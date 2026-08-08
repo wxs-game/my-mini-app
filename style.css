@@ -561,7 +561,7 @@ main {
 ========================================== */
 .mine-tile {
     aspect-ratio: 1;
-    background: rgba(255, 255, 255, 0.04); /* Полупрозрачный темно-серый фон */
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
     display: flex;
@@ -1825,10 +1825,12 @@ main {
     }
 }
 
-/* Шапка поля ставки в Минах (Заголовок слева, инпут справа) */
+/* ==========================================
+   ВЫРОВНЕННАЯ ШАПКА ПОЛЯ СТАВКИ В МИНАХ
+========================================== */
 .mines-bet-header {
     display: flex;
-    align-items: center;
+    align-items: center; /* Выравнивает label и карточку ввода строго по центру по вертикали */
     justify-content: space-between;
     width: 100%;
 }
@@ -1838,16 +1840,20 @@ main {
     font-weight: 700;
     color: #888888;
     letter-spacing: 0.5px;
+    margin: 0;
+    line-height: 1;
 }
 
-/* Компактный инпут в стиле Колеса */
+/* Компактный инпут с фиксированной высотой и вертикальным выравниванием */
 .mines-bet-header .card-input-wrap {
     display: flex;
-    align-items: center;
+    align-items: center; /* Центрирует внутренний input и значок $ */
+    justify-content: flex-end;
     background: #121212;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    padding: 6px 12px;
+    padding: 0 12px;
+    height: 38px; /* Выравниваем общую высоту контейнера */
     width: 130px;
     box-sizing: border-box;
 }
@@ -1862,6 +1868,9 @@ main {
     font-weight: 700;
     text-align: right;
     padding: 0;
+    margin: 0;
+    height: 100%;
+    line-height: normal; /* Центрирует плейсхолдер и текст */
 }
 
 .mines-bet-header .card-input-wrap input::placeholder {
@@ -1873,5 +1882,8 @@ main {
     font-size: 15px;
     font-weight: 700;
     margin-left: 5px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
     user-select: none;
 }
