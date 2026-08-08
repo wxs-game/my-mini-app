@@ -115,17 +115,20 @@
             <div class="mines-controls">
                 <div class="control-row">
                     <div class="ctrl-box">
-                        <label>СУММА СТАВКИ</label>
-                        <div class="sum-input-wrap">
-                            <input type="number" id="minesBetInput" placeholder="0.00" min="0.1" step="any">
-                            <span class="currency-symbol">$</span>
-                        </div>
-                        <div class="ctrl-btns-row" style="margin-top: 8px;">
-                            <button class="pct-btn" onclick="adjustMinesBet(0.5)">½</button>
-                            <button class="pct-btn" onclick="adjustMinesBet(2)">x2</button>
-                            <button class="pct-btn" onclick="setMinesMaxBet()">MAX</button>
-                        </div>
-                    </div>
+    <div class="mines-bet-header">
+        <label>СУММА СТАВКИ</label>
+        <div class="card-input-wrap">
+            <input type="number" id="minesBetInput" placeholder="0.00" min="0.1" step="any">
+            <span class="currency-symbol">$</span>
+        </div>
+    </div>
+    <div class="ctrl-btns-row" style="margin-top: 10px;">
+        <button class="pct-btn" onclick="adjustMinesBet(0.5)">½</button>
+        <button class="pct-btn" onclick="adjustMinesBet(2)">x2</button>
+        <button class="pct-btn" onclick="setMinesMaxBet()">MAX</button>
+    </div>
+</div>
+
 
                     <div class="ctrl-box">
                         <label>МИНЫ</label>
