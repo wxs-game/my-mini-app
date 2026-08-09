@@ -116,7 +116,8 @@ async function fetchUserProfileFromApi() {
             method: 'GET',
             headers: {
                 'Authorization': tg.initData,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
             }
         });
 
@@ -139,7 +140,8 @@ async function apiRecordBet(amount) {
             method: 'POST',
             headers: {
                 'Authorization': tg.initData,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({ amount: amount })
         });
@@ -161,7 +163,8 @@ async function apiAddWin(amount) {
             method: 'POST',
             headers: {
                 'Authorization': tg.initData,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({ amount: amount })
         });
@@ -412,7 +415,6 @@ async function startMinesGame() {
         return;
     }
 
-    // Списываем ставку в SQLite через бэкенд
     const success = await apiRecordBet(bet);
     if (!success) {
         showMessage("Ошибка проведение ставки на сервере!");
@@ -499,7 +501,6 @@ async function cashoutMines() {
     const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
     const winAmount = minesGame.bet * mult;
 
-    // Начисляем выигрыш на бэкенде
     await apiAddWin(winAmount);
     updateBalance();
 
@@ -754,7 +755,6 @@ async function spinWheel() {
         return;
     }
 
-    // Списываем общую сумму ставки в БД
     const success = await apiRecordBet(totalBet);
     if (!success) {
         showMessage("Ошибка проведение ставки!");
