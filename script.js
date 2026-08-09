@@ -739,10 +739,20 @@ function updateTotalBet() {
    ВРАЩЕНИЕ КОЛЕСА
 ========================= */
 
-async function spinWheel() {
-    if (wheelSpinning) return;
+let isBetProcessing = false; // Флаг защиты от спама
 
-    // Считываем значение из активного инпута перед стартом, чтобы не потерять введенную сумму
+async function spinWheel() {
+    // 1. Если колесо крутится или прямо сейчас отправляется ставка — игнорируем клик
+    if (wheelSpinning || isBetProcessing) return;
+
+    const button = document.getElementById('spinButton');
+    if (!button) return;
+
+    // Сразу блокируем кнопку интерфейса, чтобы спам-клики не проходили
+    isBetProcessing = true;
+    button.disabled = true;
+
+    // Считываем значение из активного инпута перед стартом
     const currentInput = document.getElementById('activeBetInput');
     if (currentInput && currentInput.value !== '') {
         onActiveColorInput(currentInput.value);
@@ -750,39 +760,46 @@ async function spinWheel() {
 
     let totalBet = 0;
     Object.keys(colorBets).forEach(key => {
-        colorBets[key] = parseFloat(colorBets[key]) || 0; // Приводим строго к числу
+        colorBets[key] = parseFloat(colorBets[key]) || 0;
         totalBet += colorBets[key];
     });
 
     if (totalBet <= 0) {
         showMessage("Укажите сумму хотя бы на один цвет!");
+        button.disabled = false;
+        isBetProcessing = false;
         return;
     }
 
     if (totalBet > currentBalance) {
         showMessage("Недостаточно средств на балансе!");
+        button.disabled = false;
+        isBetProcessing = false;
         return;
     }
 
-    // 1. Списываем общую ставку на сервере
+    // Списываем общую ставку на сервере
     const success = await apiRecordBet(totalBet);
     if (!success) {
         showMessage("Ошибка проведения ставки!");
+        button.disabled = false;
+        isBetProcessing = false;
         return;
     }
-    updateBalance();
+    
+    // Обновляем отображение баланса
+    const value = currentBalance.toFixed(2) + " $";
+    const topBalance = document.getElementById("topBalance");
+    if (topBalance) topBalance.textContent = value;
 
-    const button = document.getElementById('spinButton');
+    // Запускаем вращение
+    wheelSpinning = true;
+    button.innerHTML = '<span>↻ Вращение...</span>';
+
     const result = document.getElementById('wheelResult');
     const resultValue = document.getElementById('resultValue');
     const wheelSvg = document.getElementById('wheelSvg');
     const wheelStage = document.querySelector('.wheel-stage');
-
-    if (!button || !wheelSvg) return;
-
-    button.disabled = true;
-    wheelSpinning = true;
-    button.innerHTML = '<span>↻ Вращение...</span>';
 
     if (result) result.classList.remove('show');
     if (resultValue) resultValue.textContent = '?';
@@ -801,35 +818,32 @@ async function spinWheel() {
     const fullSpins = 6;
     wheelRotation += fullSpins * 360 + (stopAngle - (wheelRotation % 360));
 
-    wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
+    if (wheelSvg) wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
 
     setTimeout(() => {
         if (wheelStage) wheelStage.classList.add('zoomed');
     }, 3600);
 
     setTimeout(async () => {
-        wheelSpinning = false;
-        button.disabled = false;
-        button.innerHTML = '<span>↻ Сделать ставку</span>';
-
         if (wheelStage) wheelStage.classList.remove('zoomed');
 
         // Достаем выпавший сектор
         const wonSector = sectors[rewardIndex];
-        const sectorType = wonSector.type; // 'red', 'green', 'blue', 'yellow', 'gold'
+        const sectorType = wonSector.type; 
         
-        // Получаем чистую сумму ставки на этот цвет
         const betOnWonColor = parseFloat(colorBets[sectorType]) || 0;
         const multiplier = parseFloat(wonSector.mult) || 0;
 
         let totalWin = 0;
 
-        // Если была ставка на этот цвет — считаем выигрыш
         if (betOnWonColor > 0 && multiplier > 0) {
             totalWin = betOnWonColor * multiplier;
-            // Отправляем запрос на зачисление выигрыша на FastAPI
-            await apiAddWin(totalWin);
-            await updateBalance();
+            const successWin = await apiAddWin(totalWin);
+            
+            if (successWin) {
+                const updatedVal = currentBalance.toFixed(2) + " $";
+                if (topBalance) topBalance.textContent = updatedVal;
+            }
         }
 
         if (resultValue) {
@@ -847,6 +861,12 @@ async function spinWheel() {
         if (tg?.HapticFeedback) {
             tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
         }
+
+        // Разблокируем состояния после завершения раунда
+        wheelSpinning = false;
+        isBetProcessing = false;
+        button.disabled = false;
+        button.innerHTML = '<span>↻ Сделать ставку</span>';
 
     }, 5000);
 }
