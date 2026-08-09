@@ -27,7 +27,7 @@
         <div class="balance">
             <div class="balance-info">
                 <small>Баланс</small>
-                <span id="topBalance">125.50 $</span>
+                <span id="topBalance">0.00 $</span>
             </div>
             <button class="balance-add" onclick="openBalance('deposit')">+</button>
         </div>
@@ -115,20 +115,19 @@
             <div class="mines-controls">
                 <div class="control-row">
                     <div class="ctrl-box">
-    <div class="mines-bet-header">
-        <label>СУММА СТАВКИ</label>
-        <div class="card-input-wrap">
-            <input type="number" id="minesBetInput" placeholder="0.00" min="0.1" step="any">
-            <span class="currency-symbol">$</span>
-        </div>
-    </div>
-    <div class="ctrl-btns-row" style="margin-top: 10px;">
-        <button class="pct-btn" onclick="adjustMinesBet(0.5)">½</button>
-        <button class="pct-btn" onclick="adjustMinesBet(2)">x2</button>
-        <button class="pct-btn" onclick="setMinesMaxBet()">MAX</button>
-    </div>
-</div>
-
+                        <div class="mines-bet-header">
+                            <label>СУММА СТАВКИ</label>
+                            <div class="card-input-wrap">
+                                <input type="number" id="minesBetInput" placeholder="0.00" min="0.1" step="any">
+                                <span class="currency-symbol">$</span>
+                            </div>
+                        </div>
+                        <div class="ctrl-btns-row" style="margin-top: 10px;">
+                            <button class="pct-btn" onclick="adjustMinesBet(0.5)">½</button>
+                            <button class="pct-btn" onclick="adjustMinesBet(2)">x2</button>
+                            <button class="pct-btn" onclick="setMinesMaxBet()">MAX</button>
+                        </div>
+                    </div>
 
                     <div class="ctrl-box">
                         <label>МИНЫ</label>
@@ -190,7 +189,7 @@
             <div class="wheel-bet-panels">
                 <div class="bet-panel-header">
                     <span>Выберите цвет ставки</span>
-                    <span id="betBalanceText">Баланс: 125.50 $</span>
+                    <span id="betBalanceText">Баланс: Загрузка...</span>
                 </div>
 
                 <div class="color-tabs-row" id="colorTabsRow">
@@ -250,7 +249,7 @@
 
         <div class="balance-gold-card">
             <div class="bg-label">ТЕКУЩИЙ БАЛАНС</div>
-            <div class="bg-amount" id="balanceCardValue">125.50 $</div>
+            <div class="bg-amount" id="balanceCardValue">0.00 $</div>
         </div>
 
         <div class="balance-mode-toggle">
@@ -377,7 +376,7 @@
         <div class="profile-balance-banner">
             <div class="p-bal-left">
                 <small>Текущий баланс</small>
-                <strong id="profileBalance">125.50 $</strong>
+                <strong id="profileBalance">0.00 $</strong>
             </div>
             <button class="p-deposit-btn" onclick="openBalance('deposit')">Пополнить</button>
         </div>
