@@ -90,6 +90,7 @@ const sectors = [
 
 let wheelRotation = 0;
 let wheelSpinning = false;
+let isBetProcessing = false;
 
 /* =========================
    ИГРОВОЕ СОСТОЯНИЕ МИН
@@ -103,6 +104,41 @@ let minesGame = {
     revealed: [],
     gemsFound: 0
 };
+
+/* =========================
+   СИНХРОНИЗАЦИЯ БАЛАНСА В UI
+========================= */
+
+function setUIBalance(newBalance) {
+    currentBalance = parseFloat(newBalance) || 0;
+    const formatted = currentBalance.toFixed(2) + " $";
+    const turnoverValue = "$" + currentTurnover.toFixed(2);
+
+    const balanceSelectors = [
+        '#topBalance',
+        '#balanceCardValue',
+        '#profileBalance',
+        '#betBalanceText',
+        '#headerBalance',
+        '.balance-val'
+    ];
+
+    balanceSelectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+            if (selector === '#betBalanceText') {
+                el.textContent = `Баланс: ${formatted}`;
+            } else {
+                el.textContent = formatted;
+            }
+        });
+    });
+
+    const statTurnover = document.getElementById("statTurnover");
+    if (statTurnover) statTurnover.textContent = turnoverValue;
+
+    updateTotalBet();
+}
 
 /* =========================
    API ВЗАИМОДЕЙСТВИЕ
@@ -125,8 +161,8 @@ async function fetchUserProfileFromApi() {
 
         const data = await response.json();
         if (data.status === "ok") {
-            currentBalance = data.balance;
             currentTurnover = data.turnover;
+            setUIBalance(data.balance);
         }
     } catch (error) {
         console.error("Ошибка при получении профиля:", error);
@@ -147,8 +183,8 @@ async function apiRecordBet(amount) {
         });
         if (!res.ok) return false;
         const data = await res.json();
-        currentBalance = data.balance;
         currentTurnover = data.turnover;
+        setUIBalance(data.balance);
         return true;
     } catch (e) {
         console.error("Ошибка при списывании ставки:", e);
@@ -156,26 +192,35 @@ async function apiRecordBet(amount) {
     }
 }
 
-async function apiAddWin(amount) {
-    if (!tg?.initData) return;
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
-            method: 'POST',
-            headers: {
-                'Authorization': tg.initData,
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
-            },
-            body: JSON.stringify({ amount: amount })
-        });
-        if (res.ok) {
-            const data = await res.json();
-            currentBalance = data.balance;
-            currentTurnover = data.turnover;
+async function apiAddWin(amount, retries = 3) {
+    if (!tg?.initData) return false;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': tg.initData,
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify({ amount: amount })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                currentTurnover = data.turnover;
+                setUIBalance(data.balance);
+                return true;
+            }
+        } catch (e) {
+            console.error(`Попытка ${attempt} зачислить выигрыш не удалась:`, e);
         }
-    } catch (e) {
-        console.error("Ошибка при зачислении выигрыша:", e);
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    showMessage("Ошибка зачисления выигрыша на сервере! Проверьте интернет-соединение.");
+    return false;
 }
 
 /* =========================
@@ -211,23 +256,6 @@ function loadTelegramUser() {
 
 async function updateBalance() {
     await fetchUserProfileFromApi();
-
-    const value = currentBalance.toFixed(2) + " $";
-    const turnoverValue = "$" + currentTurnover.toFixed(2);
-
-    const topBalance = document.getElementById("topBalance");
-    const balanceCardValue = document.getElementById("balanceCardValue");
-    const profileBalance = document.getElementById("profileBalance");
-    const statTurnover = document.getElementById("statTurnover");
-    const betBalanceText = document.getElementById("betBalanceText");
-
-    if (topBalance) topBalance.textContent = value;
-    if (balanceCardValue) balanceCardValue.textContent = value;
-    if (profileBalance) profileBalance.textContent = value;
-    if (statTurnover) statTurnover.textContent = turnoverValue;
-    if (betBalanceText) betBalanceText.textContent = `Баланс: ${value}`;
-
-    updateTotalBet();
 }
 
 /* =========================
@@ -420,7 +448,6 @@ async function startMinesGame() {
         showMessage("Ошибка проведение ставки на сервере!");
         return;
     }
-    updateBalance();
 
     minesGame.active = true;
     minesGame.bet = bet;
@@ -502,7 +529,6 @@ async function cashoutMines() {
     const winAmount = minesGame.bet * mult;
 
     await apiAddWin(winAmount);
-    updateBalance();
 
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
@@ -652,11 +678,21 @@ function selectColorTab(color) {
 
 function onActiveColorInput(val) {
     let parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed <= 0) {
+    // Если введено число меньше 0.1 (и не 0), не засчитываем его как валидную ставку
+    if (isNaN(parsed) || parsed < 0.10) {
         colorBets[activeColor] = 0;
     } else {
         colorBets[activeColor] = parsed;
     }
+
+    const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    if (tabVal) {
+        const cfg = COLOR_CONFIG[activeColor];
+        tabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor]} $` : cfg.label;
+    }
+
+    updateTotalBet();
+}
 
     const tabVal = document.getElementById(`tab-val-${activeColor}`);
     if (tabVal) {
@@ -687,6 +723,30 @@ function applyPercentToActive(pct) {
     Object.keys(colorBets).forEach(key => {
         if (key !== activeColor) otherBetsSum += colorBets[key];
     });
+
+    const availableBalance = currentBalance - otherBetsSum;
+    if (availableBalance < 0.10) {
+        showMessage("Недостаточно средств для минимальной ставки!");
+        return;
+    }
+
+    let amount = Math.floor(availableBalance * pct * 100) / 100;
+    if (amount < 0.10) {
+        amount = 0.10; // Если процент меньше 0.1, ставим 0.1
+    }
+
+    colorBets[activeColor] = amount;
+
+    const input = document.getElementById('activeBetInput');
+    if (input) input.value = amount.toFixed(2);
+
+    const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    if (tabVal) {
+        tabVal.textContent = `${amount.toFixed(2)} $`;
+    }
+
+    updateTotalBet();
+}
 
     const availableBalance = currentBalance - otherBetsSum;
     if (availableBalance <= 0) return;
@@ -739,20 +799,15 @@ function updateTotalBet() {
    ВРАЩЕНИЕ КОЛЕСА
 ========================= */
 
-let isBetProcessing = false; // Флаг защиты от спама
-
 async function spinWheel() {
-    // 1. Если колесо крутится или прямо сейчас отправляется ставка — игнорируем клик
     if (wheelSpinning || isBetProcessing) return;
 
     const button = document.getElementById('spinButton');
     if (!button) return;
 
-    // Сразу блокируем кнопку интерфейса, чтобы спам-клики не проходили
     isBetProcessing = true;
     button.disabled = true;
 
-    // Считываем значение из активного инпута перед стартом
     const currentInput = document.getElementById('activeBetInput');
     if (currentInput && currentInput.value !== '') {
         onActiveColorInput(currentInput.value);
@@ -764,12 +819,12 @@ async function spinWheel() {
         totalBet += colorBets[key];
     });
 
-    if (totalBet <= 0) {
-        showMessage("Укажите сумму хотя бы на один цвет!");
-        button.disabled = false;
-        isBetProcessing = false;
-        return;
-    }
+if (totalBet < 0.10) {
+    showMessage("Минимальная общая ставка — 0.10 $!");
+    button.disabled = false;
+    isBetProcessing = false;
+    return;
+}
 
     if (totalBet > currentBalance) {
         showMessage("Недостаточно средств на балансе!");
@@ -778,7 +833,6 @@ async function spinWheel() {
         return;
     }
 
-    // Списываем общую ставку на сервере
     const success = await apiRecordBet(totalBet);
     if (!success) {
         showMessage("Ошибка проведения ставки!");
@@ -786,13 +840,7 @@ async function spinWheel() {
         isBetProcessing = false;
         return;
     }
-    
-    // Обновляем отображение баланса
-    const value = currentBalance.toFixed(2) + " $";
-    const topBalance = document.getElementById("topBalance");
-    if (topBalance) topBalance.textContent = value;
 
-    // Запускаем вращение
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
 
@@ -804,7 +852,6 @@ async function spinWheel() {
     if (result) result.classList.remove('show');
     if (resultValue) resultValue.textContent = '?';
 
-    // Вычисляем случайный сектор
     const rewardIndex = Math.floor(Math.random() * sectors.length);
     const totalSectors = sectors.length;
     const sectorAngle = 360 / totalSectors;
@@ -827,7 +874,6 @@ async function spinWheel() {
     setTimeout(async () => {
         if (wheelStage) wheelStage.classList.remove('zoomed');
 
-        // Достаем выпавший сектор
         const wonSector = sectors[rewardIndex];
         const sectorType = wonSector.type; 
         
@@ -838,12 +884,7 @@ async function spinWheel() {
 
         if (betOnWonColor > 0 && multiplier > 0) {
             totalWin = betOnWonColor * multiplier;
-            const successWin = await apiAddWin(totalWin);
-            
-            if (successWin) {
-                const updatedVal = currentBalance.toFixed(2) + " $";
-                if (topBalance) topBalance.textContent = updatedVal;
-            }
+            await apiAddWin(totalWin);
         }
 
         if (resultValue) {
@@ -862,7 +903,6 @@ async function spinWheel() {
             tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
         }
 
-        // Разблокируем состояния после завершения раунда
         wheelSpinning = false;
         isBetProcessing = false;
         button.disabled = false;
@@ -1001,7 +1041,7 @@ function demoBalanceAction() {
     }
 
     if (balanceMode === "deposit") {
-        currentBalance += amount;
+        setUIBalance(currentBalance + amount);
 
         transactions.unshift({
             type: 'deposit',
@@ -1022,7 +1062,7 @@ function demoBalanceAction() {
         return;
     }
 
-    currentBalance -= amount;
+    setUIBalance(currentBalance - amount);
 
     transactions.unshift({
         type: 'withdraw',
