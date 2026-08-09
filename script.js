@@ -141,7 +141,6 @@ function setUIBalance(newBalance) {
     const formatted = currentBalance.toFixed(2) + " $";
     const turnoverValue = "$" + currentTurnover.toFixed(2);
 
-    // Заполняем по всем возможным ID
     const elementsMap = {
         "topBalance": formatted,
         "balanceCardValue": formatted,
@@ -155,7 +154,6 @@ function setUIBalance(newBalance) {
         if (el) el.textContent = elementsMap[id];
     });
 
-    // Дополнительно обновляем по классам
     document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
         el.textContent = formatted;
     });
@@ -164,7 +162,7 @@ function setUIBalance(newBalance) {
 }
 
 async function updateBalance() {
-    loadTelegramUser(); // Заново подтягиваем аватару и имя при вызове
+    loadTelegramUser();
     await fetchUserProfileFromApi();
 }
 
@@ -189,7 +187,7 @@ async function fetchUserProfileFromApi() {
 
         const data = await response.json();
         if (data.status === "ok") {
-            currentTurnover = data.turnover;
+            currentTurnover = data.turnover || 0;
             setUIBalance(data.balance);
         }
     } catch (error) {
@@ -211,7 +209,7 @@ async function apiRecordBet(amount) {
         });
         if (!res.ok) return false;
         const data = await res.json();
-        currentTurnover = data.turnover;
+        currentTurnover = data.turnover || 0;
         setUIBalance(data.balance);
         return true;
     } catch (e) {
@@ -237,7 +235,7 @@ async function apiAddWin(amount, retries = 3) {
 
             if (res.ok) {
                 const data = await res.json();
-                currentTurnover = data.turnover;
+                currentTurnover = data.turnover || 0;
                 setUIBalance(data.balance);
                 return true;
             }
@@ -249,41 +247,6 @@ async function apiAddWin(amount, retries = 3) {
 
     showMessage("Ошибка зачисления выигрыша на сервере! Проверьте интернет-соединение.");
     return false;
-}
-
-/* =========================
-   TELEGRAM USER & БАЛАНС
-========================= */
-
-function loadTelegramUser() {
-    if (!tg) return;
-    const user = tg.initDataUnsafe?.user;
-    if (!user) return;
-
-    const usernameElement = document.getElementById("username");
-    const avatarElement = document.getElementById("avatar");
-    const profileName = document.getElementById("profileName");
-    const profileUsername = document.getElementById("profileUsername");
-    const profileAvatar = document.getElementById("profileAvatar");
-
-    const name = user.first_name || user.username || "Игрок";
-
-    if (usernameElement) usernameElement.textContent = name;
-    if (profileName) profileName.textContent = name;
-
-    if (profileUsername) {
-        profileUsername.textContent = user.username ? "@" + user.username : "Telegram пользователь";
-    }
-
-    if (user.photo_url) {
-        const imageHTML = `<img src="${user.photo_url}" alt="avatar">`;
-        if (avatarElement) avatarElement.innerHTML = imageHTML;
-        if (profileAvatar) profileAvatar.innerHTML = imageHTML;
-    }
-}
-
-async function updateBalance() {
-    await fetchUserProfileFromApi();
 }
 
 /* =========================
@@ -706,7 +669,6 @@ function selectColorTab(color) {
 
 function onActiveColorInput(val) {
     let parsed = parseFloat(val);
-    // Если введено число меньше 0.1 (и не 0), не засчитываем его как валидную ставку
     if (isNaN(parsed) || parsed < 0.10) {
         colorBets[activeColor] = 0;
     } else {
@@ -722,24 +684,15 @@ function onActiveColorInput(val) {
     updateTotalBet();
 }
 
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        const cfg = COLOR_CONFIG[activeColor];
-        tabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor]} $` : cfg.label;
-    }
-
-    updateTotalBet();
-}
-
 function applyMinToActive() {
     if (wheelSpinning) return;
     colorBets[activeColor] = 0.10;
 
     const input = document.getElementById('activeBetInput');
-    if (input) input.value = '0.1';
+    if (input) input.value = '0.10';
 
     const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) tabVal.textContent = '0.1 $';
+    if (tabVal) tabVal.textContent = '0.10 $';
 
     updateTotalBet();
 }
@@ -760,7 +713,7 @@ function applyPercentToActive(pct) {
 
     let amount = Math.floor(availableBalance * pct * 100) / 100;
     if (amount < 0.10) {
-        amount = 0.10; // Если процент меньше 0.1, ставим 0.1
+        amount = 0.10;
     }
 
     colorBets[activeColor] = amount;
@@ -771,24 +724,6 @@ function applyPercentToActive(pct) {
     const tabVal = document.getElementById(`tab-val-${activeColor}`);
     if (tabVal) {
         tabVal.textContent = `${amount.toFixed(2)} $`;
-    }
-
-    updateTotalBet();
-}
-
-    const availableBalance = currentBalance - otherBetsSum;
-    if (availableBalance <= 0) return;
-
-    const amount = Math.floor(availableBalance * pct * 100) / 100;
-    colorBets[activeColor] = amount;
-
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = amount > 0 ? amount : '';
-
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        const cfg = COLOR_CONFIG[activeColor];
-        tabVal.textContent = amount > 0 ? `${amount} $` : cfg.label;
     }
 
     updateTotalBet();
@@ -847,12 +782,12 @@ async function spinWheel() {
         totalBet += colorBets[key];
     });
 
-if (totalBet < 0.10) {
-    showMessage("Минимальная общая ставка — 0.10 $!");
-    button.disabled = false;
-    isBetProcessing = false;
-    return;
-}
+    if (totalBet < 0.10) {
+        showMessage("Минимальная общая ставка — 0.10 $!");
+        button.disabled = false;
+        isBetProcessing = false;
+        return;
+    }
 
     if (totalBet > currentBalance) {
         showMessage("Недостаточно средств на балансе!");
