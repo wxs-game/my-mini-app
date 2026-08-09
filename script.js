@@ -5,6 +5,9 @@ if (tg) {
     tg.expand();
 }
 
+// URL вашего FastAPI бэкенда через ngrok
+const API_BASE_URL = "https://cable-coral-ahead.ngrok-free.dev";
+
 /* =========================
    ДАННЫЕ И БАЛАНС
 ========================= */
