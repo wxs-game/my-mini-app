@@ -5,21 +5,20 @@ if (tg) {
     tg.expand();
 }
 
-// URL вашего FastAPI бэкенда через ngrok
-const API_BASE_URL = "https://cable-coral-ahead.ngrok-free.dev";
-
 /* =========================
-   ДАННЫЕ И БАЛАНС
+   БЭКЕНД И АВТОРИЗАЦИЯ
 ========================= */
 
-let currentBalance = 125.50;
-let balanceMode = "deposit";
+const API_BASE_URL = "https://cable-coral-ahead.ngrok-free.dev";
 
+let currentBalance = 0.00;
+let currentTurnover = 0.00;
+
+let balanceMode = "deposit";
 let selectedMethod = "CryptoBot";
 let selectedMethodSub = "Криптовалюта";
 let selectedMethodIcon = "cryptobot.png";
 
-// Конфигурация кастомизации фона профиля (8 цветов)
 const COLOR_PALETTE = [
     { id: 'slate', start: '#2c3e50', end: '#1a252f' },
     { id: 'purple', start: '#8e44ad', end: '#2c3e50' },
@@ -106,6 +105,77 @@ let minesGame = {
 };
 
 /* =========================
+   API ВЗАИМОДЕЙСТВИЕ
+========================= */
+
+async function fetchUserProfileFromApi() {
+    if (!tg?.initData) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
+            method: 'GET',
+            headers: {
+                'Authorization': tg.initData,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (data.status === "ok") {
+            currentBalance = data.balance;
+            currentTurnover = data.turnover;
+        }
+    } catch (error) {
+        console.error("Ошибка при получении профиля:", error);
+    }
+}
+
+async function apiRecordBet(amount) {
+    if (!tg?.initData) return false;
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/user/record-bet`, {
+            method: 'POST',
+            headers: {
+                'Authorization': tg.initData,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ amount: amount })
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        currentBalance = data.balance;
+        currentTurnover = data.turnover;
+        return true;
+    } catch (e) {
+        console.error("Ошибка при списывании ставки:", e);
+        return false;
+    }
+}
+
+async function apiAddWin(amount) {
+    if (!tg?.initData) return;
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
+            method: 'POST',
+            headers: {
+                'Authorization': tg.initData,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ amount: amount })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            currentBalance = data.balance;
+            currentTurnover = data.turnover;
+        }
+    } catch (e) {
+        console.error("Ошибка при зачислении выигрыша:", e);
+    }
+}
+
+/* =========================
    TELEGRAM USER & БАЛАНС
 ========================= */
 
@@ -136,19 +206,24 @@ function loadTelegramUser() {
     }
 }
 
-function updateBalance() {
+async function updateBalance() {
+    await fetchUserProfileFromApi();
+
     const value = currentBalance.toFixed(2) + " $";
+    const turnoverValue = "$" + currentTurnover.toFixed(2);
 
     const topBalance = document.getElementById("topBalance");
     const balanceCardValue = document.getElementById("balanceCardValue");
     const profileBalance = document.getElementById("profileBalance");
+    const statTurnover = document.getElementById("statTurnover");
     const betBalanceText = document.getElementById("betBalanceText");
 
     if (topBalance) topBalance.textContent = value;
     if (balanceCardValue) balanceCardValue.textContent = value;
     if (profileBalance) profileBalance.textContent = value;
+    if (statTurnover) statTurnover.textContent = turnoverValue;
     if (betBalanceText) betBalanceText.textContent = `Баланс: ${value}`;
-    
+
     updateTotalBet();
 }
 
@@ -176,6 +251,7 @@ function goHome() {
     showPage("homePage");
     updateNav("home");
     loadTelegramUser();
+    updateBalance();
 }
 
 function openGamesMenu() {
@@ -248,10 +324,10 @@ function updateNav(active) {
 function selectMinesCount(count, btn) {
     if (minesGame.active) return;
     minesGame.minesCount = count;
-    
+
     document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    
+
     renderMinesCoefBar();
 }
 
@@ -259,7 +335,7 @@ function adjustMinesBet(factor) {
     if (minesGame.active) return;
     const input = document.getElementById('minesBetInput');
     if (!input) return;
-    
+
     let current = parseFloat(input.value);
     if (isNaN(current) || current <= 0) {
         current = 0.10;
@@ -323,7 +399,7 @@ function handleMinesAction() {
     }
 }
 
-function startMinesGame() {
+async function startMinesGame() {
     const input = document.getElementById('minesBetInput');
     const bet = parseFloat(input.value);
 
@@ -336,7 +412,12 @@ function startMinesGame() {
         return;
     }
 
-    currentBalance -= bet;
+    // Списываем ставку в SQLite через бэкенд
+    const success = await apiRecordBet(bet);
+    if (!success) {
+        showMessage("Ошибка проведение ставки на сервере!");
+        return;
+    }
     updateBalance();
 
     minesGame.active = true;
@@ -359,7 +440,6 @@ function startMinesGame() {
     if (actionBtn) actionBtn.textContent = 'ЗАБРАТЬ 0.00$';
     if (autoBtn) autoBtn.disabled = false;
 
-    // Сброс всех плиток перед новой игрой
     for (let i = 0; i < 25; i++) {
         const tile = document.getElementById(`tile-${i}`);
         if (tile) {
@@ -415,10 +495,12 @@ function autoPickMinesTile() {
     }
 }
 
-function cashoutMines() {
+async function cashoutMines() {
     const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
     const winAmount = minesGame.bet * mult;
-    currentBalance += winAmount;
+
+    // Начисляем выигрыш на бэкенде
+    await apiAddWin(winAmount);
     updateBalance();
 
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
@@ -433,9 +515,9 @@ function endMinesGame(isWin) {
     for (let i = 0; i < 25; i++) {
         const tile = document.getElementById(`tile-${i}`);
         if (!tile) continue;
-        
+
         tile.classList.add('disabled');
-        
+
         if (!minesGame.revealed[i]) {
             tile.classList.add('end-show');
             if (minesGame.field[i] === 'bomb') {
@@ -518,7 +600,7 @@ function renderColorTabs() {
     row.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
         const cfg = COLOR_CONFIG[key];
         const hasBet = colorBets[key] > 0;
-        
+
         return `
             <div class="color-tab-btn ${key === activeColor ? 'active' : ''}" 
                  id="tab-${key}" 
@@ -642,7 +724,7 @@ function resetActiveBet() {
 function updateTotalBet() {
     const totalInfo = document.getElementById('totalBetInfo');
     let totalSum = 0;
-    
+
     Object.values(colorBets).forEach(val => {
         totalSum += val;
     });
@@ -672,6 +754,14 @@ async function spinWheel() {
         return;
     }
 
+    // Списываем общую сумму ставки в БД
+    const success = await apiRecordBet(totalBet);
+    if (!success) {
+        showMessage("Ошибка проведение ставки!");
+        return;
+    }
+    updateBalance();
+
     const button = document.getElementById('spinButton');
     const result = document.getElementById('wheelResult');
     const resultValue = document.getElementById('resultValue');
@@ -681,9 +771,6 @@ async function spinWheel() {
     if (!button || !wheelSvg) return;
 
     button.disabled = true;
-    currentBalance -= totalBet;
-    updateBalance();
-
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
 
@@ -709,7 +796,7 @@ async function spinWheel() {
         if (wheelStage) wheelStage.classList.add('zoomed');
     }, 3600);
 
-    setTimeout(() => {
+    setTimeout(async () => {
         wheelSpinning = false;
         button.disabled = false;
         button.innerHTML = '<span>↻ Сделать ставку</span>';
@@ -722,7 +809,7 @@ async function spinWheel() {
         let totalWin = 0;
         if (betOnWonColor > 0) {
             totalWin = betOnWonColor * wonSector.mult;
-            currentBalance += totalWin;
+            await apiAddWin(totalWin);
             updateBalance();
         }
 
@@ -876,7 +963,6 @@ function demoBalanceAction() {
 
     if (balanceMode === "deposit") {
         currentBalance += amount;
-        updateBalance();
 
         transactions.unshift({
             type: 'deposit',
@@ -898,7 +984,6 @@ function demoBalanceAction() {
     }
 
     currentBalance -= amount;
-    updateBalance();
 
     transactions.unshift({
         type: 'withdraw',
@@ -972,9 +1057,9 @@ function saveProfileCustomization() {
    ЗАПУСК
 ========================= */
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     loadTelegramUser();
-    updateBalance();
+    await updateBalance();
     renderTransactions();
     goHome();
     applyDesign();
