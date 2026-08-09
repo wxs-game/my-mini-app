@@ -106,38 +106,66 @@ let minesGame = {
 };
 
 /* =========================
-   СИНХРОНИЗАЦИЯ БАЛАНСА В UI
+   TELEGRAM USER & БАЛАНС
 ========================= */
 
+function loadTelegramUser() {
+    if (!tg) return;
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return;
+
+    const usernameElement = document.getElementById("username");
+    const avatarElement = document.getElementById("avatar");
+    const profileName = document.getElementById("profileName");
+    const profileUsername = document.getElementById("profileUsername");
+    const profileAvatar = document.getElementById("profileAvatar");
+
+    const name = user.first_name || user.username || "Игрок";
+
+    if (usernameElement) usernameElement.textContent = name;
+    if (profileName) profileName.textContent = name;
+
+    if (profileUsername) {
+        profileUsername.textContent = user.username ? "@" + user.username : "Telegram пользователь";
+    }
+
+    if (user.photo_url) {
+        const imageHTML = `<img src="${user.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        if (avatarElement) avatarElement.innerHTML = imageHTML;
+        if (profileAvatar) profileAvatar.innerHTML = imageHTML;
+    }
+}
+
 function setUIBalance(newBalance) {
-    currentBalance = parseFloat(newBalance) || 0;
+    currentBalance = parseFloat(newBalance) || 0.00;
     const formatted = currentBalance.toFixed(2) + " $";
     const turnoverValue = "$" + currentTurnover.toFixed(2);
 
-    const balanceSelectors = [
-        '#topBalance',
-        '#balanceCardValue',
-        '#profileBalance',
-        '#betBalanceText',
-        '#headerBalance',
-        '.balance-val'
-    ];
+    // Заполняем по всем возможным ID
+    const elementsMap = {
+        "topBalance": formatted,
+        "balanceCardValue": formatted,
+        "profileBalance": formatted,
+        "statTurnover": turnoverValue,
+        "betBalanceText": `Баланс: ${formatted}`
+    };
 
-    balanceSelectors.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
-            if (selector === '#betBalanceText') {
-                el.textContent = `Баланс: ${formatted}`;
-            } else {
-                el.textContent = formatted;
-            }
-        });
+    Object.keys(elementsMap).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = elementsMap[id];
     });
 
-    const statTurnover = document.getElementById("statTurnover");
-    if (statTurnover) statTurnover.textContent = turnoverValue;
+    // Дополнительно обновляем по классам
+    document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
+        el.textContent = formatted;
+    });
 
     updateTotalBet();
+}
+
+async function updateBalance() {
+    loadTelegramUser(); // Заново подтягиваем аватару и имя при вызове
+    await fetchUserProfileFromApi();
 }
 
 /* =========================
