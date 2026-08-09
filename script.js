@@ -742,8 +742,17 @@ function updateTotalBet() {
 async function spinWheel() {
     if (wheelSpinning) return;
 
+    // Считываем значение из активного инпута перед стартом, чтобы не потерять введенную сумму
+    const currentInput = document.getElementById('activeBetInput');
+    if (currentInput && currentInput.value !== '') {
+        onActiveColorInput(currentInput.value);
+    }
+
     let totalBet = 0;
-    Object.values(colorBets).forEach(v => totalBet += v);
+    Object.keys(colorBets).forEach(key => {
+        colorBets[key] = parseFloat(colorBets[key]) || 0; // Приводим строго к числу
+        totalBet += colorBets[key];
+    });
 
     if (totalBet <= 0) {
         showMessage("Укажите сумму хотя бы на один цвет!");
@@ -755,9 +764,10 @@ async function spinWheel() {
         return;
     }
 
+    // 1. Списываем общую ставку на сервере
     const success = await apiRecordBet(totalBet);
     if (!success) {
-        showMessage("Ошибка проведение ставки!");
+        showMessage("Ошибка проведения ставки!");
         return;
     }
     updateBalance();
@@ -777,6 +787,7 @@ async function spinWheel() {
     if (result) result.classList.remove('show');
     if (resultValue) resultValue.textContent = '?';
 
+    // Вычисляем случайный сектор
     const rewardIndex = Math.floor(Math.random() * sectors.length);
     const totalSectors = sectors.length;
     const sectorAngle = 360 / totalSectors;
@@ -803,14 +814,22 @@ async function spinWheel() {
 
         if (wheelStage) wheelStage.classList.remove('zoomed');
 
+        // Достаем выпавший сектор
         const wonSector = sectors[rewardIndex];
-        const betOnWonColor = colorBets[wonSector.type] || 0;
+        const sectorType = wonSector.type; // 'red', 'green', 'blue', 'yellow', 'gold'
+        
+        // Получаем чистую сумму ставки на этот цвет
+        const betOnWonColor = parseFloat(colorBets[sectorType]) || 0;
+        const multiplier = parseFloat(wonSector.mult) || 0;
 
         let totalWin = 0;
-        if (betOnWonColor > 0) {
-            totalWin = betOnWonColor * wonSector.mult;
+
+        // Если была ставка на этот цвет — считаем выигрыш
+        if (betOnWonColor > 0 && multiplier > 0) {
+            totalWin = betOnWonColor * multiplier;
+            // Отправляем запрос на зачисление выигрыша на FastAPI
             await apiAddWin(totalWin);
-            updateBalance();
+            await updateBalance();
         }
 
         if (resultValue) {
