@@ -359,7 +359,7 @@ function adjustMinesBet(factor) {
     if (!input) return;
 
     let current = parseFloat(input.value);
-    if (isNaN(current) || current <= 0) {
+    if (isNaN(current) || current < 0.10) {
         current = 0.10;
     } else {
         current = Math.max(0.10, current * factor);
@@ -425,8 +425,8 @@ async function startMinesGame() {
     const input = document.getElementById('minesBetInput');
     const bet = parseFloat(input.value);
 
-    if (isNaN(bet) || bet <= 0) {
-        showMessage("Укажите сумму ставки!");
+    if (isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
         return;
     }
     if (bet > currentBalance) {
