@@ -102,8 +102,241 @@ let minesGame = {
     minesCount: 3,
     field: [],
     revealed: [],
-    gemsFound: 0
+    gemsFound: 0,
+    isProcessing: false // Защита от мультикликов и дюпа
 };
+
+function selectMinesCount(count, btn) {
+    if (minesGame.active) return;
+    minesGame.minesCount = count;
+
+    document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    renderMinesCoefBar();
+}
+
+function adjustMinesBet(factor) {
+    if (minesGame.active) return;
+    const input = document.getElementById('minesBetInput');
+    if (!input) return;
+
+    let current = parseFloat(input.value);
+    if (isNaN(current) || current < 0.10) {
+        current = 0.10;
+    } else {
+        current = Math.max(0.10, current * factor);
+    }
+    input.value = current.toFixed(2);
+}
+
+function setMinesMaxBet() {
+    if (minesGame.active) return;
+    const input = document.getElementById('minesBetInput');
+    if (input) input.value = currentBalance.toFixed(2);
+}
+
+function getMinesMultiplier(gemsFound, minesCount) {
+    if (gemsFound === 0) return 1.0;
+    const totalTiles = 25;
+    let mult = 1.0;
+    for (let i = 0; i < gemsFound; i++) {
+        mult *= (totalTiles - i) / (totalTiles - minesCount - i);
+    }
+    return Math.floor(mult * 100) / 100;
+}
+
+function renderMinesCoefBar() {
+    const bar = document.getElementById('minesCoefBar');
+    if (!bar) return;
+
+    let html = '';
+    const maxGems = 25 - minesGame.minesCount;
+    for (let step = 1; step <= Math.min(10, maxGems); step++) {
+        const mult = getMinesMultiplier(step, minesGame.minesCount);
+        const isActive = step === minesGame.gemsFound;
+        html += `
+            <div class="coef-item ${isActive ? 'active' : ''}">
+                <span class="step-num">${step}</span>
+                <strong class="mult-val">${mult.toFixed(2)}x</strong>
+            </div>
+        `;
+    }
+    bar.innerHTML = html;
+}
+
+function initMinesGrid() {
+    const grid = document.getElementById('minesGrid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    for (let i = 0; i < 25; i++) {
+        grid.innerHTML += `<div class="mine-tile disabled" id="tile-${i}" onclick="clickMinesTile(${i})"></div>`;
+    }
+    renderMinesCoefBar();
+}
+
+function handleMinesAction() {
+    if (minesGame.isProcessing) return; // Блокировка при обработке
+    
+    if (minesGame.active) {
+        cashoutMines();
+    } else {
+        startMinesGame();
+    }
+}
+
+async function startMinesGame() {
+    if (minesGame.isProcessing) return;
+
+    const input = document.getElementById('minesBetInput');
+    const bet = parseFloat(input.value);
+
+    if (isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        return;
+    }
+
+    minesGame.isProcessing = true; // Блокируем клики до ответа сервера
+
+    const success = await apiRecordBet(bet);
+    if (!success) {
+        showMessage("Ошибка проведение ставки на сервере!");
+        minesGame.isProcessing = false;
+        return;
+    }
+
+    minesGame.active = true;
+    minesGame.bet = bet;
+    minesGame.gemsFound = 0;
+    minesGame.revealed = Array(25).fill(false);
+    minesGame.field = Array(25).fill('gem');
+
+    let placedMines = 0;
+    while (placedMines < minesGame.minesCount) {
+        let randIndex = Math.floor(Math.random() * 25);
+        if (minesGame.field[randIndex] !== 'bomb') {
+            minesGame.field[randIndex] = 'bomb';
+            placedMines++;
+        }
+    }
+
+    const actionBtn = document.getElementById('minesActionBtn');
+    const autoBtn = document.getElementById('minesAutoBtn');
+    if (actionBtn) actionBtn.textContent = 'ОТКРОЙТЕ КЛЕТКУ';
+    if (autoBtn) autoBtn.disabled = false;
+
+    for (let i = 0; i < 25; i++) {
+        const tile = document.getElementById(`tile-${i}`);
+        if (tile) {
+            tile.className = 'mine-tile';
+            tile.innerHTML = '';
+            tile.removeAttribute('style');
+        }
+    }
+
+    renderMinesCoefBar();
+    minesGame.isProcessing = false;
+}
+
+function clickMinesTile(index) {
+    if (!minesGame.active || minesGame.revealed[index] || minesGame.isProcessing) return;
+
+    minesGame.revealed[index] = true;
+    const tile = document.getElementById(`tile-${index}`);
+
+    if (minesGame.field[index] === 'bomb') {
+        tile.className = 'mine-tile revealed-bomb';
+        tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+        endMinesGame(false);
+    } else {
+        minesGame.gemsFound++;
+        tile.className = 'mine-tile revealed-gem';
+        
+        tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+
+        const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
+        const currentWin = (minesGame.bet * mult).toFixed(2);
+
+        const actionBtn = document.getElementById('minesActionBtn');
+        if (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${currentWin}$`;
+
+        renderMinesCoefBar();
+
+        if (minesGame.gemsFound === 25 - minesGame.minesCount) {
+            cashoutMines();
+        }
+    }
+}
+
+function autoPickMinesTile() {
+    if (!minesGame.active || minesGame.isProcessing) return;
+    let unrevealed = [];
+    for (let i = 0; i < 25; i++) {
+        if (!minesGame.revealed[i]) unrevealed.push(i);
+    }
+    if (unrevealed.length > 0) {
+        let rand = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+        clickMinesTile(rand);
+    }
+}
+
+async function cashoutMines() {
+    // Запрет вывода без первого шага
+    if (minesGame.gemsFound <= 0) {
+        showMessage("Откройте хотя бы одну ячейку!");
+        return;
+    }
+
+    if (minesGame.isProcessing) return;
+    minesGame.isProcessing = true; // Блокируем повторные нажатия (защита от дюпа)
+
+    const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
+    const winAmount = minesGame.bet * mult;
+
+    const success = await apiAddWin(winAmount);
+
+    if (success) {
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+    }
+
+    endMinesGame(true);
+}
+
+function endMinesGame(isWin) {
+    minesGame.active = false;
+
+    for (let i = 0; i < 25; i++) {
+        const tile = document.getElementById(`tile-${i}`);
+        if (!tile) continue;
+
+        tile.classList.add('disabled');
+
+        if (!minesGame.revealed[i]) {
+            tile.classList.add('end-show');
+            if (minesGame.field[i] === 'bomb') {
+                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+            } else {
+                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+            }
+        }
+    }
+
+    const actionBtn = document.getElementById('minesActionBtn');
+    const autoBtn = document.getElementById('minesAutoBtn');
+    if (actionBtn) actionBtn.textContent = 'Начать игру';
+    if (autoBtn) autoBtn.disabled = true;
+
+    minesGame.isProcessing = false;
+}
 
 /* =========================
    TELEGRAM USER & БАЛАНС
