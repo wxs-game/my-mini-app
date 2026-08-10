@@ -96,6 +96,8 @@ let isBetProcessing = false;
    ИГРОВОЕ СОСТОЯНИЕ МИН
 ========================= */
 
+const DIAMOND_EMOJI_HTML = '<tg-emoji emoji-id="5463168898381686643">💎</tg-emoji>';
+
 let minesGame = {
     active: false,
     bet: 0.10,
@@ -464,7 +466,7 @@ async function startMinesGame() {
         const tile = document.getElementById(`tile-${i}`);
         if (tile) {
             tile.className = 'mine-tile';
-            tile.textContent = '';
+            tile.innerHTML = '';
             tile.removeAttribute('style');
         }
     }
@@ -486,7 +488,7 @@ function clickMinesTile(index) {
     } else {
         minesGame.gemsFound++;
         tile.className = 'mine-tile revealed-gem';
-        tile.textContent = '💎';
+        tile.innerHTML = DIAMOND_EMOJI_HTML;
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
         const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
@@ -541,7 +543,7 @@ function endMinesGame(isWin) {
             if (minesGame.field[i] === 'bomb') {
                 tile.textContent = '💣';
             } else {
-                tile.textContent = '💎';
+                tile.innerHTML = DIAMOND_EMOJI_HTML;
             }
         }
     }
