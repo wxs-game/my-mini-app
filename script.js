@@ -488,7 +488,7 @@ function clickMinesTile(index) {
         tile.className = 'mine-tile revealed-gem';
         
         // Вставляем картинку напрямую
-        tile.innerHTML = `<img src="assets/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+        tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
 
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
@@ -545,7 +545,7 @@ function endMinesGame(isWin) {
                 tile.textContent = '💣';
             } else {
                 // Вставляем картинку при открытии поля в конце игры
-                tile.innerHTML = `<img src="assets/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             }
         }
     }
