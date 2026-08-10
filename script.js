@@ -487,15 +487,8 @@ function clickMinesTile(index) {
         minesGame.gemsFound++;
         tile.className = 'mine-tile revealed-gem';
         
-        tile.innerHTML = `<div id="lottie-gem-${index}" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;"></div>`;
-
-lottie.loadAnimation({
-    container: document.getElementById(`lottie-gem-${index}`),
-    renderer: 'svg',
-    loop: true,
-    autoplay: true,
-    path: 'assets/gem.json' // Укажите ваш путь к .json файлу
-});
+        // Вставляем картинку напрямую
+        tile.innerHTML = `<img src="assets/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
 
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
@@ -551,16 +544,8 @@ function endMinesGame(isWin) {
             if (minesGame.field[i] === 'bomb') {
                 tile.textContent = '💣';
             } else {
-                // Везде заменено index -> i
-                tile.innerHTML = `<div id="lottie-gem-${i}" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;"></div>`;
-
-                lottie.loadAnimation({
-                    container: document.getElementById(`lottie-gem-${i}`),
-                    renderer: 'svg',
-                    loop: false, // Для закрытых ячеек лучше выключить зацикливание
-                    autoplay: true,
-                    path: 'assets/gem.json'
-                });
+                // Вставляем картинку при открытии поля в конце игры
+                tile.innerHTML = `<img src="assets/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             }
         }
     }
