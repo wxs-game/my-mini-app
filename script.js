@@ -96,8 +96,6 @@ let isBetProcessing = false;
    ИГРОВОЕ СОСТОЯНИЕ МИН
 ========================= */
 
-const DIAMOND_EMOJI_HTML = '<tg-emoji emoji-id="5463168898381686643">💎</tg-emoji>';
-
 let minesGame = {
     active: false,
     bet: 0.10,
@@ -488,7 +486,18 @@ function clickMinesTile(index) {
     } else {
         minesGame.gemsFound++;
         tile.className = 'mine-tile revealed-gem';
-        tile.innerHTML = DIAMOND_EMOJI_HTML;
+        
+        // Создаем контейнер и рендерим Lottie-анимацию из gem.json
+        tile.innerHTML = `<div id="lottie-gem-${index}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;"></div>`;
+        
+        lottie.loadAnimation({
+            container: document.getElementById(`lottie-gem-${index}`),
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            path: 'gem.json'
+        });
+
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
         const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
@@ -543,7 +552,14 @@ function endMinesGame(isWin) {
             if (minesGame.field[i] === 'bomb') {
                 tile.textContent = '💣';
             } else {
-                tile.innerHTML = DIAMOND_EMOJI_HTML;
+                tile.innerHTML = `<div id="lottie-gem-${i}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;"></div>`;
+                lottie.loadAnimation({
+                    container: document.getElementById(`lottie-gem-${i}`),
+                    renderer: 'svg',
+                    loop: false,
+                    autoplay: true,
+                    path: 'gem.json'
+                });
             }
         }
     }
