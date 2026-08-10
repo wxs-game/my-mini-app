@@ -480,7 +480,7 @@ function clickMinesTile(index) {
 
     if (minesGame.field[index] === 'bomb') {
         tile.className = 'mine-tile revealed-bomb';
-        tile.textContent = '💣';
+        tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
         endMinesGame(false);
     } else {
@@ -541,7 +541,7 @@ function endMinesGame(isWin) {
         if (!minesGame.revealed[i]) {
             tile.classList.add('end-show');
             if (minesGame.field[i] === 'bomb') {
-                tile.textContent = '💣';
+                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             } else {
                 tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             }
