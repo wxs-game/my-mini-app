@@ -487,15 +487,15 @@ function clickMinesTile(index) {
         minesGame.gemsFound++;
         tile.className = 'mine-tile revealed-gem';
         
-        // Создаем контейнер и рендерим Lottie-анимацию из gem.json
-        tile.innerHTML = `<div id="lottie-gem-${index}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;"></div>`;
+        tile.innerHTML = `<div id="lottie-gem-${index}" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;"></div>`;
         
+        // Используем встроенный объект данных вместо загрузки файла по пути
         lottie.loadAnimation({
             container: document.getElementById(`lottie-gem-${index}`),
             renderer: 'svg',
             loop: true,
             autoplay: true,
-            path: 'gem.json'
+            animationData: typeof GEM_ANIMATION_DATA !== 'undefined' ? GEM_ANIMATION_DATA : null
         });
 
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
@@ -552,13 +552,13 @@ function endMinesGame(isWin) {
             if (minesGame.field[i] === 'bomb') {
                 tile.textContent = '💣';
             } else {
-                tile.innerHTML = `<div id="lottie-gem-${i}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;"></div>`;
+                tile.innerHTML = `<div id="lottie-gem-${i}" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;"></div>`;
                 lottie.loadAnimation({
                     container: document.getElementById(`lottie-gem-${i}`),
                     renderer: 'svg',
                     loop: false,
                     autoplay: true,
-                    path: 'gem.json'
+                    animationData: typeof GEM_ANIMATION_DATA !== 'undefined' ? GEM_ANIMATION_DATA : null
                 });
             }
         }
