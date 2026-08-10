@@ -5,14 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#090909">
     <title>WXS Game</title>
+    <!-- Основной скрипт Telegram WebApp -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Виджет для анимированных кастомных эмодзи -->
+    <script src="https://telegram.org/js/telegram-widget.js?22"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="app">
 
-    <!-- ==================== ЕДИНАЯ ВЕРХНЯЯ ШАПКА (ВИДНА ВЕЗДЕ) ==================== -->
+    <!-- ==================== ЕДИНАЯ ВЕРХНЯЯ ШАПКА ==================== -->
     <header class="top">
         <div class="profile-card" onclick="openProfile()">
             <div class="avatar-frame">
@@ -101,24 +104,17 @@
         </div>
 
         <section class="mines-card">
-            <!-- Лента текущих коэффициентов -->
-            <div class="mines-coef-bar" id="minesCoefBar">
-                <!-- Генерируется скриптом -->
-            </div>
+            <div class="mines-coef-bar" id="minesCoefBar"></div>
 
-            <!-- Игровое поле 5х5 -->
-            <div class="mines-grid" id="minesGrid">
-                <!-- Клетки генерируются скриптом -->
-            </div>
+            <div class="mines-grid" id="minesGrid"></div>
 
-            <!-- Панель управления ставкой и минами -->
             <div class="mines-controls">
                 <div class="control-row">
                     <div class="ctrl-box">
                         <div class="mines-bet-header">
                             <label>СУММА СТАВКИ</label>
                             <div class="card-input-wrap">
-                                <input type="number" id="minesBetInput" placeholder="0.00" min="0.1" step="any">
+                                <input type="number" id="minesBetInput" placeholder="0.10" min="0.1" step="any">
                                 <span class="currency-symbol">$</span>
                             </div>
                         </div>
@@ -140,7 +136,6 @@
                     </div>
                 </div>
 
-                <!-- Главные действия -->
                 <div class="mines-actions">
                     <button class="mines-main-btn" id="minesActionBtn" onclick="handleMinesAction()">
                         Начать игру
@@ -192,15 +187,11 @@
                     <span id="betBalanceText">Баланс: Загрузка...</span>
                 </div>
 
-                <div class="color-tabs-row" id="colorTabsRow">
-                    <!-- Генерируется скриптом -->
-                </div>
+                <div class="color-tabs-row" id="colorTabsRow"></div>
 
                 <div class="active-bet-box" id="activeBetBox">
                     <div class="card-top">
-                        <div class="card-title" id="activeColorTitle">
-                            <!-- Название активного цвета -->
-                        </div>
+                        <div class="card-title" id="activeColorTitle"></div>
                         <div class="card-input-wrap">
                             <input type="number" 
                                    id="activeBetInput" 
@@ -220,7 +211,7 @@
                         <button class="pct-btn" onclick="applyPercentToActive(1.00)">MAX</button>
                     </div>
 
-                    <button class="reset-bet-btn" onclick="resetActiveBet()" style="width: 100%; margin-top: 8px; padding: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #888; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s ease;">
+                    <button class="reset-bet-btn" onclick="resetActiveBet()" style="width: 100%; margin-top: 8px; padding: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #888; font-size: 11px; font-weight: 700; cursor: pointer;">
                         ✕ Сбросить ставку
                     </button>
                 </div>
@@ -332,15 +323,12 @@
                     </div>
                 </div>
 
-                <!-- Кнопка настройки профиля -->
                 <button class="pct-btn" onclick="toggleProfileCustomizer()" style="margin-top: 14px; width: 100%; padding: 8px; color: #ffc800; border: 1px solid rgba(255,200,0,0.3); border-radius: 12px; cursor: pointer; font-weight: 700;">
                     ⚙️ Настроить профиль
                 </button>
 
-                <!-- Блок выбор цвета фона -->
                 <div id="customizerBox" class="hidden" style="margin-top: 12px; background: rgba(0,0,0,0.7); padding: 14px; border-radius: 16px; text-align: left; border: 1px solid #282828;">
                     <span style="font-size:11px; color:#aaa; font-weight:700;">Цвет фона шапки:</span>
-                    <!-- Сетка градиентов: 8 цветов (4 в ряд) -->
                     <div class="color-picker-grid" id="colorPickerGrid"></div>
 
                     <button class="main-action-btn" onclick="saveProfileCustomization()" style="width:100%; margin-top:14px; padding:10px; font-size:13px;">
@@ -418,6 +406,10 @@
     </nav>
 </div>
 
+<!-- Важно: подключение вашего JS-скрипта перед закрывающим тегом body -->
+<script src="script.js"></script>
+</body>
+</html>
 <script src="script.js"></script>
 </body>
 </html>
