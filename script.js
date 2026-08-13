@@ -9,7 +9,7 @@ if (tg) {
    БЭКЕНД И АВТОРИЗАЦИЯ
 ========================= */
 
-const API_BASE_URL = "https://dghbc-5-248-188-249.free.pinggy.net";
+const API_BASE_URL = "https://oyexn-178-137-18-3.run.pinggy-free.link";
 
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
