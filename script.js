@@ -1144,3 +1144,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     goHome();
     applyDesign();
 });
+
+// Автоматический запуск при старте Mini App
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("🚀 Mini App запущен!");
+    
+    // Инициализация Telegram Mini App SDK
+    if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    }
+
+    // Вызываем твою функцию profile() для загрузки баланса из БД
+    if (typeof profile === "function") {
+        console.log("📡 Отправляем запрос profile() на бэкенд...");
+        profile();
+    } else {
+        console.error("❌ Функция profile() не найдена!");
+    }
+});
