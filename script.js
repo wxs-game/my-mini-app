@@ -1,4 +1,4 @@
-Const tg = window.Telegram?.WebApp;
+const tg = window.Telegram?.WebApp;
 
 If (tg) {
     Tg.ready();
