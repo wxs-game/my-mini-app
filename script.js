@@ -1,25 +1,25 @@
-const tg = window.Telegram?.WebApp;
+Const tg = window.Telegram?.WebApp;
 
-if (tg) {
-    tg.ready();
-    tg.expand();
+If (tg) {
+    Tg.ready();
+    Tg.expand();
 }
 
 /* =========================
    БЭКЕНД И АВТОРИЗАЦИЯ
 ========================= */
 
-const API_BASE_URL = "https://oyexn-178-137-18-3.run.pinggy-free.link";
+Const API_BASE_URL = "https://oyexn-178-137-18-3.run.pinggy-free.link";
 
-let currentBalance = 0.00;
-let currentTurnover = 0.00;
+Let currentBalance = 0.00;
+Let currentTurnover = 0.00;
 
-let balanceMode = "deposit";
-let selectedMethod = "CryptoBot";
-let selectedMethodSub = "Криптовалюта";
-let selectedMethodIcon = "cryptobot.png";
+Let balanceMode = "deposit";
+Let selectedMethod = "CryptoBot";
+Let selectedMethodSub = "Криптовалюта";
+Let selectedMethodIcon = "cryptobot.png";
 
-const COLOR_PALETTE = [
+Const COLOR_PALETTE = [
     { id: 'slate', start: '#2c3e50', end: '#1a252f' },
     { id: 'purple', start: '#8e44ad', end: '#2c3e50' },
     { id: 'green', start: '#27ae60', end: '#114b27' },
@@ -30,30 +30,30 @@ const COLOR_PALETTE = [
     { id: 'gold', start: '#f39c12', end: '#4a3004' }
 ];
 
-let profileDesign = JSON.parse(localStorage.getItem('wxs_profile')) || {
-    colorId: 'slate',
-    start: '#2c3e50',
-    end: '#1a252f'
+Let profileDesign = JSON.parse(localStorage.getItem('wxs_profile')) || {
+    ColorId: 'slate',
+    Start: '#2c3e50',
+    End: '#1a252f'
 };
 
-let colorBets = { green: 0, red: 0, blue: 0, yellow: 0, gold: 0 };
-let activeColor = 'green';
+Let colorBets = { green: 0, red: 0, blue: 0, yellow: 0, gold: 0 };
+Let activeColor = 'green';
 
-let transactions = [
+Let transactions = [
     { type: 'deposit', method: 'CryptoBot', icon: 'cryptobot.png', amount: 50.00, date: 'Сегодня, 14:20', status: 'success' },
     { type: 'withdraw', method: 'xRocket', icon: 'xrocket.png', amount: 20.00, date: 'Вчера, 18:05', status: 'success' },
     { type: 'deposit', method: 'CryptoBot', icon: 'cryptobot.png', amount: 95.50, date: '21 Июля', status: 'success' }
 ];
 
-const COLOR_CONFIG = {
-    green:  { label: '1x',  mult: 1,  color: '#2ecc71', name: 'Зеленый' },
-    red:    { label: '2x',  mult: 2,  color: '#e74c3c', name: 'Красный' },
-    blue:   { label: '3x',  mult: 3,  color: '#3498db', name: 'Синий' },
-    yellow: { label: '5x',  mult: 5,  color: '#f1c40f', name: 'Желтый' },
-    gold:   { label: '50x', mult: 50, color: '#ffd700', name: 'Золото' }
+Const COLOR_CONFIG = {
+    Green:  { label: '1x',  mult: 1,  color: '#2ecc71', name: 'Зеленый' },
+    Red:    { label: '2x',  mult: 2,  color: '#e74c3c', name: 'Красный' },
+    Blue:   { label: '3x',  mult: 3,  color: '#3498db', name: 'Синий' },
+    Yellow: { label: '5x',  mult: 5,  color: '#f1c40f', name: 'Желтый' },
+    Gold:   { label: '50x', mult: 50, color: '#ffd700', name: 'Золото' }
 };
 
-const sectors = [
+Const sectors = [
     { type: 'gold',   ...COLOR_CONFIG.gold },
     { type: 'green',  ...COLOR_CONFIG.green },
     { type: 'red',    ...COLOR_CONFIG.red },
@@ -88,292 +88,292 @@ const sectors = [
     { type: 'red',    ...COLOR_CONFIG.red }
 ];
 
-let wheelRotation = 0;
-let wheelSpinning = false;
-let isBetProcessing = false;
+Let wheelRotation = 0;
+Let wheelSpinning = false;
+Let isBetProcessing = false;
 
 /* =========================
    ИГРОВОЕ СОСТОЯНИЕ МИН
 ========================= */
 
-let minesGame = {
-    active: false,
-    bet: 0.10,
-    minesCount: 3,
-    field: [],
-    revealed: [],
-    gemsFound: 0,
-    isProcessing: false
+Let minesGame = {
+    Active: false,
+    Bet: 0.10,
+    MinesCount: 3,
+    Field: [],
+    Revealed: [],
+    GemsFound: 0,
+    IsProcessing: false
 };
 
-function selectMinesCount(count, btn) {
-    if (minesGame.active) return;
-    minesGame.minesCount = count;
+Function selectMinesCount(count, btn) {
+    If (minesGame.active) return;
+    MinesGame.minesCount = count;
 
-    document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    Document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
+    Btn.classList.add('active');
 
-    renderMinesCoefBar();
+    RenderMinesCoefBar();
 }
 
-function adjustMinesBet(factor) {
-    if (minesGame.active) return;
-    const input = document.getElementById('minesBetInput');
-    if (!input) return;
+Function adjustMinesBet(factor) {
+    If (minesGame.active) return;
+    Const input = document.getElementById('minesBetInput');
+    If (!input) return;
 
-    let current = parseFloat(input.value);
-    if (isNaN(current) || current < 0.10) {
-        current = 0.10;
+    Let current = parseFloat(input.value);
+    If (isNaN(current) || current < 0.10) {
+        Current = 0.10;
     } else {
-        current = Math.max(0.10, current * factor);
+        Current = Math.max(0.10, current * factor);
     }
-    input.value = current.toFixed(2);
+    Input.value = current.toFixed(2);
 }
 
-function setMinesMaxBet() {
-    if (minesGame.active) return;
-    const input = document.getElementById('minesBetInput');
-    if (input) input.value = currentBalance.toFixed(2);
+Function setMinesMaxBet() {
+    If (minesGame.active) return;
+    Const input = document.getElementById('minesBetInput');
+    If (input) input.value = currentBalance.toFixed(2);
 }
 
-function getMinesMultiplier(gemsFound, minesCount) {
-    if (gemsFound === 0) return 1.0;
-    const totalTiles = 25;
-    let mult = 1.0;
-    for (let i = 0; i < gemsFound; i++) {
-        mult *= (totalTiles - i) / (totalTiles - minesCount - i);
+Function getMinesMultiplier(gemsFound, minesCount) {
+    If (gemsFound === 0) return 1.0;
+    Const totalTiles = 25;
+    Let mult = 1.0;
+    For (let i = 0; i < gemsFound; i++) {
+        Mult *= (totalTiles - i) / (totalTiles - minesCount - i);
     }
-    return Math.floor(mult * 100) / 100;
+    Return Math.floor(mult * 100) / 100;
 }
 
-function renderMinesCoefBar() {
-    const bar = document.getElementById('minesCoefBar');
-    if (!bar) return;
+Function renderMinesCoefBar() {
+    Const bar = document.getElementById('minesCoefBar');
+    If (!bar) return;
 
-    let html = '';
-    const maxGems = 25 - minesGame.minesCount;
-    for (let step = 1; step <= Math.min(10, maxGems); step++) {
-        const mult = getMinesMultiplier(step, minesGame.minesCount);
-        const isActive = step === minesGame.gemsFound;
-        html += `
+    Let html = '';
+    Const maxGems = 25 - minesGame.minesCount;
+    For (let step = 1; step <= Math.min(10, maxGems); step++) {
+        Const mult = getMinesMultiplier(step, minesGame.minesCount);
+        Const isActive = step === minesGame.gemsFound;
+        Html += `
             <div class="coef-item ${isActive ? 'active' : ''}">
                 <span class="step-num">${step}</span>
                 <strong class="mult-val">${mult.toFixed(2)}x</strong>
             </div>
         `;
     }
-    bar.innerHTML = html;
+    Bar.innerHTML = html;
 }
 
-function initMinesGrid() {
-    const grid = document.getElementById('minesGrid');
-    if (!grid) return;
+Function initMinesGrid() {
+    Const grid = document.getElementById('minesGrid');
+    If (!grid) return;
 
-    grid.innerHTML = '';
-    for (let i = 0; i < 25; i++) {
-        grid.innerHTML += `<div class="mine-tile disabled" id="tile-${i}" onclick="clickMinesTile(${i})"></div>`;
+    Grid.innerHTML = '';
+    For (let i = 0; i < 25; i++) {
+        Grid.innerHTML += `<div class="mine-tile disabled" id="tile-${i}" onclick="clickMinesTile(${i})"></div>`;
     }
-    renderMinesCoefBar();
+    RenderMinesCoefBar();
 }
 
-function handleMinesAction() {
-    if (minesGame.isProcessing) return;
+Function handleMinesAction() {
+    If (minesGame.isProcessing) return;
     
-    if (minesGame.active) {
-        cashoutMines();
+    If (minesGame.active) {
+        CashoutMines();
     } else {
-        startMinesGame();
+        StartMinesGame();
     }
 }
 
-async function startMinesGame() {
-    if (minesGame.isProcessing) return;
+Async function startMinesGame() {
+    If (minesGame.isProcessing) return;
 
-    const input = document.getElementById('minesBetInput');
-    const bet = parseFloat(input.value);
+    Const input = document.getElementById('minesBetInput');
+    Const bet = parseFloat(input.value);
 
-    if (isNaN(bet) || bet < 0.10) {
-        showMessage("Минимальная ставка — 0.10 $!");
-        return;
+    If (isNaN(bet) || bet < 0.10) {
+        ShowMessage("Минимальная ставка — 0.10 $!");
+        Return;
     }
-    if (bet > currentBalance) {
-        showMessage("Недостаточно средств!");
-        return;
-    }
-
-    minesGame.isProcessing = true;
-
-    const success = await apiRecordBet(bet);
-    if (!success) {
-        showMessage("Ошибка проведения ставки на сервере!");
-        minesGame.isProcessing = false;
-        return;
+    If (bet > currentBalance) {
+        ShowMessage("Недостаточно средств!");
+        Return;
     }
 
-    minesGame.active = true;
-    minesGame.bet = bet;
-    minesGame.gemsFound = 0;
-    minesGame.revealed = Array(25).fill(false);
-    minesGame.field = Array(25).fill('gem');
+    MinesGame.isProcessing = true;
 
-    let placedMines = 0;
-    while (placedMines < minesGame.minesCount) {
-        let randIndex = Math.floor(Math.random() * 25);
-        if (minesGame.field[randIndex] !== 'bomb') {
-            minesGame.field[randIndex] = 'bomb';
-            placedMines++;
+    Const success = await apiRecordBet(bet);
+    If (!success) {
+        ShowMessage("Ошибка проведения ставки на сервере!");
+        MinesGame.isProcessing = false;
+        Return;
+    }
+
+    MinesGame.active = true;
+    MinesGame.bet = bet;
+    MinesGame.gemsFound = 0;
+    MinesGame.revealed = Array(25).fill(false);
+    MinesGame.field = Array(25).fill('gem');
+
+    Let placedMines = 0;
+    While (placedMines < minesGame.minesCount) {
+        Let randIndex = Math.floor(Math.random() * 25);
+        If (minesGame.field[randIndex] !== 'bomb') {
+            MinesGame.field[randIndex] = 'bomb';
+            PlacedMines++;
         }
     }
 
-    const actionBtn = document.getElementById('minesActionBtn');
-    const autoBtn = document.getElementById('minesAutoBtn');
-    if (actionBtn) actionBtn.textContent = 'ОТКРОЙТЕ КЛЕТКУ';
-    if (autoBtn) autoBtn.disabled = false;
+    Const actionBtn = document.getElementById('minesActionBtn');
+    Const autoBtn = document.getElementById('minesAutoBtn');
+    If (actionBtn) actionBtn.textContent = 'ОТКРОЙТЕ КЛЕТКУ';
+    If (autoBtn) autoBtn.disabled = false;
 
-    for (let i = 0; i < 25; i++) {
-        const tile = document.getElementById(`tile-${i}`);
-        if (tile) {
-            tile.className = 'mine-tile';
-            tile.innerHTML = '';
-            tile.removeAttribute('style');
+    For (let i = 0; i < 25; i++) {
+        Const tile = document.getElementById(`tile-${i}`);
+        If (tile) {
+            Tile.className = 'mine-tile';
+            Tile.innerHTML = '';
+            Tile.removeAttribute('style');
         }
     }
 
-    renderMinesCoefBar();
-    minesGame.isProcessing = false;
+    RenderMinesCoefBar();
+    MinesGame.isProcessing = false;
 }
 
-function clickMinesTile(index) {
-    if (!minesGame.active || minesGame.revealed[index] || minesGame.isProcessing) return;
+Function clickMinesTile(index) {
+    If (!minesGame.active || minesGame.revealed[index] || minesGame.isProcessing) return;
 
-    minesGame.revealed[index] = true;
-    const tile = document.getElementById(`tile-${index}`);
+    MinesGame.revealed[index] = true;
+    Const tile = document.getElementById(`tile-${index}`);
 
-    if (minesGame.field[index] === 'bomb') {
-        tile.className = 'mine-tile revealed-bomb';
-        tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
-        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
-        endMinesGame(false);
+    If (minesGame.field[index] === 'bomb') {
+        Tile.className = 'mine-tile revealed-bomb';
+        Tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
+        If (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+        EndMinesGame(false);
     } else {
-        minesGame.gemsFound++;
-        tile.className = 'mine-tile revealed-gem';
+        MinesGame.gemsFound++;
+        Tile.className = 'mine-tile revealed-gem';
         
-        tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+        Tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
 
-        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+        If (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
-        const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
-        const currentWin = (minesGame.bet * mult).toFixed(2);
+        Const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
+        Const currentWin = (minesGame.bet * mult).toFixed(2);
 
-        const actionBtn = document.getElementById('minesActionBtn');
-        if (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${currentWin}$`;
+        Const actionBtn = document.getElementById('minesActionBtn');
+        If (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${currentWin}$`;
 
-        renderMinesCoefBar();
+        RenderMinesCoefBar();
 
-        if (minesGame.gemsFound === 25 - minesGame.minesCount) {
-            cashoutMines();
+        If (minesGame.gemsFound === 25 - minesGame.minesCount) {
+            CashoutMines();
         }
     }
 }
 
-function autoPickMinesTile() {
-    if (!minesGame.active || minesGame.isProcessing) return;
-    let unrevealed = [];
-    for (let i = 0; i < 25; i++) {
-        if (!minesGame.revealed[i]) unrevealed.push(i);
+Function autoPickMinesTile() {
+    If (!minesGame.active || minesGame.isProcessing) return;
+    Let unrevealed = [];
+    For (let i = 0; i < 25; i++) {
+        If (!minesGame.revealed[i]) unrevealed.push(i);
     }
-    if (unrevealed.length > 0) {
-        let rand = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-        clickMinesTile(rand);
+    If (unrevealed.length > 0) {
+        Let rand = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+        ClickMinesTile(rand);
     }
 }
 
-async function cashoutMines() {
-    if (minesGame.gemsFound < 1) {
-        showMessage("Откройте хотя бы одну ячейку!");
-        return;
+Async function cashoutMines() {
+    If (minesGame.gemsFound < 1) {
+        ShowMessage("Откройте хотя бы одну ячейку!");
+        Return;
     }
 
-    if (minesGame.isProcessing) return;
-    minesGame.isProcessing = true;
+    If (minesGame.isProcessing) return;
+    MinesGame.isProcessing = true;
 
-    const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
-    const winAmount = minesGame.bet * mult;
+    Const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
+    Const winAmount = minesGame.bet * mult;
 
-    const success = await apiAddWin(winAmount);
+    Const success = await apiAddWin(winAmount);
 
-    if (success) {
-        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-        showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+    If (success) {
+        If (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        ShowMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
     }
 
-    endMinesGame(true);
+    EndMinesGame(true);
 }
 
-function endMinesGame(isWin) {
-    minesGame.active = false;
+Function endMinesGame(isWin) {
+    MinesGame.active = false;
 
-    for (let i = 0; i < 25; i++) {
-        const tile = document.getElementById(`tile-${i}`);
-        if (!tile) continue;
+    For (let i = 0; i < 25; i++) {
+        Const tile = document.getElementById(`tile-${i}`);
+        If (!tile) continue;
 
-        tile.classList.add('disabled');
+        Tile.classList.add('disabled');
 
-        if (!minesGame.revealed[i]) {
-            tile.classList.add('end-show');
-            if (minesGame.field[i] === 'bomb') {
-                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+        If (!minesGame.revealed[i]) {
+            Tile.classList.add('end-show');
+            If (minesGame.field[i] === 'bomb') {
+                Tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             } else {
-                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                Tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             }
         }
     }
 
-    const actionBtn = document.getElementById('minesActionBtn');
-    const autoBtn = document.getElementById('minesAutoBtn');
-    if (actionBtn) actionBtn.textContent = 'Начать игру';
-    if (autoBtn) autoBtn.disabled = true;
+    Const actionBtn = document.getElementById('minesActionBtn');
+    Const autoBtn = document.getElementById('minesAutoBtn');
+    If (actionBtn) actionBtn.textContent = 'Начать игру';
+    If (autoBtn) autoBtn.disabled = true;
 
-    minesGame.isProcessing = false;
+    MinesGame.isProcessing = false;
 }
 
 /* =========================
    TELEGRAM USER & БАЛАНС
 ========================= */
 
-function loadTelegramUser() {
-    if (!tg) return;
-    const user = tg.initDataUnsafe?.user;
-    if (!user) return;
+Function loadTelegramUser() {
+    If (!tg) return;
+    Const user = tg.initDataUnsafe?.user;
+    If (!user) return;
 
-    const usernameElement = document.getElementById("username");
-    const avatarElement = document.getElementById("avatar");
-    const profileName = document.getElementById("profileName");
-    const profileUsername = document.getElementById("profileUsername");
-    const profileAvatar = document.getElementById("profileAvatar");
+    Const usernameElement = document.getElementById("username");
+    Const avatarElement = document.getElementById("avatar");
+    Const profileName = document.getElementById("profileName");
+    Const profileUsername = document.getElementById("profileUsername");
+    Const profileAvatar = document.getElementById("profileAvatar");
 
-    const name = user.first_name || user.username || "Игрок";
+    Const name = user.first_name || user.username || "Игрок";
 
-    if (usernameElement) usernameElement.textContent = name;
-    if (profileName) profileName.textContent = name;
+    If (usernameElement) usernameElement.textContent = name;
+    If (profileName) profileName.textContent = name;
 
-    if (profileUsername) {
-        profileUsername.textContent = user.username ? "@" + user.username : "Telegram пользователь";
+    If (profileUsername) {
+        ProfileUsername.textContent = user.username ? "@" + user.username : "Telegram пользователь";
     }
 
-    if (user.photo_url) {
-        const imageHTML = `<img src="${user.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-        if (avatarElement) avatarElement.innerHTML = imageHTML;
-        if (profileAvatar) profileAvatar.innerHTML = imageHTML;
+    If (user.photo_url) {
+        Const imageHTML = `<img src="${user.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        If (avatarElement) avatarElement.innerHTML = imageHTML;
+        If (profileAvatar) profileAvatar.innerHTML = imageHTML;
     }
 }
 
-function setUIBalance(newBalance) {
-    currentBalance = parseFloat(newBalance) || 0.00;
-    const formatted = currentBalance.toFixed(2) + " $";
-    const turnoverValue = "$" + currentTurnover.toFixed(2);
+Function setUIBalance(newBalance) {
+    CurrentBalance = parseFloat(newBalance) || 0.00;
+    Const formatted = currentBalance.toFixed(2) + " $";
+    Const turnoverValue = "$" + currentTurnover.toFixed(2);
 
-    const elementsMap = {
+    Const elementsMap = {
         "topBalance": formatted,
         "balanceCardValue": formatted,
         "profileBalance": formatted,
@@ -382,20 +382,20 @@ function setUIBalance(newBalance) {
     };
 
     Object.keys(elementsMap).forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = elementsMap[id];
+        Const el = document.getElementById(id);
+        If (el) el.textContent = elementsMap[id];
     });
 
-    document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
-        el.textContent = formatted;
+    Document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
+        El.textContent = formatted;
     });
 
-    updateTotalBet();
+    UpdateTotalBet();
 }
 
-async function updateBalance() {
-    loadTelegramUser();
-    await fetchUserProfileFromApi();
+Async function updateBalance() {
+    LoadTelegramUser();
+    Await fetchUserProfileFromApi();
 }
 
 /* =========================
@@ -403,226 +403,231 @@ async function updateBalance() {
 ========================= */
 
 // Добавляем универсальные заголовки для туннеля Pinggy
-function getApiHeaders() {
-    return {
-        'Authorization': tg?.initData || '',
+Function getApiHeaders() {
+    Return {
+        'Authorization': window.Telegram?.WebApp?.initData || '',
         'Content-Type': 'application/json',
         'pinggy-skip-browser-warning': 'true' // Пропускаем экран защиты Pinggy
     };
 }
 
-async function fetchUserProfileFromApi() {
-    if (!tg?.initData) {
-        console.warn("⚠️ tg.initData отсутствует! Возможно, скрипт запущен вне Telegram.");
-        return;
+Async function fetchUserProfileFromApi() {
+    Const initData = window.Telegram?.WebApp?.initData || '';
+
+    If (!initData) {
+        Console.warn("⚠️ tg.initData отсутствует! Возможно, скрипт запущен вне Telegram.");
+        Return;
     }
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
-            method: 'GET',
-            headers: getApiHeaders()
+    Try {
+        Console.log("📡 Отправляем запрос на получение профиля...");
+        Const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
+            Method: 'GET',
+            Headers: getApiHeaders()
         });
 
-        if (!response.ok) {
-            console.error(`❌ Ошибка сервера API: Статус ${response.status}`);
-            const errorText = await response.text();
-            console.error("Детали ошибки сервера:", errorText);
-            return;
+        If (!response.ok) {
+            Console.error(`❌ Ошибка сервера API: Статус ${response.status}`);
+            Const errorText = await response.text();
+            Console.error("Детали ошибки сервера:", errorText);
+            Return;
         }
 
-        const data = await response.json();
-        console.log("✅ Успешно получены данные пользователя:", data);
+        Const data = await response.json();
+        Console.log("✅ Успешно получены данные пользователя:", data);
 
-        if (data.status === "ok") {
-            currentTurnover = data.turnover || 0;
-            setUIBalance(data.balance);
+        If (data.status === "ok") {
+            CurrentTurnover = data.turnover || 0;
+            SetUIBalance(data.balance);
         }
     } catch (error) {
-        console.error("❌ Ошибка при получении профиля:", error);
+        Console.error("❌ Ошибка при получении профиля:", error);
     }
 }
 
-async function apiRecordBet(amount) {
-    if (!tg?.initData) {
-        console.warn("⚠️ tg.initData отсутствует при попытке сделать ставку.");
-        return false;
+Async function apiRecordBet(amount) {
+    Const initData = window.Telegram?.WebApp?.initData || '';
+    If (!initData) {
+        Console.warn("⚠️ tg.initData отсутствует при попытке сделать ставку.");
+        Return false;
     }
 
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/user/play`, {
-            method: 'POST',
-            headers: getApiHeaders(),
-            body: JSON.stringify({ amount: amount })
+    Try {
+        Const res = await fetch(`${API_BASE_URL}/api/user/play`, {
+            Method: 'POST',
+            Headers: getApiHeaders(),
+            Body: JSON.stringify({ amount: amount })
         });
 
-        if (!res.ok) {
-            console.error(`❌ Ошибка списания ставки: Статус ${res.status}`);
-            return false;
+        If (!res.ok) {
+            Console.error(`❌ Ошибка списания ставки: Статус ${res.status}`);
+            Return false;
         }
 
-        const data = await res.json();
-        currentTurnover = data.turnover || 0;
-        setUIBalance(data.balance);
-        return true;
+        Const data = await res.json();
+        CurrentTurnover = data.turnover || 0;
+        SetUIBalance(data.balance);
+        Return true;
     } catch (e) {
-        console.error("❌ Ошибка при списывании ставки:", e);
-        return false;
+        Console.error("❌ Ошибка при списывании ставки:", e);
+        Return false;
     }
 }
 
-async function apiAddWin(amount, retries = 3) {
-    if (!tg?.initData) {
-        console.warn("⚠️ tg.initData отсутствует при попытке зачислить выигрыш.");
-        return false;
+Async function apiAddWin(amount, retries = 3) {
+    Const initData = window.Telegram?.WebApp?.initData || '';
+    If (!initData) {
+        Console.warn("⚠️ tg.initData отсутствует при попытке зачислить выигрыш.");
+        Return false;
     }
 
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
-                method: 'POST',
-                headers: getApiHeaders(),
-                body: JSON.stringify({ amount: amount })
+    For (let attempt = 1; attempt <= retries; attempt++) {
+        Try {
+            Const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
+                Method: 'POST',
+                Headers: getApiHeaders(),
+                Body: JSON.stringify({ amount: amount })
             });
 
-            if (res.ok) {
-                const data = await res.json();
-                currentTurnover = data.turnover || 0;
-                setUIBalance(data.balance);
-                return true;
+            If (res.ok) {
+                Const data = await res.json();
+                CurrentTurnover = data.turnover || 0;
+                SetUIBalance(data.balance);
+                Return true;
             }
         } catch (e) {
-            console.error(`Попытка ${attempt} зачислить выигрыш не удалась:`, e);
+            Console.error(`Попытка ${attempt} зачислить выигрыш не удалась:`, e);
         }
-        await new Promise(resolve => setTimeout(resolve, 500));
+        Await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    showMessage("Ошибка зачисления выигрыша на сервере! Проверьте интернет-соединение.");
-    return false;
+    ShowMessage("Ошибка зачисления выигрыша на сервере! Проверьте интернет-соединение.");
+    Return false;
 }
 
 /* =========================
    НАВИГАЦИЯ
 ========================= */
 
-function hideAllPages() {
-    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage"];
-    pages.forEach(id => {
-        const page = document.getElementById(id);
-        if (page) page.classList.add("hidden");
+Function hideAllPages() {
+    Const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage"];
+    Pages.forEach(id => {
+        Const page = document.getElementById(id);
+        If (page) page.classList.add("hidden");
     });
-    closeMethodsDropdown();
+    CloseMethodsDropdown();
 }
 
-function showPage(id) {
-    hideAllPages();
-    const page = document.getElementById(id);
-    if (page) page.classList.remove("hidden");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+Function showPage(id) {
+    HideAllPages();
+    Const page = document.getElementById(id);
+    If (page) page.classList.remove("hidden");
+    Window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function goHome() {
-    showPage("homePage");
-    updateNav("home");
-    loadTelegramUser();
-    updateBalance();
+Function goHome() {
+    ShowPage("homePage");
+    UpdateNav("home");
+    LoadTelegramUser();
+    UpdateBalance();
 }
 
-function openGamesMenu() {
-    const homePage = document.getElementById('homePage');
-    const gamesSection = document.getElementById('gamesListSection');
+Function openGamesMenu() {
+    Const homePage = document.getElementById('homePage');
+    Const gamesSection = document.getElementById('gamesListSection');
 
-    if (homePage && homePage.classList.contains('hidden')) {
-        showPage("homePage");
+    If (homePage && homePage.classList.contains('hidden')) {
+        ShowPage("homePage");
     }
 
-    updateNav("games");
+    UpdateNav("games");
 
-    if (gamesSection) {
-        gamesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    If (gamesSection) {
+        GamesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
-function openWheel() {
-    showPage("wheelPage");
-    updateNav("games");
-    updateBalance();
-    loadTelegramUser(); 
-    drawWheel();
-    renderColorTabs();
-    selectColorTab(activeColor);
+Function openWheel() {
+    ShowPage("wheelPage");
+    UpdateNav("games");
+    UpdateBalance();
+    LoadTelegramUser(); 
+    DrawWheel();
+    RenderColorTabs();
+    SelectColorTab(activeColor);
 }
 
-function openMines() {
-    showPage("minesPage");
-    updateNav("games");
-    updateBalance();
-    initMinesGrid();
+Function openMines() {
+    ShowPage("minesPage");
+    UpdateNav("games");
+    UpdateBalance();
+    InitMinesGrid();
 }
 
-function openBalance(mode = "deposit") {
-    showPage("balancePage");
-    setBalanceMode(mode);
-    updateNav("balance");
-    updateBalance();
-    renderTransactions();
+Function openBalance(mode = "deposit") {
+    ShowPage("balancePage");
+    SetBalanceMode(mode);
+    UpdateNav("balance");
+    UpdateBalance();
+    RenderTransactions();
 }
 
-function openProfile() {
-    showPage("profilePage");
-    updateNav("profile");
-    updateBalance();
-    loadTelegramUser();
-    applyDesign();
-    renderCustomizerControls();
+Function openProfile() {
+    ShowPage("profilePage");
+    UpdateNav("profile");
+    UpdateBalance();
+    LoadTelegramUser();
+    ApplyDesign();
+    RenderCustomizerControls();
 }
 
-function openBonus() {
-    showPage("bonusPage");
-    updateNav("bonus");
+Function openBonus() {
+    ShowPage("bonusPage");
+    UpdateNav("bonus");
 }
 
-function updateNav(active) {
-    const navItems = document.querySelectorAll(".nav-item");
-    navItems.forEach(item => item.classList.remove("active"));
+Function updateNav(active) {
+    Const navItems = document.querySelectorAll(".nav-item");
+    NavItems.forEach(item => item.classList.remove("active"));
 
-    const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
-    const activeElement = document.getElementById(map[active]);
-    if (activeElement) activeElement.classList.add("active");
+    Const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
+    Const activeElement = document.getElementById(map[active]);
+    If (activeElement) activeElement.classList.add("active");
 }
 
 /* =========================
    ОТРИСОВКА SVG КОЛЕСА
 ========================= */
 
-function drawWheel() {
-    const wheelSvg = document.getElementById('wheelSvg');
-    const rewardList = document.getElementById('rewardList');
-    if (!wheelSvg) return;
+Function drawWheel() {
+    Const wheelSvg = document.getElementById('wheelSvg');
+    Const rewardList = document.getElementById('rewardList');
+    If (!wheelSvg) return;
 
-    const total = sectors.length;
-    const sliceAngle = 360 / total;
-    const radius = 150;
-    const center = 150;
+    Const total = sectors.length;
+    Const sliceAngle = 360 / total;
+    Const radius = 150;
+    Const center = 150;
 
-    let svgContent = '';
+    Let svgContent = '';
 
-    sectors.forEach((sector, i) => {
-        const startAngle = i * sliceAngle - 90;
-        const endAngle = startAngle + sliceAngle;
+    Sectors.forEach((sector, i) => {
+        Const startAngle = i * sliceAngle - 90;
+        Const endAngle = startAngle + sliceAngle;
 
-        const x1 = center + radius * Math.cos((Math.PI * startAngle) / 180);
-        const y1 = center + radius * Math.sin((Math.PI * startAngle) / 180);
-        const x2 = center + radius * Math.cos((Math.PI * endAngle) / 180);
-        const y2 = center + radius * Math.sin((Math.PI * endAngle) / 180);
+        Const x1 = center + radius * Math.cos((Math.PI * startAngle) / 180);
+        Const y1 = center + radius * Math.sin((Math.PI * startAngle) / 180);
+        Const x2 = center + radius * Math.cos((Math.PI * endAngle) / 180);
+        Const y2 = center + radius * Math.sin((Math.PI * endAngle) / 180);
 
-        const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} Z`;
+        Const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} Z`;
 
-        const textAngle = startAngle + sliceAngle / 2;
-        const textRadius = radius * 0.75;
-        const textX = center + textRadius * Math.cos((Math.PI * textAngle) / 180);
-        const textY = center + textRadius * Math.sin((Math.PI * textAngle) / 180);
+        Const textAngle = startAngle + sliceAngle / 2;
+        Const textRadius = radius * 0.75;
+        Const textX = center + textRadius * Math.cos((Math.PI * textAngle) / 180);
+        Const textY = center + textRadius * Math.sin((Math.PI * textAngle) / 180);
 
-        svgContent += `
+        SvgContent += `
             <path d="${pathData}" fill="${sector.color}" class="wheel-sector" />
             <text x="${textX}" y="${textY}" class="wheel-sector-text" style="font-size: 8px;" transform="rotate(${textAngle + 90}, ${textX}, ${textY})">
                 ${sector.label}
@@ -630,12 +635,12 @@ function drawWheel() {
         `;
     });
 
-    wheelSvg.innerHTML = svgContent;
+    WheelSvg.innerHTML = svgContent;
 
-    if (rewardList) {
-        rewardList.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
-            const cfg = COLOR_CONFIG[key];
-            return `
+    If (rewardList) {
+        RewardList.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
+            Const cfg = COLOR_CONFIG[key];
+            Return `
                 <div style="background:#161616; border:1px solid #222; padding:10px; border-radius:12px; display:flex; align-items:center; gap:8px;">
                     <span style="background:${cfg.color}; width:16px; height:16px; border-radius:50%; display:inline-block;"></span>
                     <b style="font-size:12px;">${cfg.name} (${cfg.label})</b>
@@ -649,46 +654,46 @@ function drawWheel() {
    ТАБЫ ЦВЕТОВ И СТАВКИ КОЛЕСА
 ========================= */
 
-function renderColorTabs() {
-    const row = document.getElementById('colorTabsRow');
-    if (!row) return;
+Function renderColorTabs() {
+    Const row = document.getElementById('colorTabsRow');
+    If (!row) return;
 
-    row.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
-        const cfg = COLOR_CONFIG[key];
-        const hasBet = colorBets[key] > 0;
+    Row.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
+        Const cfg = COLOR_CONFIG[key];
+        Const hasBet = colorBets[key] > 0;
 
-        return `
+        Return `
             <div class="color-tab-btn ${key === activeColor ? 'active' : ''}" 
-                 id="tab-${key}" 
-                 onclick="selectColorTab('${key}')">
+                 Id="tab-${key}" 
+                 Onclick="selectColorTab('${key}')">
                 <span class="tab-indicator" style="background: ${cfg.color};"></span>
                 <span class="tab-name">${cfg.name}</span>
                 <span class="tab-mult" id="tab-val-${key}">
-                    ${hasBet ? colorBets[key] + ' $' : cfg.label}
+                    ${hasBet ? ColorBets[key] + ' $' : cfg.label}
                 </span>
             </div>
         `;
     }).join('');
 }
 
-function selectColorTab(color) {
-    if (wheelSpinning) return;
+Function selectColorTab(color) {
+    If (wheelSpinning) return;
 
-    const currentInput = document.getElementById('activeBetInput');
-    if (currentInput) {
-        onActiveColorInput(currentInput.value);
+    Const currentInput = document.getElementById('activeBetInput');
+    If (currentInput) {
+        OnActiveColorInput(currentInput.value);
     }
 
-    activeColor = color;
+    ActiveColor = color;
 
-    document.querySelectorAll('.color-tab-btn').forEach(btn => btn.classList.remove('active'));
-    const currentTab = document.getElementById(`tab-${color}`);
-    if (currentTab) currentTab.classList.add('active');
+    Document.querySelectorAll('.color-tab-btn').forEach(btn => btn.classList.remove('active'));
+    Const currentTab = document.getElementById(`tab-${color}`);
+    If (currentTab) currentTab.classList.add('active');
 
-    const cfg = COLOR_CONFIG[color];
-    const titleBox = document.getElementById('activeColorTitle');
-    if (titleBox) {
-        titleBox.innerHTML = `
+    Const cfg = COLOR_CONFIG[color];
+    Const titleBox = document.getElementById('activeColorTitle');
+    If (titleBox) {
+        TitleBox.innerHTML = `
             <span class="color-indicator" style="background: ${cfg.color};"></span>
             <div>
                 <span>Ставка на ${cfg.name}</span><br>
@@ -697,102 +702,102 @@ function selectColorTab(color) {
         `;
     }
 
-    if (currentInput) {
-        const savedVal = colorBets[color];
-        currentInput.value = savedVal > 0 ? savedVal : '';
+    If (currentInput) {
+        Const savedVal = colorBets[color];
+        CurrentInput.value = savedVal > 0 ? SavedVal : '';
     }
 
-    updateTotalBet();
+    UpdateTotalBet();
 }
 
-function onActiveColorInput(val) {
-    let parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0.10) {
-        colorBets[activeColor] = 0;
+Function onActiveColorInput(val) {
+    Let parsed = parseFloat(val);
+    If (isNaN(parsed) || parsed < 0.10) {
+        ColorBets[activeColor] = 0;
     } else {
-        colorBets[activeColor] = parsed;
+        ColorBets[activeColor] = parsed;
     }
 
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        const cfg = COLOR_CONFIG[activeColor];
-        tabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor]} $` : cfg.label;
+    Const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    If (tabVal) {
+        Const cfg = COLOR_CONFIG[activeColor];
+        TabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor]} $` : cfg.label;
     }
 
-    updateTotalBet();
+    UpdateTotalBet();
 }
 
-function applyMinToActive() {
-    if (wheelSpinning) return;
-    colorBets[activeColor] = 0.10;
+Function applyMinToActive() {
+    If (wheelSpinning) return;
+    ColorBets[activeColor] = 0.10;
 
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = '0.10';
+    Const input = document.getElementById('activeBetInput');
+    If (input) input.value = '0.10';
 
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) tabVal.textContent = '0.10 $';
+    Const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    If (tabVal) tabVal.textContent = '0.10 $';
 
-    updateTotalBet();
+    UpdateTotalBet();
 }
 
-function applyPercentToActive(pct) {
-    if (wheelSpinning) return;
+Function applyPercentToActive(pct) {
+    If (wheelSpinning) return;
 
-    let otherBetsSum = 0;
+    Let otherBetsSum = 0;
     Object.keys(colorBets).forEach(key => {
-        if (key !== activeColor) otherBetsSum += colorBets[key];
+        If (key !== activeColor) otherBetsSum += colorBets[key];
     });
 
-    const availableBalance = currentBalance - otherBetsSum;
-    if (availableBalance < 0.10) {
-        showMessage("Недостаточно средств для минимальной ставки!");
-        return;
+    Const availableBalance = currentBalance - otherBetsSum;
+    If (availableBalance < 0.10) {
+        ShowMessage("Недостаточно средств для минимальной ставки!");
+        Return;
     }
 
-    let amount = Math.floor(availableBalance * pct * 100) / 100;
-    if (amount < 0.10) {
-        amount = 0.10;
+    Let amount = Math.floor(availableBalance * pct * 100) / 100;
+    If (amount < 0.10) {
+        Amount = 0.10;
     }
 
-    colorBets[activeColor] = amount;
+    ColorBets[activeColor] = amount;
 
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = amount.toFixed(2);
+    Const input = document.getElementById('activeBetInput');
+    If (input) input.value = amount.toFixed(2);
 
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        tabVal.textContent = `${amount.toFixed(2)} $`;
+    Const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    If (tabVal) {
+        TabVal.textContent = `${amount.toFixed(2)} $`;
     }
 
-    updateTotalBet();
+    UpdateTotalBet();
 }
 
-function resetActiveBet() {
-    if (wheelSpinning) return;
-    colorBets[activeColor] = 0;
+Function resetActiveBet() {
+    If (wheelSpinning) return;
+    ColorBets[activeColor] = 0;
 
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = '';
+    Const input = document.getElementById('activeBetInput');
+    If (input) input.value = '';
 
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        const cfg = COLOR_CONFIG[activeColor];
-        tabVal.textContent = cfg.label;
+    Const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    If (tabVal) {
+        Const cfg = COLOR_CONFIG[activeColor];
+        TabVal.textContent = cfg.label;
     }
 
-    updateTotalBet();
+    UpdateTotalBet();
 }
 
-function updateTotalBet() {
-    const totalInfo = document.getElementById('totalBetInfo');
-    let totalSum = 0;
+Function updateTotalBet() {
+    Const totalInfo = document.getElementById('totalBetInfo');
+    Let totalSum = 0;
 
     Object.values(colorBets).forEach(val => {
-        totalSum += val;
+        TotalSum += val;
     });
 
-    if (totalInfo) {
-        totalInfo.textContent = `Общая ставка: ${totalSum.toFixed(2)} $`;
+    If (totalInfo) {
+        TotalInfo.textContent = `Общая ставка: ${totalSum.toFixed(2)} $`;
     }
 }
 
@@ -800,114 +805,114 @@ function updateTotalBet() {
    ВРАЩЕНИЕ КОЛЕСА
 ========================= */
 
-async function spinWheel() {
-    if (wheelSpinning || isBetProcessing) return;
+Async function spinWheel() {
+    If (wheelSpinning || isBetProcessing) return;
 
-    const button = document.getElementById('spinButton');
-    if (!button) return;
+    Const button = document.getElementById('spinButton');
+    If (!button) return;
 
-    isBetProcessing = true;
-    button.disabled = true;
+    IsBetProcessing = true;
+    Button.disabled = true;
 
-    const currentInput = document.getElementById('activeBetInput');
-    if (currentInput && currentInput.value !== '') {
-        onActiveColorInput(currentInput.value);
+    Const currentInput = document.getElementById('activeBetInput');
+    If (currentInput && currentInput.value !== '') {
+        OnActiveColorInput(currentInput.value);
     }
 
-    let totalBet = 0;
+    Let totalBet = 0;
     Object.keys(colorBets).forEach(key => {
-        colorBets[key] = parseFloat(colorBets[key]) || 0;
-        totalBet += colorBets[key];
+        ColorBets[key] = parseFloat(colorBets[key]) || 0;
+        TotalBet += colorBets[key];
     });
 
-    if (totalBet < 0.10) {
-        showMessage("Минимальная общая ставка — 0.10 $!");
-        button.disabled = false;
-        isBetProcessing = false;
-        return;
+    If (totalBet < 0.10) {
+        ShowMessage("Минимальная общая ставка — 0.10 $!");
+        Button.disabled = false;
+        IsBetProcessing = false;
+        Return;
     }
 
-    if (totalBet > currentBalance) {
-        showMessage("Недостаточно средств на балансе!");
-        button.disabled = false;
-        isBetProcessing = false;
-        return;
+    If (totalBet > currentBalance) {
+        ShowMessage("Недостаточно средств на балансе!");
+        Button.disabled = false;
+        IsBetProcessing = false;
+        Return;
     }
 
-    const success = await apiRecordBet(totalBet);
-    if (!success) {
-        showMessage("Ошибка проведения ставки!");
-        button.disabled = false;
-        isBetProcessing = false;
-        return;
+    Const success = await apiRecordBet(totalBet);
+    If (!success) {
+        ShowMessage("Ошибка проведения ставки!");
+        Button.disabled = false;
+        IsBetProcessing = false;
+        Return;
     }
 
-    wheelSpinning = true;
-    button.innerHTML = '<span>↻ Вращение...</span>';
+    WheelSpinning = true;
+    Button.innerHTML = '<span>↻ Вращение...</span>';
 
-    const result = document.getElementById('wheelResult');
-    const resultValue = document.getElementById('resultValue');
-    const wheelSvg = document.getElementById('wheelSvg');
-    const wheelStage = document.querySelector('.wheel-stage');
+    Const result = document.getElementById('wheelResult');
+    Const resultValue = document.getElementById('resultValue');
+    Const wheelSvg = document.getElementById('wheelSvg');
+    Const wheelStage = document.querySelector('.wheel-stage');
 
-    if (result) result.classList.remove('show');
-    if (resultValue) resultValue.textContent = '?';
+    If (result) result.classList.remove('show');
+    If (resultValue) resultValue.textContent = '?';
 
-    const rewardIndex = Math.floor(Math.random() * sectors.length);
-    const totalSectors = sectors.length;
-    const sectorAngle = 360 / totalSectors;
+    Const rewardIndex = Math.floor(Math.random() * sectors.length);
+    Const totalSectors = sectors.length;
+    Const sectorAngle = 360 / totalSectors;
 
-    const padding = 0.15; 
-    const randomOffset = (Math.random() * (1 - 2 * padding) + padding) * sectorAngle;
+    Const padding = 0.15; 
+    Const randomOffset = (Math.random() * (1 - 2 * padding) + padding) * sectorAngle;
 
-    const targetAngleInSector = (rewardIndex * sectorAngle) + randomOffset;
-    const stopAngle = 360 - targetAngleInSector;
+    Const targetAngleInSector = (rewardIndex * sectorAngle) + randomOffset;
+    Const stopAngle = 360 - targetAngleInSector;
 
-    const fullSpins = 6;
-    wheelRotation += fullSpins * 360 + (stopAngle - (wheelRotation % 360));
+    Const fullSpins = 6;
+    WheelRotation += fullSpins * 360 + (stopAngle - (wheelRotation % 360));
 
-    if (wheelSvg) wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
+    If (wheelSvg) wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
 
-    setTimeout(() => {
-        if (wheelStage) wheelStage.classList.add('zoomed');
+    SetTimeout(() => {
+        If (wheelStage) wheelStage.classList.add('zoomed');
     }, 3600);
 
-    setTimeout(async () => {
-        if (wheelStage) wheelStage.classList.remove('zoomed');
+    SetTimeout(async () => {
+        If (wheelStage) wheelStage.classList.remove('zoomed');
 
-        const wonSector = sectors[rewardIndex];
-        const sectorType = wonSector.type; 
+        Const wonSector = sectors[rewardIndex];
+        Const sectorType = wonSector.type; 
         
-        const betOnWonColor = parseFloat(colorBets[sectorType]) || 0;
-        const multiplier = parseFloat(wonSector.mult) || 0;
+        Const betOnWonColor = parseFloat(colorBets[sectorType]) || 0;
+        Const multiplier = parseFloat(wonSector.mult) || 0;
 
-        let totalWin = 0;
+        Let totalWin = 0;
 
-        if (betOnWonColor > 0 && multiplier > 0) {
-            totalWin = betOnWonColor * multiplier;
-            await apiAddWin(totalWin);
+        If (betOnWonColor > 0 && multiplier > 0) {
+            TotalWin = betOnWonColor * multiplier;
+            Await apiAddWin(totalWin);
         }
 
-        if (resultValue) {
-            if (totalWin > 0) {
-                resultValue.textContent = `Победа +${totalWin.toFixed(2)} $ (${wonSector.label})`;
-                resultValue.style.color = '#2ecc71';
+        If (resultValue) {
+            If (totalWin > 0) {
+                ResultValue.textContent = `Победа +${totalWin.toFixed(2)} $ (${wonSector.label})`;
+                ResultValue.style.color = '#2ecc71';
             } else {
-                resultValue.textContent = `Выпал ${wonSector.name} (${wonSector.label})`;
-                resultValue.style.color = '#e74c3c';
+                ResultValue.textContent = `Выпал ${wonSector.name} (${wonSector.label})`;
+                ResultValue.style.color = '#e74c3c';
             }
         }
 
-        if (result) result.classList.add('show');
+        If (result) result.classList.add('show');
 
-        if (tg?.HapticFeedback) {
-            tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
+        If (tg?.HapticFeedback) {
+            Tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
         }
 
-        wheelSpinning = false;
-        isBetProcessing = false;
-        button.disabled = false;
-        button.innerHTML = '<span>↻ Сделать ставку</span>';
+        WheelSpinning = false;
+        IsBetProcessing = false;
+        Button.disabled = false;
+        Button.innerHTML = '<span>↻ Сделать ставку</span>';
 
     }, 5000);
 }
@@ -916,29 +921,29 @@ async function spinWheel() {
    ПОПОЛНЕНИЕ И ВЫВОД
 ========================= */
 
-function renderTransactions() {
-    const list = document.getElementById("historyList");
-    const count = document.getElementById("txCount");
-    if (!list) return;
+Function renderTransactions() {
+    Const list = document.getElementById("historyList");
+    Const count = document.getElementById("txCount");
+    If (!list) return;
 
-    if (count) count.textContent = `${transactions.length} операций`;
+    If (count) count.textContent = `${transactions.length} операций`;
 
-    if (transactions.length === 0) {
-        list.innerHTML = `<div style="text-align:center; color:#666; font-size:13px; padding:15px;">История пуста</div>`;
-        return;
+    If (transactions.length === 0) {
+        List.innerHTML = `<div style="text-align:center; color:#666; font-size:13px; padding:15px;">История пуста</div>`;
+        Return;
     }
 
-    list.innerHTML = transactions.map(tx => {
-        const isDep = tx.type === 'deposit';
-        const sign = isDep ? '+' : '-';
-        const title = isDep ? 'Пополнение' : 'Вывод средств';
-        const statusText = tx.status === 'success' ? 'Успешно' : 'В обработке';
+    List.innerHTML = transactions.map(tx => {
+        Const isDep = tx.type === 'deposit';
+        Const sign = isDep ? '+' : '-';
+        Const title = isDep ? 'Пополнение' : 'Вывод средств';
+        Const statusText = tx.status === 'success' ? 'Успешно' : 'В обработке';
 
-        const iconHTML = tx.icon.includes('.')
+        Const iconHTML = tx.icon.includes('.')
             ? `<img src="${tx.icon}" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;">`
             : tx.icon;
 
-        return `
+        Return `
             <div class="history-item">
                 <div class="tx-left">
                     <div class="tx-icon ${tx.type}">
@@ -958,208 +963,196 @@ function renderTransactions() {
     }).join('');
 }
 
-function closeMethodsDropdown() {
-    const dropdown = document.getElementById("methodsDropdown");
-    const arrow = document.getElementById("methodArrow");
-    if (dropdown) dropdown.classList.remove("open");
-    if (arrow) arrow.textContent = "▼";
+Function closeMethodsDropdown() {
+    Const dropdown = document.getElementById("methodsDropdown");
+    Const arrow = document.getElementById("methodArrow");
+    If (dropdown) dropdown.classList.remove("open");
+    If (arrow) arrow.textContent = "▼";
 }
 
-function setBalanceMode(mode) {
-    balanceMode = mode;
-    closeMethodsDropdown();
+Function setBalanceMode(mode) {
+    BalanceMode = mode;
+    CloseMethodsDropdown();
 
-    const depositTab = document.getElementById("depositTab");
-    const withdrawTab = document.getElementById("withdrawTab");
-    const title = document.getElementById("formTitle");
-    const subtitle = document.getElementById("formSubtitle");
-    const action = document.getElementById("balanceAction");
+    Const depositTab = document.getElementById("depositTab");
+    Const withdrawTab = document.getElementById("withdrawTab");
+    Const title = document.getElementById("formTitle");
+    Const subtitle = document.getElementById("formSubtitle");
+    Const action = document.getElementById("balanceAction");
 
-    if (!depositTab || !withdrawTab || !title || !subtitle || !action) return;
+    If (!depositTab || !withdrawTab || !title || !subtitle || !action) return;
 
-    depositTab.classList.remove("active");
-    withdrawTab.classList.remove("active");
+    DepositTab.classList.remove("active");
+    WithdrawTab.classList.remove("active");
 
-    if (mode === "deposit") {
-        depositTab.classList.add("active");
-        title.textContent = "Пополнение баланса";
-        subtitle.textContent = "Выберите удобный способ пополнения";
-        action.textContent = "Пополнить";
+    If (mode === "deposit") {
+        DepositTab.classList.add("active");
+        Title.textContent = "Пополнение баланса";
+        Subtitle.textContent = "Выберите удобный способ пополнения";
+        Action.textContent = "Пополнить";
     }
 
-    if (mode === "withdraw") {
-        withdrawTab.classList.add("active");
-        title.textContent = "Вывод средств";
-        subtitle.textContent = "Выберите способ вывода средств";
-        action.textContent = "Вывести";
-    }
-}
-
-function toggleMethods() {
-    const dropdown = document.getElementById("methodsDropdown");
-    const arrow = document.getElementById("methodArrow");
-
-    if (!dropdown) return;
-    dropdown.classList.toggle("open");
-
-    if (arrow) {
-        arrow.textContent = dropdown.classList.contains("open") ? "▲" : "▼";
+    If (mode === "withdraw") {
+        WithdrawTab.classList.add("active");
+        Title.textContent = "Вывод средств";
+        Subtitle.textContent = "Выберите способ вывода средств";
+        Action.textContent = "Вывести";
     }
 }
 
-function selectMethod(method, icon, sub) {
-    selectedMethod = method;
-    selectedMethodIcon = icon;
-    selectedMethodSub = sub;
+Function toggleMethods() {
+    Const dropdown = document.getElementById("methodsDropdown");
+    Const arrow = document.getElementById("methodArrow");
 
-    const selected = document.getElementById("selectedMethod");
-    const selectedSub = document.getElementById("selectedMethodSub");
-    const iconElement = document.getElementById("selectedMethodIcon");
+    If (!dropdown) return;
+    Dropdown.classList.toggle("open");
 
-    if (selected) selected.textContent = method;
-    if (selectedSub) selectedSub.textContent = sub;
+    If (arrow) {
+        Arrow.textContent = dropdown.classList.contains("open") ? "▲" : "▼";
+    }
+}
 
-    if (iconElement) {
-        if (icon.includes('.')) {
-            iconElement.src = icon;
+Function selectMethod(method, icon, sub) {
+    SelectedMethod = method;
+    SelectedMethodIcon = icon;
+    SelectedMethodSub = sub;
+
+    Const selected = document.getElementById("selectedMethod");
+    Const selectedSub = document.getElementById("selectedMethodSub");
+    Const iconElement = document.getElementById("selectedMethodIcon");
+
+    If (selected) selected.textContent = method;
+    If (selectedSub) selectedSub.textContent = sub;
+
+    If (iconElement) {
+        If (icon.includes('.')) {
+            IconElement.src = icon;
         } else {
-            iconElement.textContent = icon;
+            IconElement.textContent = icon;
         }
     }
 
-    closeMethodsDropdown();
+    CloseMethodsDropdown();
 }
 
-function demoBalanceAction() {
-    const input = document.getElementById("amountInput");
-    if (!input) return;
+Function demoBalanceAction() {
+    Const input = document.getElementById("amountInput");
+    If (!input) return;
 
-    const amount = parseFloat(input.value);
+    Const amount = parseFloat(input.value);
 
-    if (!amount || amount <= 0) {
-        showMessage("Введите сумму");
-        return;
+    If (!amount || amount <= 0) {
+        ShowMessage("Введите сумму");
+        Return;
     }
 
-    if (balanceMode === "deposit") {
-        setUIBalance(currentBalance + amount);
+    If (balanceMode === "deposit") {
+        SetUIBalance(currentBalance + amount);
 
-        transactions.unshift({
-            type: 'deposit',
-            method: selectedMethod,
-            icon: selectedMethodIcon,
-            amount: amount,
-            date: 'Только что',
-            status: 'success'
+        Transactions.unshift({
+            Type: 'deposit',
+            Method: selectedMethod,
+            Icon: selectedMethodIcon,
+            Amount: amount,
+            Date: 'Только что',
+            Status: 'success'
         });
-        renderTransactions();
+        RenderTransactions();
 
-        showMessage(`Демо: пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
-        return;
+        ShowMessage(`Демо: пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
+        Return;
     }
 
-    if (amount > currentBalance) {
-        showMessage("Недостаточно средств");
-        return;
+    If (amount > currentBalance) {
+        ShowMessage("Недостаточно средств");
+        Return;
     }
 
-    setUIBalance(currentBalance - amount);
+    SetUIBalance(currentBalance - amount);
 
-    transactions.unshift({
-        type: 'withdraw',
-        method: selectedMethod,
-        icon: selectedMethodIcon,
-        amount: amount,
-        date: 'Только что',
-        status: 'pending'
+    Transactions.unshift({
+        Type: 'withdraw',
+        Method: selectedMethod,
+        Icon: selectedMethodIcon,
+        Amount: amount,
+        Date: 'Только что',
+        Status: 'pending'
     });
-    renderTransactions();
+    RenderTransactions();
 
-    showMessage(`Демо: отправлено на вывод ${amount.toFixed(2)} $ через ${selectedMethod}`);
+    ShowMessage(`Демо: отправлено на вывод ${amount.toFixed(2)} $ через ${selectedMethod}`);
 }
 
-function claimBonus() {
-    showMessage("Демо: ежедневный бонус пока не подключён");
+Function claimBonus() {
+    ShowMessage("Демо: ежедневный бонус пока не подключён");
 }
 
-function showMessage(text) {
-    if (tg?.showAlert) {
-        tg.showAlert(text);
-        return;
+Function showMessage(text) {
+    If (tg?.showAlert) {
+        Tg.showAlert(text);
+        Return;
     }
-    alert(text);
+    Alert(text);
 }
 
 /* =========================
    ПРОФИЛЬ И КАСТОМИЗАЦИЯ ФОНА
 ========================= */
 
-function applyDesign() {
-    const cover = document.getElementById('profileCover');
-    if (cover) {
-        cover.style.background = `linear-gradient(180deg, ${profileDesign.start} 0%, ${profileDesign.end} 100%)`;
+Function applyDesign() {
+    Const cover = document.getElementById('profileCover');
+    If (cover) {
+        Cover.style.background = `linear-gradient(180deg, ${profileDesign.start} 0%, ${profileDesign.end} 100%)`;
     }
 }
 
-function renderCustomizerControls() {
-    const colorGrid = document.getElementById('colorPickerGrid');
-    if (colorGrid) {
-        colorGrid.innerHTML = COLOR_PALETTE.map(item => `
+Function renderCustomizerControls() {
+    Const colorGrid = document.getElementById('colorPickerGrid');
+    If (colorGrid) {
+        ColorGrid.innerHTML = COLOR_PALETTE.map(item => `
             <div class="color-option ${item.id === profileDesign.colorId ? 'active' : ''}" 
-                 style="background: linear-gradient(135deg, ${item.start}, ${item.end});"
-                 onclick="selectGradient('${item.id}', '${item.start}', '${item.end}')">
+                 Style="background: linear-gradient(135deg, ${item.start}, ${item.end});"
+                 Onclick="selectGradient('${item.id}', '${item.start}', '${item.end}')">
             </div>
         `).join('');
     }
 }
 
-function selectGradient(id, start, end) {
-    profileDesign.colorId = id;
-    profileDesign.start = start;
-    profileDesign.end = end;
-    renderCustomizerControls();
-    applyDesign();
+Function selectGradient(id, start, end) {
+    ProfileDesign.colorId = id;
+    ProfileDesign.start = start;
+    ProfileDesign.end = end;
+    RenderCustomizerControls();
+    ApplyDesign();
 }
 
-function toggleProfileCustomizer() {
-    const box = document.getElementById('customizerBox');
-    if (box) box.classList.toggle('hidden');
+Function toggleProfileCustomizer() {
+    Const box = document.getElementById('customizerBox');
+    If (box) box.classList.toggle('hidden');
 }
 
-function saveProfileCustomization() {
-    localStorage.setItem('wxs_profile', JSON.stringify(profileDesign));
-    applyDesign();
-    toggleProfileCustomizer();
-    showMessage("Настройки сохранены!");
+Function saveProfileCustomization() {
+    LocalStorage.setItem('wxs_profile', JSON.stringify(profileDesign));
+    ApplyDesign();
+    ToggleProfileCustomizer();
+    ShowMessage("Настройки сохранены!");
 }
 
 /* =========================
-   ЗАПУСК
+   ЗАПУСК ПРИ СТАРТЕ
 ========================= */
 
-document.addEventListener("DOMContentLoaded", async () => {
-    loadTelegramUser();
-    await updateBalance();
-    renderTransactions();
-    goHome();
-    applyDesign();
-});
-
-// Автоматический запуск при старте Mini App
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("🚀 Mini App запущен!");
+Document.addEventListener("DOMContentLoaded", async () => {
+    Console.log("🚀 Mini App запущен!");
     
-    // Инициализация Telegram Mini App SDK
-    if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
+    If (window.Telegram?.WebApp) {
+        Window.Telegram.WebApp.ready();
+        Window.Telegram.WebApp.expand();
     }
 
-    // Вызываем твою функцию profile() для загрузки баланса из БД
-    if (typeof profile === "function") {
-        console.log("📡 Отправляем запрос profile() на бэкенд...");
-        profile();
-    } else {
-        console.error("❌ Функция profile() не найдена!");
-    }
+    LoadTelegramUser();
+    Await fetchUserProfileFromApi();
+    RenderTransactions();
+    GoHome();
+    ApplyDesign();
 });
