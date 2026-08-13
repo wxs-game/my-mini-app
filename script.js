@@ -430,7 +430,8 @@ async function fetchUserProfileFromApi() {
 async function apiRecordBet(amount) {
     if (!tg?.initData) return false;
     try {
-        const res = await fetch(`${API_BASE_URL}/api/user/record-bet`, {
+        // ИСПРАВЛЕН ЭНДПОИНТ: /api/user/play
+        const res = await fetch(`${API_BASE_URL}/api/user/play`, {
             method: 'POST',
             headers: {
                 'Authorization': tg.initData,
@@ -449,6 +450,7 @@ async function apiRecordBet(amount) {
         return false;
     }
 }
+
 
 async function apiAddWin(amount, retries = 3) {
     if (!tg?.initData) return false;
