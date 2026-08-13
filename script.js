@@ -402,6 +402,15 @@ async function updateBalance() {
    API ВЗАИМОДЕЙСТВИЕ
 ========================= */
 
+// Добавляем универсальные заголовки для туннеля Pinggy
+function getApiHeaders() {
+    return {
+        'Authorization': tg?.initData || '',
+        'Content-Type': 'application/json',
+        'pinggy-skip-browser-warning': 'true' // Пропускаем экран защиты Pinggy
+    };
+}
+
 async function fetchUserProfileFromApi() {
     if (!tg?.initData) {
         console.warn("⚠️ tg.initData отсутствует! Возможно, скрипт запущен вне Telegram.");
@@ -411,11 +420,7 @@ async function fetchUserProfileFromApi() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
             method: 'GET',
-            headers: {
-                'Authorization': tg.initData,
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
-            }
+            headers: getApiHeaders()
         });
 
         if (!response.ok) {
@@ -446,11 +451,7 @@ async function apiRecordBet(amount) {
     try {
         const res = await fetch(`${API_BASE_URL}/api/user/play`, {
             method: 'POST',
-            headers: {
-                'Authorization': tg.initData,
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
-            },
+            headers: getApiHeaders(),
             body: JSON.stringify({ amount: amount })
         });
 
@@ -479,11 +480,7 @@ async function apiAddWin(amount, retries = 3) {
         try {
             const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': tg.initData,
-                    'Content-Type': 'application/json',
-                    'ngrok-skip-browser-warning': 'true'
-                },
+                headers: getApiHeaders(),
                 body: JSON.stringify({ amount: amount })
             });
 
