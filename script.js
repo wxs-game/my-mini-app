@@ -205,7 +205,7 @@ async function startMinesGame() {
 
     const success = await apiRecordBet(bet);
     if (!success) {
-        showMessage("Ошибка проведение ставки на сервере!");
+        showMessage("Ошибка проведения ставки на сервере!");
         minesGame.isProcessing = false;
         return;
     }
@@ -403,7 +403,10 @@ async function updateBalance() {
 ========================= */
 
 async function fetchUserProfileFromApi() {
-    if (!tg?.initData) return;
+    if (!tg?.initData) {
+        console.warn("⚠️ tg.initData отсутствует! Возможно, скрипт запущен вне Telegram.");
+        return;
+    }
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
@@ -415,22 +418,32 @@ async function fetchUserProfileFromApi() {
             }
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+            console.error(`❌ Ошибка сервера API: Статус ${response.status}`);
+            const errorText = await response.text();
+            console.error("Детали ошибки сервера:", errorText);
+            return;
+        }
 
         const data = await response.json();
+        console.log("✅ Успешно получены данные пользователя:", data);
+
         if (data.status === "ok") {
             currentTurnover = data.turnover || 0;
             setUIBalance(data.balance);
         }
     } catch (error) {
-        console.error("Ошибка при получении профиля:", error);
+        console.error("❌ Ошибка при получении профиля:", error);
     }
 }
 
 async function apiRecordBet(amount) {
-    if (!tg?.initData) return false;
+    if (!tg?.initData) {
+        console.warn("⚠️ tg.initData отсутствует при попытке сделать ставку.");
+        return false;
+    }
+
     try {
-        // ИСПРАВЛЕН ЭНДПОИНТ: /api/user/play
         const res = await fetch(`${API_BASE_URL}/api/user/play`, {
             method: 'POST',
             headers: {
@@ -440,20 +453,27 @@ async function apiRecordBet(amount) {
             },
             body: JSON.stringify({ amount: amount })
         });
-        if (!res.ok) return false;
+
+        if (!res.ok) {
+            console.error(`❌ Ошибка списания ставки: Статус ${res.status}`);
+            return false;
+        }
+
         const data = await res.json();
         currentTurnover = data.turnover || 0;
         setUIBalance(data.balance);
         return true;
     } catch (e) {
-        console.error("Ошибка при списывании ставки:", e);
+        console.error("❌ Ошибка при списывании ставки:", e);
         return false;
     }
 }
 
-
 async function apiAddWin(amount, retries = 3) {
-    if (!tg?.initData) return false;
+    if (!tg?.initData) {
+        console.warn("⚠️ tg.initData отсутствует при попытке зачислить выигрыш.");
+        return false;
+    }
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
