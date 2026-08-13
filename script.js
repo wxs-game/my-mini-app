@@ -9,7 +9,7 @@ if (tg) {
    БЭКЕНД И АВТОРИЗАЦИЯ
 ========================= */
 
-const API_BASE_URL = "https://cable-coral-ahead.ngrok-free.dev";
+const API_BASE_URL = "https://xezym-5-248-188-249.run.pinggy-free.link";
 
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
