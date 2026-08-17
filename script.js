@@ -5,11 +5,38 @@ if (tg) {
     tg.expand();
 }
 
+// ==========================================
+// ИНИЦИАЛИЗАЦИЯ SUPABASE
+// ==========================================
+const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
+const SUPABASE_ANON_KEY = 'ВАШ_PUBLISHABLE_KEY'; // Ключ sb_publishable_... из панели Supabase
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Функция сохранения изменений в Supabase
+async function saveUserData() {
+    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (!tgUser) return;
+
+    const { error } = await supabase
+        .from('wxs_game')
+        .update({
+            balance: userState.balance,
+            turnover: userState.turnover,
+            max_win: userState.maxWin,
+            deposits: userState.deposits,
+            withdrawals: userState.withdrawals
+        })
+        .eq('telegram_id', tgUser.id);
+
+    if (error) {
+        console.error('Ошибка сохранения данных:', error);
+    }
+}
+
 /* =========================
    БЭКЕНД И АВТОРИЗАЦИЯ
 ========================= */
-
-const API_BASE_URL = "https://yyghn-178-137-210-168.free.pinggy.net";
 
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
