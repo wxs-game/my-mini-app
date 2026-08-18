@@ -2267,7 +2267,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     loadTelegramUser();
-    await loadUserData();
+    await loadUserData(); // Теперь await внутри async-функции работает корректно
     goHome();
     applyDesign();
 });
+
