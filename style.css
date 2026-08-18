@@ -13,6 +13,8 @@ html {
     background-color: #090909;
     scroll-behavior: smooth;
     height: 100%;
+    overscroll-behavior: none;   /* запрет "растягивания" страницы за края (pull-to-refresh, bounce) */
+    touch-action: pan-y;         /* разрешаем только вертикальную прокрутку, блокируем pinch-zoom */
 }
 
 body {
@@ -27,6 +29,8 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior: none;
+    touch-action: pan-y;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
@@ -1887,3 +1891,4 @@ main {
     align-items: center;
     user-select: none;
 }
+
