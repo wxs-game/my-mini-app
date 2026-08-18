@@ -35,12 +35,12 @@ let currentWithdrawals = 0.00;
 //   +10 очков за поражение
 const LEVELS = [
     { level: 1, points: 0,     title: "Новичок" },
-    { level: 2, points: 1000,  title: "Гой" },
-    { level: 3, points: 2500,  title: "Про" },
-    { level: 4, points: 5000,  title: "Додеп" },
-    { level: 5, points: 7500,  title: "Лудик" },
-    { level: 6, points: 10000, title: "Король пепе" },
-    { level: 7, points: 10001, title: "Легенда" } // 10000+ очков
+    { level: 2, points: 1500,  title: "Гой" },
+    { level: 3, points: 3750,  title: "Про" },
+    { level: 4, points: 7500,  title: "Додеп" },
+    { level: 5, points: 11250, title: "Лудик" },
+    { level: 6, points: 15000, title: "Король пепе" },
+    { level: 7, points: 15001, title: "Легенда" } // 15000+ очков
 ];
 
 function calculatePoints() {
@@ -654,6 +654,7 @@ function openProfile() {
     updateNav("profile");
     applyDesign();
     renderCustomizerControls();
+    updateLevelUI();
 }
 
 function openBonus() {
@@ -1236,6 +1237,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadUserData();
+    updateLevelUI();
     goHome();
     applyDesign();
 
