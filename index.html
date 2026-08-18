@@ -30,8 +30,8 @@
             </div>
             <div class="profile-info">
                 <div class="username" id="username">Игрок</div>
-                <div class="level">Уровень 1</div>
-                <div class="level-line"><div id="homeLevelBar" style="width: 52%;"></div></div>
+                <div class="level" id="homeLevelText">Уровень 1</div>
+                <div class="level-line"><div id="homeLevelBar" style="width: 0%;"></div></div>
             </div>
         </div>
         <div class="balance">
@@ -321,11 +321,11 @@
 
                 <div class="profile-level-block">
                     <div class="level-info">
-                        <span>Уровень 1</span>
-                        <span>52%</span>
+                        <span id="profileLevelText">Уровень 1 · Новичок</span>
+                        <span id="profileLevelPercent">0%</span>
                     </div>
                     <div class="level-progress-bar">
-                        <div class="level-progress-fill" style="width: 52%;"></div>
+                        <div class="level-progress-fill" id="profileLevelFill" style="width: 0%;"></div>
                     </div>
                 </div>
 
