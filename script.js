@@ -432,8 +432,11 @@ async function cashoutMines() {
     setUIBalance(currentBalance);
     await saveUserData();
 
-    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred("success");
+    }
+    
+    showMessage("Выигрыш: +" + winAmount.toFixed(2) + "$ (" + mult.toFixed(2) + "x)");
 
     endMinesGame(true);
 }
@@ -450,12 +453,22 @@ async function endMinesGame(isWin) {
         if (!minesGame.revealed[i]) {
             tile.classList.add('end-show');
             if (minesGame.field[i] === 'bomb') {
-                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = '<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">';
             } else {
-                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = '<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">';
             }
         }
     }
+
+    const actionBtn = document.getElementById('minesActionBtn');
+    const autoBtn = document.getElementById('minesAutoBtn');
+    if (actionBtn) actionBtn.textContent = 'Начать игру';
+    if (autoBtn) autoBtn.disabled = true;
+
+    minesGame.isProcessing = false;
+    await saveUserData();
+}
+
 
     const actionBtn = document.getElementById('minesActionBtn');
     const autoBtn = document.getElementById('minesAutoBtn');
