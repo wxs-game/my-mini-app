@@ -1,3 +1,6 @@
+// ==========================================
+// 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
+// ==========================================
 const tg = window.Telegram?.WebApp;
 
 if (tg) {
@@ -5,10 +8,24 @@ if (tg) {
     tg.expand();
 }
 
-// Асинхронная загрузка и регистрация пользователя
+const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
+// ⚠️ ВСТАВЬТЕ СЮДА ВАШ sb_publishable_ КЛЮЧ ИЗ SUPABASE:
+const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN'; 
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Переменные состояния пользователя
+let currentBalance = 0.00;
+let currentTurnover = 0.00;
+let currentMaxWin = 0.00;
+let currentDeposits = 0.00;
+let currentWithdrawals = 0.00;
+
+// ==========================================
+// 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
+// ==========================================
+
 async function loadUserData() {
-    const tg = window.Telegram?.WebApp;
-    tg?.ready();
     const tgUser = tg?.initDataUnsafe?.user;
 
     if (!tgUser) {
@@ -23,7 +40,7 @@ async function loadUserData() {
         photo_url: tgUser.photo_url || ''
     };
 
-    // 1. Проверяем, есть ли пользователь в БД
+    // 1. Запрашиваем данные из Supabase
     let { data, error } = await supabase
         .from('wxs_game')
         .select('*')
@@ -35,7 +52,7 @@ async function loadUserData() {
         return;
     }
 
-    // 2. Если нет — создаем новую запись
+    // 2. Если пользователя нет — создаем запись
     if (!data) {
         const { data: newUser, error: createError } = await supabase
             .from('wxs_game')
@@ -51,58 +68,46 @@ async function loadUserData() {
             .single();
 
         if (createError) {
-            console.error('Ошибка создания записи:', createError);
+            console.error('Ошибка создания записи в Supabase:', createError);
             return;
         }
         data = newUser;
     } else {
-        // Если есть — обновляем никнейм и аватарку
+        // Обновляем данные профиля, если они изменились в Telegram
         await supabase
             .from('wxs_game')
             .update(profileData)
             .eq('telegram_id', tgUser.id);
     }
 
-    // 3. Синхронизируем с вашим объектом userState
-    userState.balance = Number(data.balance) || 0;
-    userState.turnover = Number(data.turnover) || 0;
-    userState.maxWin = Number(data.max_win) || 0;
-    userState.deposits = Number(data.deposits) || 0;
-    userState.withdrawals = Number(data.withdrawals) || 0;
-
-    // Обновляем UI интерфейса
-    updateUI();
+    // 3. Записываем полученные данные в переменные игры
+    currentTurnover = Number(data.turnover) || 0;
+    currentMaxWin = Number(data.max_win) || 0;
+    currentDeposits = Number(data.deposits) || 0;
+    currentWithdrawals = Number(data.withdrawals) || 0;
+    
+    // Обновляем баланс в UI
+    setUIBalance(Number(data.balance) || 0);
 }
 
-// Запускаем при загрузке страницы
-document.addEventListener('DOMContentLoaded', loadUserData);
-
-// ==========================================
-// ИНИЦИАЛИЗАЦИЯ SUPABASE
-// ==========================================
-const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
-const SUPABASE_ANON_KEY = 'ВАШ_PUBLISHABLE_KEY'; // Ключ sb_publishable_... из панели Supabase
-
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Функция сохранения изменений в Supabase
+// Сохранение текущих значений в Supabase
 async function saveUserData() {
-    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    const tgUser = tg?.initDataUnsafe?.user;
     if (!tgUser) return;
 
     const { error } = await supabase
         .from('wxs_game')
         .update({
-            balance: userState.balance,
-            turnover: userState.turnover,
-            max_win: userState.maxWin,
-            deposits: userState.deposits,
-            withdrawals: userState.withdrawals
+            balance: currentBalance,
+            turnover: currentTurnover,
+            max_win: currentMaxWin,
+            deposits: currentDeposits,
+            withdrawals: currentWithdrawals
         })
         .eq('telegram_id', tgUser.id);
 
     if (error) {
-        console.error('Ошибка сохранения данных:', error);
+        console.error('Ошибка сохранения в Supabase:', error);
     }
 }
 
