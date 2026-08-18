@@ -82,62 +82,6 @@
                     <div class="game-name">Куб</div>
                     <div class="game-description">Брось кости</div>
                 </button>
-                <button class="game"
-            <div class="profile-info">
-                <div class="username" id="username">Игрок</div>
-                <div class="level">Уровень 1</div>
-                <div class="level-line"><div id="homeLevelBar" style="width: 52%;"></div></div>
-            </div>
-        </div>
-        <div class="balance">
-            <div class="balance-info">
-                <small>Баланс</small>
-                <span id="topBalance">0.00 $</span>
-            </div>
-            <button class="balance-add" onclick="openBalance('deposit')">+</button>
-        </div>
-    </header>
-
-    <!-- ==================== ГЛАВНАЯ ==================== -->
-    <main id="homePage">
-        <section class="hero" style="margin-top: 10px;">
-            <div class="hero-content">
-                <div class="hero-small">ДОБРО ПОЖАЛОВАТЬ!</div>
-                <h1>Играй и<br><span>поднимай!</span></h1>
-                <p>Больше игр —<br>больше бонусов</p>
-                <button class="bonus-button" onclick="openBonus()">
-                    <span>🎁</span> Ежедневный бонус
-                </button>
-            </div>
-            <div class="money-orb">
-                <div class="money-ring"></div>
-                <span>$</span>
-            </div>
-        </section>
-
-        <section class="quick-actions">
-            <button class="action" onclick="openBalance('deposit')">
-                <div class="action-icon">💰</div><b>Пополнить</b><small>Баланс</small>
-            </button>
-            <button class="action" onclick="openBalance('withdraw')">
-                <div class="action-icon">💸</div><b>Вывод</b><small>Средств</small>
-            </button>
-            <button class="action" onclick="showMessage('VIP пока в разработке')">
-                <div class="action-icon">👑</div><b>VIP</b><small>Статус</small>
-            </button>
-            <button class="action" onclick="showMessage('Задания пока в разработке')">
-                <div class="action-icon">📋</div><b>Задания</b><small>ежедневки</small>
-            </button>
-        </section>
-
-        <section class="games-section" id="gamesListSection">
-            <div class="section-title"><h2>Игры</h2></div>
-            <div class="games">
-                <button class="game" onclick="showMessage('Игра «Куб» пока в разработке')">
-                    <div class="game-image"><div class="game-glow"></div><span class="game-emoji">🎲</span></div>
-                    <div class="game-name">Куб</div>
-                    <div class="game-description">Брось кости</div>
-                </button>
                 <button class="game" onclick="openMines()">
                     <div class="game-image mines"><div class="game-glow"></div><span class="game-emoji">💣</span></div>
                     <div class="game-name">Мины</div>
@@ -472,4 +416,3 @@
 <script src="script.js"></script>
 </body>
 </html>
-
