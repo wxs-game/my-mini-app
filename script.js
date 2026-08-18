@@ -1,3 +1,4 @@
+(function () {
 // ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
 // ==========================================
@@ -1141,4 +1142,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     goHome();
     applyDesign();
 });
+
+})();
+
 
