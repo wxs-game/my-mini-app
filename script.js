@@ -5,6 +5,78 @@ if (tg) {
     tg.expand();
 }
 
+// Асинхронная загрузка и регистрация пользователя
+async function loadUserData() {
+    const tg = window.Telegram?.WebApp;
+    tg?.ready();
+    const tgUser = tg?.initDataUnsafe?.user;
+
+    if (!tgUser) {
+        console.warn('Запуск вне Telegram — используются локальные данные');
+        return;
+    }
+
+    const profileData = {
+        telegram_id: tgUser.id,
+        username: tgUser.username || '',
+        nickname: tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : ''),
+        photo_url: tgUser.photo_url || ''
+    };
+
+    // 1. Проверяем, есть ли пользователь в БД
+    let { data, error } = await supabase
+        .from('wxs_game')
+        .select('*')
+        .eq('telegram_id', tgUser.id)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Ошибка загрузки из Supabase:', error);
+        return;
+    }
+
+    // 2. Если нет — создаем новую запись
+    if (!data) {
+        const { data: newUser, error: createError } = await supabase
+            .from('wxs_game')
+            .insert([{
+                ...profileData,
+                balance: 0,
+                turnover: 0,
+                max_win: 0,
+                deposits: 0,
+                withdrawals: 0
+            }])
+            .select()
+            .single();
+
+        if (createError) {
+            console.error('Ошибка создания записи:', createError);
+            return;
+        }
+        data = newUser;
+    } else {
+        // Если есть — обновляем никнейм и аватарку
+        await supabase
+            .from('wxs_game')
+            .update(profileData)
+            .eq('telegram_id', tgUser.id);
+    }
+
+    // 3. Синхронизируем с вашим объектом userState
+    userState.balance = Number(data.balance) || 0;
+    userState.turnover = Number(data.turnover) || 0;
+    userState.maxWin = Number(data.max_win) || 0;
+    userState.deposits = Number(data.deposits) || 0;
+    userState.withdrawals = Number(data.withdrawals) || 0;
+
+    // Обновляем UI интерфейса
+    updateUI();
+}
+
+// Запускаем при загрузке страницы
+document.addEventListener('DOMContentLoaded', loadUserData);
+
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
 // ==========================================
