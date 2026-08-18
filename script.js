@@ -20,6 +20,8 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
 let currentMaxWin = 0.00;
+let currentTotalWin = 0.00;
+let currentBetsCount = 0;
 let currentDeposits = 0.00;
 let currentWithdrawals = 0.00;
 
@@ -87,6 +89,8 @@ async function loadUserData() {
                 balance: 100.00, // Выдаем 100 $ для тестов
                 turnover: 0,
                 max_win: 0,
+                total_win: 0,
+                bets_count: 0,
                 deposits: 0,
                 withdrawals: 0
             }])
@@ -109,6 +113,8 @@ async function loadUserData() {
     // 3. Записываем полученные данные в переменные игры
     currentTurnover = Number(data.turnover) || 0;
     currentMaxWin = Number(data.max_win) || 0;
+    currentTotalWin = Number(data.total_win) || 0;
+    currentBetsCount = Number(data.bets_count) || 0;
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
     
@@ -127,6 +133,8 @@ async function saveUserData() {
             balance: currentBalance,
             turnover: currentTurnover,
             max_win: currentMaxWin,
+            total_win: currentTotalWin,
+            bets_count: currentBetsCount,
             deposits: currentDeposits,
             withdrawals: currentWithdrawals
         })
@@ -333,6 +341,7 @@ async function startMinesGame() {
     // Списываем ставку
     currentBalance -= bet;
     currentTurnover += bet;
+    currentBetsCount++;
     setUIBalance(currentBalance);
     await saveUserData();
 
@@ -427,6 +436,7 @@ async function cashoutMines() {
     const winAmount = minesGame.bet * mult;
 
     currentBalance += winAmount;
+    currentTotalWin += winAmount;
     if (mult > currentMaxWin) currentMaxWin = mult;
 
     setUIBalance(currentBalance);
@@ -473,12 +483,18 @@ function setUIBalance(newBalance) {
     currentBalance = parseFloat(newBalance) || 0.00;
     const formatted = currentBalance.toFixed(2) + " $";
     const turnoverValue = "$" + currentTurnover.toFixed(2);
+    const maxMultValue = "x" + currentMaxWin.toFixed(2);
+    const totalWinValue = "$" + currentTotalWin.toFixed(2);
+    const betsCountValue = String(currentBetsCount);
 
     const elementsMap = {
         "topBalance": formatted,
         "balanceCardValue": formatted,
         "profileBalance": formatted,
         "statTurnover": turnoverValue,
+        "statMaxMult": maxMultValue,
+        "statTotalWin": totalWinValue,
+        "statBetsCount": betsCountValue,
         "betBalanceText": `Баланс: ${formatted}`
     };
 
@@ -823,6 +839,7 @@ async function spinWheel() {
     // Списываем ставку колеса
     currentBalance -= totalBet;
     currentTurnover += totalBet;
+    currentBetsCount++;
     setUIBalance(currentBalance);
     await saveUserData();
 
@@ -870,6 +887,7 @@ async function spinWheel() {
         if (betOnWonColor > 0 && multiplier > 0) {
             totalWin = betOnWonColor * multiplier;
             currentBalance += totalWin;
+            currentTotalWin += totalWin;
             if (multiplier > currentMaxWin) currentMaxWin = multiplier;
             setUIBalance(currentBalance);
             await saveUserData();
@@ -1141,6 +1159,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadUserData();
     goHome();
     applyDesign();
+
+    /* Доп. защита от зума жестами (pinch) и двойным тапом,
+       на случай если touch-action в CSS игнорируется браузером */
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+            e.preventDefault(); // блокируем pinch-zoom двумя пальцами
+        }
+    }, { passive: false });
 });
 
 // Экспорт функций в глобальную область для onclick-обработчиков в HTML
@@ -1174,3 +1211,4 @@ window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
 
 })();
+
