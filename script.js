@@ -12,8 +12,7 @@ const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
 // ⚠️ Ваша база данных Supabase:
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN'; 
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Переменные состояния пользователя
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
