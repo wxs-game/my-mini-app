@@ -2258,14 +2258,16 @@ function saveProfileCustomization() {
    ЗАПУСК ПРИ СТАРТЕ
 ========================= */
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Mini App запущен!");
+    
+    if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    }
 
-    renderTransactions();
+    loadTelegramUser();
+    await loadUserData();
     goHome();
     applyDesign();
-
-    // Небольшая задержка, чтобы Telegram SDK успел инициализировать initData
-    setTimeout(loadUserData, 200);
 });
-
