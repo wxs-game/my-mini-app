@@ -22,8 +22,81 @@ let currentTurnover = 0.00;
 let currentMaxWin = 0.00;
 let currentTotalWin = 0.00;
 let currentBetsCount = 0;
+let currentWinsCount = 0;
 let currentDeposits = 0.00;
 let currentWithdrawals = 0.00;
+
+// ==========================================
+// СИСТЕМА УРОВНЕЙ (на основе очков)
+// ==========================================
+// Очки начисляются так:
+//   +75 очков за каждый 1$ оборота
+//   +5 очков за победу
+//   +10 очков за поражение
+const LEVELS = [
+    { level: 1, points: 0,     title: "Новичок" },
+    { level: 2, points: 1000,  title: "Гой" },
+    { level: 3, points: 2500,  title: "Про" },
+    { level: 4, points: 5000,  title: "Додеп" },
+    { level: 5, points: 7500,  title: "Лудик" },
+    { level: 6, points: 10000, title: "Король пепе" },
+    { level: 7, points: 10001, title: "Легенда" } // 10000+ очков
+];
+
+function calculatePoints() {
+    const lossesCount = Math.max(0, currentBetsCount - currentWinsCount);
+    return (currentTurnover * 75) + (currentWinsCount * 5) + (lossesCount * 10);
+}
+
+function getLevelInfo(points) {
+    let current = LEVELS[0];
+    let next = LEVELS[1] || null;
+
+    for (let i = 0; i < LEVELS.length; i++) {
+        if (points >= LEVELS[i].points) {
+            current = LEVELS[i];
+            next = LEVELS[i + 1] || null;
+        } else {
+            break;
+        }
+    }
+
+    let percent;
+    if (!next) {
+        // Максимальный уровень достигнут — полоса всегда заполнена
+        percent = 100;
+    } else {
+        const range = next.points - current.points;
+        const progress = points - current.points;
+        percent = range > 0 ? Math.min(100, Math.max(0, (progress / range) * 100)) : 100;
+    }
+
+    return {
+        level: current.level,
+        title: current.title,
+        percent: percent,
+        points: points
+    };
+}
+
+function updateLevelUI() {
+    const points = calculatePoints();
+    const info = getLevelInfo(points);
+    const percentRounded = Math.round(info.percent);
+
+    const homeLevelText = document.getElementById("homeLevelText");
+    const homeLevelBar = document.getElementById("homeLevelBar");
+    const profileLevelText = document.getElementById("profileLevelText");
+    const profileLevelPercent = document.getElementById("profileLevelPercent");
+    const profileLevelFill = document.getElementById("profileLevelFill");
+
+    if (homeLevelText) homeLevelText.textContent = `Уровень ${info.level}`;
+    if (homeLevelBar) homeLevelBar.style.width = percentRounded + "%";
+
+    if (profileLevelText) profileLevelText.textContent = `Уровень ${info.level} · ${info.title}`;
+    if (profileLevelPercent) profileLevelPercent.textContent = percentRounded + "%";
+    if (profileLevelFill) profileLevelFill.style.width = percentRounded + "%";
+}
 
 // ==========================================
 // 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
@@ -91,6 +164,7 @@ async function loadUserData() {
                 max_win: 0,
                 total_win: 0,
                 bets_count: 0,
+                wins_count: 0,
                 deposits: 0,
                 withdrawals: 0
             }])
@@ -115,6 +189,7 @@ async function loadUserData() {
     currentMaxWin = Number(data.max_win) || 0;
     currentTotalWin = Number(data.total_win) || 0;
     currentBetsCount = Number(data.bets_count) || 0;
+    currentWinsCount = Number(data.wins_count) || 0;
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
     
@@ -135,6 +210,7 @@ async function saveUserData() {
             max_win: currentMaxWin,
             total_win: currentTotalWin,
             bets_count: currentBetsCount,
+            wins_count: currentWinsCount,
             deposits: currentDeposits,
             withdrawals: currentWithdrawals
         })
@@ -437,6 +513,7 @@ async function cashoutMines() {
 
     currentBalance += winAmount;
     currentTotalWin += winAmount;
+    currentWinsCount++;
     if (mult > currentMaxWin) currentMaxWin = mult;
 
     setUIBalance(currentBalance);
@@ -507,6 +584,7 @@ function setUIBalance(newBalance) {
         el.textContent = formatted;
     });
 
+    updateLevelUI();
     updateTotalBet();
 }
 
@@ -888,6 +966,7 @@ async function spinWheel() {
             totalWin = betOnWonColor * multiplier;
             currentBalance += totalWin;
             currentTotalWin += totalWin;
+            currentWinsCount++;
             if (multiplier > currentMaxWin) currentMaxWin = multiplier;
             setUIBalance(currentBalance);
             await saveUserData();
@@ -1211,3 +1290,4 @@ window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
 
 })();
+
