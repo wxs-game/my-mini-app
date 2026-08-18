@@ -1143,6 +1143,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyDesign();
 });
 
+// Экспорт функций в глобальную область для onclick-обработчиков в HTML
+window.adjustMinesBet = adjustMinesBet;
+window.applyMinToActive = applyMinToActive;
+window.applyPercentToActive = applyPercentToActive;
+window.autoPickMinesTile = autoPickMinesTile;
+window.claimBonus = claimBonus;
+window.demoBalanceAction = demoBalanceAction;
+window.goHome = goHome;
+window.handleMinesAction = handleMinesAction;
+window.onActiveColorInput = onActiveColorInput;
+window.openBalance = openBalance;
+window.openBonus = openBonus;
+window.openGamesMenu = openGamesMenu;
+window.openMines = openMines;
+window.openProfile = openProfile;
+window.openWheel = openWheel;
+window.resetActiveBet = resetActiveBet;
+window.saveProfileCustomization = saveProfileCustomization;
+window.selectMethod = selectMethod;
+window.selectMinesCount = selectMinesCount;
+window.setBalanceMode = setBalanceMode;
+window.setMinesMaxBet = setMinesMaxBet;
+window.showMessage = showMessage;
+window.spinWheel = spinWheel;
+window.toggleMethods = toggleMethods;
+window.toggleProfileCustomizer = toggleProfileCustomizer;
+window.clickMinesTile = clickMinesTile;
+window.selectColorTab = selectColorTab;
+window.selectGradient = selectGradient;
+
 })();
-
-
