@@ -1,4 +1,4 @@
-// ==========================================
+//// ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
 // ==========================================
 const tg = window.Telegram?.WebApp;
@@ -9,7 +9,7 @@ if (tg) {
 }
 
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
-// ⚠️ ВСТАВЬТЕ СЮДА ВАШ sb_publishable_ КЛЮЧ ИЗ SUPABASE:
+// ⚠️ Ваша база данных Supabase:
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN'; 
 
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -24,6 +24,31 @@ let currentWithdrawals = 0.00;
 // ==========================================
 // 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
 // ==========================================
+
+function updateProfileUI(data) {
+    const name = data.nickname || data.username || "Игрок";
+    
+    // Элементы профиля и шапки
+    const usernameElem = document.getElementById("username");
+    const profileName = document.getElementById("profileName");
+    const profileUsername = document.getElementById("profileUsername");
+    const avatarElem = document.getElementById("avatar");
+    const profileAvatar = document.getElementById("profileAvatar");
+
+    if (usernameElem) usernameElem.textContent = name;
+    if (profileName) profileName.textContent = name;
+    if (profileUsername) {
+        profileUsername.textContent = data.username ? "@" + data.username : "Telegram пользователь";
+    }
+
+    if (data.photo_url) {
+        const imageHTML = `<img src="${data.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        if (avatarElem) avatarElem.innerHTML = imageHTML;
+        if (profileAvatar) profileAvatar.innerHTML = imageHTML;
+    }
+
+    setUIBalance(data.balance);
+}
 
 async function loadUserData() {
     const tgUser = tg?.initDataUnsafe?.user;
@@ -52,13 +77,13 @@ async function loadUserData() {
         return;
     }
 
-    // 2. Если пользователя нет — создаем запись
+    // 2. Если пользователя нет — создаем новую запись с бонусом 100$
     if (!data) {
         const { data: newUser, error: createError } = await supabase
             .from('wxs_game')
             .insert([{
                 ...profileData,
-                balance: 0,
+                balance: 100.00, // Выдаем 100 $ для тестов
                 turnover: 0,
                 max_win: 0,
                 deposits: 0,
@@ -73,7 +98,7 @@ async function loadUserData() {
         }
         data = newUser;
     } else {
-        // Обновляем данные профиля, если они изменились в Telegram
+        // Обновляем данные профиля (имя, аватар), если они изменились в Telegram
         await supabase
             .from('wxs_game')
             .update(profileData)
@@ -86,8 +111,8 @@ async function loadUserData() {
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
     
-    // Обновляем баланс в UI
-    setUIBalance(Number(data.balance) || 0);
+    // Обновляем UI приложения
+    updateProfileUI(data);
 }
 
 // Сохранение текущих значений в Supabase
@@ -112,11 +137,8 @@ async function saveUserData() {
 }
 
 /* =========================
-   БЭКЕНД И АВТОРИЗАЦИЯ
+   СОСТОЯНИЕ ПРИЛОЖЕНИЯ
 ========================= */
-
-let currentBalance = 0.00;
-let currentTurnover = 0.00;
 
 let balanceMode = "deposit";
 let selectedMethod = "CryptoBot";
@@ -307,12 +329,11 @@ async function startMinesGame() {
 
     minesGame.isProcessing = true;
 
-    const success = await apiRecordBet(bet);
-    if (!success) {
-        showMessage("Ошибка проведения ставки на сервере!");
-        minesGame.isProcessing = false;
-        return;
-    }
+    // Списываем ставку
+    currentBalance -= bet;
+    currentTurnover += bet;
+    setUIBalance(currentBalance);
+    await saveUserData();
 
     minesGame.active = true;
     minesGame.bet = bet;
@@ -404,12 +425,14 @@ async function cashoutMines() {
     const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
     const winAmount = minesGame.bet * mult;
 
-    const success = await apiAddWin(winAmount);
+    currentBalance += winAmount;
+    if (mult > currentMaxWin) currentMaxWin = mult;
 
-    if (success) {
-        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-        showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
-    }
+    setUIBalance(currentBalance);
+    await saveUserData();
+
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
 
     endMinesGame(true);
 }
@@ -442,35 +465,8 @@ function endMinesGame(isWin) {
 }
 
 /* =========================
-   TELEGRAM USER & БАЛАНС
+   БАЛАНС И UI
 ========================= */
-
-function loadTelegramUser() {
-    if (!tg) return;
-    const user = tg.initDataUnsafe?.user;
-    if (!user) return;
-
-    const usernameElement = document.getElementById("username");
-    const avatarElement = document.getElementById("avatar");
-    const profileName = document.getElementById("profileName");
-    const profileUsername = document.getElementById("profileUsername");
-    const profileAvatar = document.getElementById("profileAvatar");
-
-    const name = user.first_name || user.username || "Игрок";
-
-    if (usernameElement) usernameElement.textContent = name;
-    if (profileName) profileName.textContent = name;
-
-    if (profileUsername) {
-        profileUsername.textContent = user.username ? "@" + user.username : "Telegram пользователь";
-    }
-
-    if (user.photo_url) {
-        const imageHTML = `<img src="${user.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-        if (avatarElement) avatarElement.innerHTML = imageHTML;
-        if (profileAvatar) profileAvatar.innerHTML = imageHTML;
-    }
-}
 
 function setUIBalance(newBalance) {
     currentBalance = parseFloat(newBalance) || 0.00;
@@ -497,117 +493,6 @@ function setUIBalance(newBalance) {
     updateTotalBet();
 }
 
-async function updateBalance() {
-    loadTelegramUser();
-    await fetchUserProfileFromApi();
-}
-
-/* =========================
-   API ВЗАИМОДЕЙСТВИЕ
-========================= */
-
-function getApiHeaders() {
-    return {
-        'Authorization': window.Telegram?.WebApp?.initData || '',
-        'Content-Type': 'application/json',
-        'pinggy-skip-browser-warning': 'true'
-    };
-}
-
-async function fetchUserProfileFromApi() {
-    const initData = window.Telegram?.WebApp?.initData || '';
-
-    if (!initData) {
-        console.warn("⚠️ tg.initData отсутствует! Возможно, скрипт запущен вне Telegram.");
-        return;
-    }
-
-    try {
-        console.log("📡 Отправляем запрос на получение профиля...");
-        const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
-            method: 'GET',
-            headers: getApiHeaders()
-        });
-
-        if (!response.ok) {
-            console.error(`❌ Ошибка сервера API: Статус ${response.status}`);
-            const errorText = await response.text();
-            console.error("Детали ошибки сервера:", errorText);
-            return;
-        }
-
-        const data = await response.json();
-        console.log("✅ Успешно получены данные пользователя:", data);
-
-        if (data.status === "ok") {
-            currentTurnover = data.turnover || 0;
-            setUIBalance(data.balance);
-        }
-    } catch (error) {
-        console.error("❌ Ошибка при получении профиля:", error);
-    }
-}
-
-async function apiRecordBet(amount) {
-    const initData = window.Telegram?.WebApp?.initData || '';
-    if (!initData) {
-        console.warn("⚠️ tg.initData отсутствует при попытке сделать ставку.");
-        return false;
-    }
-
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/user/play`, {
-            method: 'POST',
-            headers: getApiHeaders(),
-            body: JSON.stringify({ amount: amount })
-        });
-
-        if (!res.ok) {
-            console.error(`❌ Ошибка списания ставки: Статус ${res.status}`);
-            return false;
-        }
-
-        const data = await res.json();
-        currentTurnover = data.turnover || 0;
-        setUIBalance(data.balance);
-        return true;
-    } catch (e) {
-        console.error("❌ Ошибка при списывании ставки:", e);
-        return false;
-    }
-}
-
-async function apiAddWin(amount, retries = 3) {
-    const initData = window.Telegram?.WebApp?.initData || '';
-    if (!initData) {
-        console.warn("⚠️ tg.initData отсутствует при попытке зачислить выигрыш.");
-        return false;
-    }
-
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/user/add-win`, {
-                method: 'POST',
-                headers: getApiHeaders(),
-                body: JSON.stringify({ amount: amount })
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                currentTurnover = data.turnover || 0;
-                setUIBalance(data.balance);
-                return true;
-            }
-        } catch (e) {
-            console.error(`Попытка ${attempt} зачислить выигрыш не удалась:`, e);
-        }
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    showMessage("Ошибка зачисления выигрыша на сервере! Проверьте интернет-соединение.");
-    return false;
-}
-
 /* =========================
    НАВИГАЦИЯ
 ========================= */
@@ -631,8 +516,6 @@ function showPage(id) {
 function goHome() {
     showPage("homePage");
     updateNav("home");
-    loadTelegramUser();
-    updateBalance();
 }
 
 function openGamesMenu() {
@@ -653,8 +536,6 @@ function openGamesMenu() {
 function openWheel() {
     showPage("wheelPage");
     updateNav("games");
-    updateBalance();
-    loadTelegramUser(); 
     drawWheel();
     renderColorTabs();
     selectColorTab(activeColor);
@@ -663,7 +544,6 @@ function openWheel() {
 function openMines() {
     showPage("minesPage");
     updateNav("games");
-    updateBalance();
     initMinesGrid();
 }
 
@@ -671,15 +551,12 @@ function openBalance(mode = "deposit") {
     showPage("balancePage");
     setBalanceMode(mode);
     updateNav("balance");
-    updateBalance();
     renderTransactions();
 }
 
 function openProfile() {
     showPage("profilePage");
     updateNav("profile");
-    updateBalance();
-    loadTelegramUser();
     applyDesign();
     renderCustomizerControls();
 }
@@ -942,13 +819,11 @@ async function spinWheel() {
         return;
     }
 
-    const success = await apiRecordBet(totalBet);
-    if (!success) {
-        showMessage("Ошибка проведения ставки!");
-        button.disabled = false;
-        isBetProcessing = false;
-        return;
-    }
+    // Списываем ставку колеса
+    currentBalance -= totalBet;
+    currentTurnover += totalBet;
+    setUIBalance(currentBalance);
+    await saveUserData();
 
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
@@ -993,7 +868,10 @@ async function spinWheel() {
 
         if (betOnWonColor > 0 && multiplier > 0) {
             totalWin = betOnWonColor * multiplier;
-            await apiAddWin(totalWin);
+            currentBalance += totalWin;
+            if (multiplier > currentMaxWin) currentMaxWin = multiplier;
+            setUIBalance(currentBalance);
+            await saveUserData();
         }
 
         if (resultValue) {
@@ -1138,7 +1016,7 @@ function selectMethod(method, icon, sub) {
     closeMethodsDropdown();
 }
 
-function demoBalanceAction() {
+async function demoBalanceAction() {
     const input = document.getElementById("amountInput");
     if (!input) return;
 
@@ -1150,7 +1028,10 @@ function demoBalanceAction() {
     }
 
     if (balanceMode === "deposit") {
-        setUIBalance(currentBalance + amount);
+        currentBalance += amount;
+        currentDeposits += amount;
+        setUIBalance(currentBalance);
+        await saveUserData();
 
         transactions.unshift({
             type: 'deposit',
@@ -1162,7 +1043,7 @@ function demoBalanceAction() {
         });
         renderTransactions();
 
-        showMessage(`Демо: пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
+        showMessage(`Пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
         return;
     }
 
@@ -1171,7 +1052,10 @@ function demoBalanceAction() {
         return;
     }
 
-    setUIBalance(currentBalance - amount);
+    currentBalance -= amount;
+    currentWithdrawals += amount;
+    setUIBalance(currentBalance);
+    await saveUserData();
 
     transactions.unshift({
         type: 'withdraw',
@@ -1183,11 +1067,11 @@ function demoBalanceAction() {
     });
     renderTransactions();
 
-    showMessage(`Демо: отправлено на вывод ${amount.toFixed(2)} $ через ${selectedMethod}`);
+    showMessage(`Заявка на вывод ${amount.toFixed(2)} $ через ${selectedMethod} принята`);
 }
 
 function claimBonus() {
-    showMessage("Демо: ежедневный бонус пока не подключён");
+    showMessage("Ежедневный бонус временно недоступен");
 }
 
 function showMessage(text) {
@@ -1245,17 +1129,14 @@ function saveProfileCustomization() {
    ЗАПУСК ПРИ СТАРТЕ
 ========================= */
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
     console.log("🚀 Mini App запущен!");
-    
-    if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-    }
 
-    loadTelegramUser();
-    await fetchUserProfileFromApi();
     renderTransactions();
     goHome();
     applyDesign();
+
+    // Небольшая задержка, чтобы Telegram SDK успел инициализировать initData
+    setTimeout(loadUserData, 200);
 });
+
