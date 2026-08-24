@@ -5,15 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#090909">
     <title>WXS Game</title>
-    
+
+    <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://telegram.org/js/telegram-widget.js?22"></script>
-    
+
+    <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
-
+    <!-- Lottie Animation Engine -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 
     <link rel="stylesheet" href="style.css">
@@ -22,6 +21,9 @@
 <body>
 
 <div class="app">
+
+    <!-- Всплывающее плавающее уведомление (Toast) -->
+    <div id="toastMessage" class="toast-message hidden"></div>
 
     <header class="top">
         <div class="profile-card" onclick="openProfile()">
@@ -43,6 +45,7 @@
         </div>
     </header>
 
+    <!-- ==================== ГЛАВНАЯ СТРАНИЦА ==================== -->
     <main id="homePage">
         <section class="hero" style="margin-top: 10px;">
             <div class="hero-content">
@@ -89,7 +92,7 @@
                 </button>
                 <button class="game" onclick="openWheel()">
                     <div class="game-image wheel"><div class="game-glow"></div><span class="game-emoji">🎡</span></div>
-                    <div class="game-name">Dream Cather</div>
+                    <div class="game-name">Dream Catcher</div>
                     <div class="game-description">Азартная классика</div>
                 </button>
                 <button class="game" onclick="showMessage('Игра «Краш» пока в разработке')">
@@ -101,7 +104,7 @@
         </section>
     </main>
 
-    <!-- ==================== МИНЫ ==================== -->
+    <!-- ==================== ИГРА: МИНЫ ==================== -->
     <main id="minesPage" class="mines-page hidden">
         <div class="page-header" style="margin-top: 10px;">
             <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
@@ -118,7 +121,7 @@
                 <div class="control-row">
                     <div class="ctrl-box">
                         <div class="mines-bet-header">
-                            <label>СУММА СТАВКИ</label>
+                            <label for="minesBetInput">СУММА СТАВКИ</label>
                             <div class="card-input-wrap">
                                 <input type="number" id="minesBetInput" placeholder="0.10" min="0.1" step="any">
                                 <span class="currency-symbol">$</span>
@@ -133,11 +136,11 @@
 
                     <div class="ctrl-box">
                         <label>МИНЫ</label>
-                        <div class="mines-count-selector">
-                            <button class="mines-count-btn active" onclick="selectMinesCount(3, this)">3</button>
-                            <button class="mines-count-btn" onclick="selectMinesCount(5, this)">5</button>
-                            <button class="mines-count-btn" onclick="selectMinesCount(10, this)">10</button>
-                            <button class="mines-count-btn" onclick="selectMinesCount(24, this)">24</button>
+                        <div class="mines-count-selector" id="minesCountSelector">
+                            <button class="mines-count-btn active" data-mines="3">3</button>
+                            <button class="mines-count-btn" data-mines="5">5</button>
+                            <button class="mines-count-btn" data-mines="10">10</button>
+                            <button class="mines-count-btn" data-mines="24">24</button>
                         </div>
                     </div>
                 </div>
@@ -154,7 +157,7 @@
         </section>
     </main>
 
-    <!-- ==================== КОЛЕСО ==================== -->
+    <!-- ==================== ИГРА: КОЛЕСО ==================== -->
     <main id="wheelPage" class="wheel-page hidden">
         <div class="page-header" style="margin-top: 10px;">
             <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
@@ -170,7 +173,7 @@
                 <div class="wheel-pointer">
                     <div class="pointer-tip"></div>
                 </div>
-                
+
                 <div class="wheel-gold-frame">
                     <div class="gold-bezel-glow"></div>
                     <div class="wheel-outer">
@@ -190,22 +193,21 @@
             <div class="wheel-bet-panels">
                 <div class="bet-panel-header">
                     <span>Выберите цвет ставки</span>
-                    <span id="betBalanceText">Баланс: Загрузка...</span>
+                    <span id="betBalanceText">Баланс: $0.00</span>
                 </div>
 
                 <div class="color-tabs-row" id="colorTabsRow"></div>
 
                 <div class="active-bet-box" id="activeBetBox">
                     <div class="card-top">
-                        <div class="card-title" id="activeColorTitle"></div>
+                        <div class="card-title" id="activeColorTitle">Множитель</div>
                         <div class="card-input-wrap">
                             <input type="number" 
                                    id="activeBetInput" 
                                    placeholder="0.00" 
                                    min="0" 
-                                   step="any" 
-                                   oninput="onActiveColorInput(this.value)">
-                            <span style="color:#666; font-size:14px; margin-left:4px;">$</span>
+                                   step="any">
+                            <span class="currency-symbol">$</span>
                         </div>
                     </div>
 
@@ -236,7 +238,7 @@
         </section>
     </main>
 
-    <!-- ==================== БАЛАНС ==================== -->
+    <!-- ==================== СТРАНИЦА БАЛАНСА ==================== -->
     <main id="balancePage" class="balance-page hidden">
         <div class="page-header" style="margin-top: 10px;">
             <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
@@ -273,7 +275,7 @@
                         </div>
                         <span class="arrow" id="methodArrow">▼</span>
                     </div>
-                    <div class="select-items" id="methodsDropdown">
+                    <div class="select-items hidden" id="methodsDropdown">
                         <div onclick="selectMethod('CryptoBot', 'cryptobot.png', 'Криптовалюта')">
                             <img src="cryptobot.png" alt="CryptoBot" style="width: 24px; height: 24px; object-fit: contain;"> 
                             <div><strong>CryptoBot</strong><small>Криптовалюта</small></div>
@@ -287,14 +289,14 @@
             </div>
 
             <div class="input-group">
-                <label>СУММА</label>
+                <label for="amountInput">СУММА</label>
                 <div class="sum-input-wrap">
                     <input type="number" id="amountInput" placeholder="0.00">
                     <span class="currency-symbol">$</span>
                 </div>
             </div>
 
-            <button class="main-action-btn" id="balanceAction" onclick="demoBalanceAction()">
+            <button class="main-action-btn" id="balanceAction" onclick="executeBalanceTransaction()">
                 Пополнить
             </button>
         </section>
@@ -302,20 +304,20 @@
         <section class="history-box">
             <div class="history-header">
                 <h2>Последние транзакции</h2>
-                <small id="txCount">3 операции</small>
+                <small id="txCount">0 операций</small>
             </div>
             <div class="history-list" id="historyList"></div>
         </section>
     </main>
 
-    <!-- ==================== ПРОФИЛЬ ==================== -->
+    <!-- ==================== СТРАНИЦА ПРОФИЛЯ ==================== -->
     <main id="profilePage" class="profile-page hidden">
         <section class="profile-header-card profile-cover" id="profileCover" style="margin-top: 10px; position: relative; overflow: hidden;">
             <div style="position: relative; z-index: 2;">
                 <div class="profile-avatar-wrapper" style="position: relative; display: inline-block;">
                     <div class="profile-avatar-circle" id="profileAvatar">👤</div>
                 </div>
-                
+
                 <h1 id="profileName">Игрок</h1>
                 <div class="profile-tag" id="profileUsername">@username</div>
 
@@ -376,7 +378,7 @@
         </div>
     </main>
 
-    <!-- ==================== БОНУС ==================== -->
+    <!-- ==================== СТРАНИЦА БОНУСОВ ==================== -->
     <main id="bonusPage" class="bonus-page hidden">
         <div class="page-header" style="margin-top: 10px;">
             <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
@@ -388,11 +390,11 @@
             <h2>Ежедневный бонус</h2>
             <p class="wheel-subtitle">Заходите каждый день и получайте бесплатные средства!</p>
             <div style="font-size: 60px; margin: 20px 0;">🎁</div>
-            <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
+            <button class="main-action-btn" id="claimBonusBtn" onclick="claimBonus()">Забрать бонус</button>
         </section>
     </main>
 
-    <!-- НИЖНЕЕ МЕНЮ -->
+    <!-- ==================== НИЖНЕЕ МЕНЮ ==================== -->
     <nav class="bottom-nav">
         <button class="nav-item active" id="homeNav" onclick="goHome()">
             <span class="nav-icon">🏠</span><small>Главная</small>
@@ -416,4 +418,3 @@
 <script src="script.js"></script>
 </body>
 </html>
-
