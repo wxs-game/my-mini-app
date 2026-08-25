@@ -17,6 +17,15 @@ const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ==========================================
+// АДРЕС БЭКЕНДА (api.py), поднятого через ngrok
+// ==========================================
+// ⚠️ Пока используется бесплатный ngrok-домен, он мог бы меняться при
+// каждом перезапуске туннеля — но у тебя указан фиксированный поддомен
+// (--url=...), так что он останется стабильным между перезапусками,
+// пока ты не изменишь его в самой команде ngrok.
+const API_BASE = 'https://cable-coral-ahead.ngrok-free.dev';
+
+// ==========================================
 // ⚠️ КРИТИЧЕСКИ ВАЖНО — ограничение архитектуры (не устраняется правками ниже)
 // ==========================================
 // Всё игровое состояние (баланс, RNG, ставки, начисления) считается в
@@ -41,6 +50,11 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 //   - проверять initData на бэкенде по HMAC секретного токена бота
 //     (см. https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app)
 //     вместо доверия tg.initDataUnsafe.
+// Депозит через CryptoBot (см. demoBalanceAction ниже) уже не начисляет
+// баланс на фронте — зачисление происходит только на бэкенде по
+// подтверждённому вебхуку от CryptoBot. Это закрывает "дюп" через
+// пополнение, но пункты 1-3 выше по-прежнему актуальны для всех
+// остальных операций (мины, колесо).
 // ==========================================
 
 // Переменные состояния пользователя
@@ -1361,19 +1375,25 @@ function selectMethod(method, icon, sub) {
     closeMethodsDropdown();
 }
 
-// ⚠️ ВНИМАНИЕ: это функция-ЗАГЛУШКА. Она не проверяет никакой реальный
-// платёж — ввод любой суммы и клик "Пополнить" реально начисляет баланс.
-// Это готовый способ бесконечно "дюпать" валюту, независимо от блокировок
-// ниже. Перед продакшеном ОБЯЗАТЕЛЬНО замените это на:
-//   - создание инвойса через API CryptoBot/xRocket на бэкенде,
-//   - зачисление баланса ТОЛЬКО по подтверждённому вебхуку от платёжного
-//     провайдера (никогда не доверяя сумме, введённой в этой форме),
-//   - аналогично для вывода — реальную отправку средств, а не просто
-//     локальное уменьшение баланса.
+// ==========================================
+// ПОПОЛНЕНИЕ ЧЕРЕЗ CRYPTOBOT (реальная оплата)
+// ==========================================
+// Депозит теперь идёт через бэкенд (api.py): создаётся инвойс CryptoBot,
+// открывается его платёжное мини-приложение, а баланс зачисляется
+// НЕ отсюда, а на бэкенде — только после подтверждённого вебхука
+// "invoice_paid". Это убирает "дюп" через форму пополнения, который был
+// в старой демо-версии (там баланс начислялся локально по одному клику).
+//
+// Вывод средств (withdraw) остаётся локальной заглушкой — она НЕ
+// проверяет реальную возможность вывода и НЕ отправляет деньги. Перед
+// продакшеном её тоже нужно перевести на бэкенд (например, ручную
+// модерацию заявок или CryptoBot transfer API), иначе пользователь может
+// "вывести" произвольную сумму без реального списания на вашей стороне.
 async function demoBalanceAction() {
-    const input = document.getElementById("amountInput");
-    if (!input) return;
     if (!lockEconomy()) return;
+
+    const input = document.getElementById("amountInput");
+    if (!input) { unlockEconomy(); return; }
 
     const amount = roundMoney(parseFloat(input.value));
 
@@ -1383,41 +1403,82 @@ async function demoBalanceAction() {
         return;
     }
 
-    const snapshot = snapshotBalanceState();
-
-    if (balanceMode === "deposit") {
-        currentBalance = roundMoney(currentBalance + amount);
-        currentDeposits = roundMoney(currentDeposits + amount);
-        setUIBalance(currentBalance);
-
-        const ok = await saveUserDataWithRetry();
-        if (!ok) {
-            restoreBalanceState(snapshot);
-            showMessage("Не удалось сохранить пополнение. Попробуйте снова.");
-            unlockEconomy();
-            return;
-        }
-
-        transactions.unshift({
-            type: 'deposit',
-            method: selectedMethod,
-            icon: selectedMethodIcon,
-            amount: amount,
-            date: 'Только что',
-            status: 'success'
-        });
-        renderTransactions();
-
-        showMessage(`Пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) {
+        showMessage("Откройте приложение через Telegram, чтобы пополнить баланс.");
         unlockEconomy();
         return;
     }
 
+    if (balanceMode === "deposit") {
+        if (selectedMethod !== "CryptoBot") {
+            showMessage("Сейчас доступна оплата только через CryptoBot. Выберите этот способ.");
+            unlockEconomy();
+            return;
+        }
+
+        const actionBtn = document.getElementById("balanceAction");
+        if (actionBtn) actionBtn.disabled = true;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/create-invoice`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: amount,
+                    telegram_id: tgUser.id
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error(`Backend responded with ${res.status}`);
+            }
+
+            const payload = await res.json();
+            const payUrl = payload?.pay_url;
+
+            if (!payUrl) {
+                throw new Error('pay_url missing in response');
+            }
+
+            // Открываем мини-приложение CryptoBot с созданным инвойсом.
+            // openTelegramLink доступен только внутри Telegram — вне его
+            // используем обычный переход по ссылке как запасной вариант.
+            if (tg?.openTelegramLink) {
+                tg.openTelegramLink(payUrl);
+            } else {
+                window.open(payUrl, '_blank');
+            }
+
+            transactions.unshift({
+                type: 'deposit',
+                method: selectedMethod,
+                icon: selectedMethodIcon,
+                amount: amount,
+                date: 'Только что',
+                status: 'pending'
+            });
+            renderTransactions();
+
+            showMessage("Счёт создан. Завершите оплату в открывшемся окне CryptoBot — баланс зачислится автоматически после подтверждения платежа.");
+        } catch (e) {
+            console.error('Ошибка создания инвойса CryptoBot:', e);
+            showMessage("Не удалось создать счёт на оплату. Проверьте соединение и попробуйте снова.");
+        } finally {
+            if (actionBtn) actionBtn.disabled = false;
+            unlockEconomy();
+        }
+        return;
+    }
+
+    // ⚠️ Вывод средств — по-прежнему ЗАГЛУШКА, ничего реально не выводит.
     if (amount > currentBalance) {
         showMessage("Недостаточно средств");
         unlockEconomy();
         return;
     }
+
+    const snapshot = snapshotBalanceState();
 
     currentBalance = roundMoney(currentBalance - amount);
     currentWithdrawals = roundMoney(currentWithdrawals + amount);
