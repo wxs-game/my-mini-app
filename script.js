@@ -1,1292 +1,1528 @@
 (function () {
-    "use strict";
+// ==========================================
+// 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
+// ==========================================
+const tg = window.Telegram?.WebApp;
 
-    // ==========================================
-    // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
-    // ==========================================
-    const tg = window.Telegram?.WebApp;
+if (tg) {
+    tg.ready();
+    tg.expand();
+}
 
-    if (tg) {
-        tg.ready();
-        tg.expand();
+const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
+// ⚠️ Ваша база данных Supabase:
+const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN'; 
+
+// Используем имя supabase, чтобы не менять вызовы по всему коду
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ==========================================
+// ⚠️ КРИТИЧЕСКИ ВАЖНО — ограничение архитектуры (не устраняется правками ниже)
+// ==========================================
+// Всё игровое состояние (баланс, RNG, ставки, начисления) считается в
+// браузере пользователя и отправляется в Supabase публичным anon-ключом.
+// Это значит, что ЛЮБОЙ пользователь через консоль разработчика может:
+//   1) вызвать supabase.from('wxs_game').update({balance: 999999}) напрямую,
+//      минуя всю игровую логику ниже;
+//   2) подменить tg.initDataUnsafe.user.id (эти данные НЕ подписаны и
+//      никак не проверяются) и получить доступ к чужой записи в БД;
+//   3) переопределить Math.random(), чтобы предсказуемо выигрывать в
+//      "Мины" и "Колесо".
+// Правки в этом файле устраняют логические баги и гонки состояний
+// (потерю выигрыша при сбое сети, дублирование операций, "бесплатные"
+// раунды при неудачном списании и т.д.), но НЕ закрывают пункты 1-3 —
+// это возможно только на сервере:
+//   - перенести списание ставки / начисление выигрыша / депозит-вывод
+//     в Supabase Edge Function или Postgres RPC с SECURITY DEFINER,
+//     вызываемую под service_role;
+//   - в RLS-политиках таблицы wxs_game запретить клиенту UPDATE полей
+//     balance/turnover/max_win/total_win/bets_count/wins_count/
+//     deposits/withdrawals напрямую (разрешить только чтение своей строки);
+//   - проверять initData на бэкенде по HMAC секретного токена бота
+//     (см. https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app)
+//     вместо доверия tg.initDataUnsafe.
+// ==========================================
+
+// Переменные состояния пользователя
+let currentBalance = 0.00;
+let currentTurnover = 0.00;
+let currentMaxWin = 0.00;
+let currentTotalWin = 0.00;
+let currentBetsCount = 0;
+let currentWinsCount = 0;
+let currentDeposits = 0.00;
+let currentWithdrawals = 0.00;
+
+// ==========================================
+// СИСТЕМА УРОВНЕЙ (на основе очков)
+// ==========================================
+// Очки начисляются так:
+//   +75 очков за каждый 1$ оборота
+//   +5 очков за победу
+//   +10 очков за поражение
+const LEVELS = [
+    { level: 1, points: 0,     title: "Новичок" },
+    { level: 2, points: 1500,  title: "Гой" },
+    { level: 3, points: 3750,  title: "Про" },
+    { level: 4, points: 7500,  title: "Додеп" },
+    { level: 5, points: 11250, title: "Лудик" },
+    { level: 6, points: 15000, title: "Король пепе" },
+    { level: 7, points: 15001, title: "Легенда" } // 15000+ очков
+];
+
+function calculatePoints() {
+    const lossesCount = Math.max(0, currentBetsCount - currentWinsCount);
+    return (currentTurnover * 75) + (currentWinsCount * 5) + (lossesCount * 10);
+}
+
+function getLevelInfo(points) {
+    let current = LEVELS[0];
+    let next = LEVELS[1] || null;
+
+    for (let i = 0; i < LEVELS.length; i++) {
+        if (points >= LEVELS[i].points) {
+            current = LEVELS[i];
+            next = LEVELS[i + 1] || null;
+        } else {
+            break;
+        }
     }
 
-    const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
+    let percent;
+    if (!next) {
+        // Максимальный уровень достигнут — полоса всегда заполнена
+        percent = 100;
+    } else {
+        const range = next.points - current.points;
+        const progress = points - current.points;
+        percent = range > 0 ? Math.min(100, Math.max(0, (progress / range) * 100)) : 100;
+    }
 
-    if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-        console.error('Supabase SDK не найден на странице!');
+    return {
+        level: current.level,
+        title: current.title,
+        percent: percent,
+        points: points
+    };
+}
+
+function updateLevelUI() {
+    const points = calculatePoints();
+    const info = getLevelInfo(points);
+    const percentRounded = Math.round(info.percent);
+
+    const homeLevelText = document.getElementById("homeLevelText");
+    const homeLevelBar = document.getElementById("homeLevelBar");
+    const profileLevelText = document.getElementById("profileLevelText");
+    const profileLevelPercent = document.getElementById("profileLevelPercent");
+    const profileLevelFill = document.getElementById("profileLevelFill");
+
+    if (homeLevelText) homeLevelText.textContent = `Уровень ${info.level}`;
+    if (homeLevelBar) homeLevelBar.style.width = percentRounded + "%";
+
+    if (profileLevelText) profileLevelText.textContent = `Уровень ${info.level} · ${info.title}`;
+    if (profileLevelPercent) profileLevelPercent.textContent = percentRounded + "%";
+    if (profileLevelFill) profileLevelFill.style.width = percentRounded + "%";
+}
+
+// ==========================================
+// 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
+// ==========================================
+
+function updateProfileUI(data) {
+    const name = data.nickname || data.username || "Игрок";
+    
+    // Элементы профиля и шапки
+    const usernameElem = document.getElementById("username");
+    const profileName = document.getElementById("profileName");
+    const profileUsername = document.getElementById("profileUsername");
+    const avatarElem = document.getElementById("avatar");
+    const profileAvatar = document.getElementById("profileAvatar");
+
+    if (usernameElem) usernameElem.textContent = name;
+    if (profileName) profileName.textContent = name;
+    if (profileUsername) {
+        profileUsername.textContent = data.username ? "@" + data.username : "Telegram пользователь";
+    }
+
+    if (data.photo_url) {
+        const imageHTML = `<img src="${data.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        if (avatarElem) avatarElem.innerHTML = imageHTML;
+        if (profileAvatar) profileAvatar.innerHTML = imageHTML;
+    }
+
+    setUIBalance(data.balance);
+}
+async function loadUserData() {
+    const tgUser = tg?.initDataUnsafe?.user;
+
+    if (!tgUser) {
+        console.warn('Запуск вне Telegram — используются локальные данные');
         return;
     }
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const profileData = {
+        telegram_id: tgUser.id,
+        username: tgUser.username || '',
+        nickname: tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : ''),
+        photo_url: tgUser.photo_url || ''
+    };
 
-    // Переменные состояния пользователя
-    let currentBalance = 0.00;
-    let currentTurnover = 0.00;
-    let currentMaxWin = 0.00;
-    let currentTotalWin = 0.00;
-    let currentBetsCount = 0;
-    let currentWinsCount = 0;
-    let currentDeposits = 0.00;
-    let currentWithdrawals = 0.00;
+    // 1. Запрашиваем данные из Supabase
+    let { data, error } = await supabase
+        .from('wxs_game')
+        .select('*')
+        .eq('telegram_id', tgUser.id)
+        .maybeSingle();
 
-    // ==========================================
-    // СИСТЕМА УРОВНЕЙ
-    // ==========================================
-    const LEVELS = [
-        { level: 1, points: 0, title: "Новичок" },
-        { level: 2, points: 1500, title: "Гой" },
-        { level: 3, points: 3750, title: "Про" },
-        { level: 4, points: 7500, title: "Додеп" },
-        { level: 5, points: 11250, title: "Лудик" },
-        { level: 6, points: 15000, title: "Король пепе" },
-        { level: 7, points: 30000, title: "Легенда" }
-    ];
-
-    function calculatePoints() {
-        const lossesCount = Math.max(0, currentBetsCount - currentWinsCount);
-        return (currentTurnover * 75) + (currentWinsCount * 5) + (lossesCount * 10);
+    if (error) {
+        console.error('Ошибка загрузки из Supabase:', error);
+        showMessage("Не удалось загрузить профиль. Проверьте соединение и перезапустите приложение.");
+        return;
     }
 
-    function getLevelInfo(points) {
-        let current = LEVELS[0];
-        let next = LEVELS[1] || null;
+    // 2. Если пользователя нет — создаем новую запись с бонусом 100$
+    if (!data) {
+        const { data: newUser, error: createError } = await supabase
+            .from('wxs_game')
+            .insert([{
+                ...profileData,
+                balance: 100.00, // Выдаем 100 $ для тестов
+                turnover: 0,
+                max_win: 0,
+                total_win: 0,
+                bets_count: 0,
+                wins_count: 0,
+                deposits: 0,
+                withdrawals: 0
+            }])
+            .select()
+            .single();
 
-        for (let i = 0; i < LEVELS.length; i++) {
-            if (points >= LEVELS[i].points) {
-                current = LEVELS[i];
-                next = LEVELS[i + 1] || null;
-            } else {
-                break;
-            }
-        }
-
-        let percent = 100;
-        if (next) {
-            const range = next.points - current.points;
-            const progress = points - current.points;
-            percent = range > 0 ? Math.min(100, Math.max(0, (progress / range) * 100)) : 100;
-        }
-
-        return {
-            level: current.level,
-            title: current.title,
-            percent: percent,
-            points: points
-        };
-    }
-
-    function updateLevelUI() {
-        const points = calculatePoints();
-        const info = getLevelInfo(points);
-        const percentRounded = Math.round(info.percent);
-
-        const homeLevelText = document.getElementById("homeLevelText");
-        const homeLevelBar = document.getElementById("homeLevelBar");
-        const profileLevelText = document.getElementById("profileLevelText");
-        const profileLevelPercent = document.getElementById("profileLevelPercent");
-        const profileLevelFill = document.getElementById("profileLevelFill");
-
-        if (homeLevelText) homeLevelText.textContent = `Уровень ${info.level}`;
-        if (homeLevelBar) homeLevelBar.style.width = percentRounded + "%";
-
-        if (profileLevelText) profileLevelText.textContent = `Уровень ${info.level} · ${info.title}`;
-        if (profileLevelPercent) profileLevelPercent.textContent = percentRounded + "%";
-        if (profileLevelFill) profileLevelFill.style.width = percentRounded + "%";
-    }
-
-    // ==========================================
-    // 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
-    // ==========================================
-
-    function updateProfileUI(data) {
-        const name = data.nickname || data.username || "Игрок";
-
-        const usernameElem = document.getElementById("username");
-        const profileName = document.getElementById("profileName");
-        const profileUsername = document.getElementById("profileUsername");
-        const avatarElem = document.getElementById("avatar");
-        const profileAvatar = document.getElementById("profileAvatar");
-
-        if (usernameElem) usernameElem.textContent = name;
-        if (profileName) profileName.textContent = name;
-        if (profileUsername) {
-            profileUsername.textContent = data.username ? "@" + data.username : "Telegram пользователь";
-        }
-
-        if (data.photo_url) {
-            const imageHTML = `<img src="${data.photo_url}" alt="avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            if (avatarElem) avatarElem.innerHTML = imageHTML;
-            if (profileAvatar) profileAvatar.innerHTML = imageHTML;
-        }
-
-        setUIBalance(data.balance);
-    }
-
-    async function loadUserData() {
-        const tgUser = tg?.initDataUnsafe?.user;
-
-        if (!tgUser) {
-            console.warn('Запуск вне Telegram — используются локальные данные');
+        if (createError) {
+            console.error('Ошибка создания записи в Supabase:', createError);
             return;
         }
-
-        const profileData = {
-            telegram_id: tgUser.id,
-            username: tgUser.username || '',
-            nickname: (tgUser.first_name || '') + (tgUser.last_name ? ' ' + tgUser.last_name : ''),
-            photo_url: tgUser.photo_url || ''
-        };
-
-        let { data, error } = await supabase
+        data = newUser;
+    } else {
+        // Обновляем данные профиля (имя, аватар), если они изменились в Telegram
+        await supabase
             .from('wxs_game')
-            .select('*')
-            .eq('telegram_id', tgUser.id)
-            .maybeSingle();
-
-        if (error) {
-            console.error('Ошибка загрузки из Supabase:', error);
-            return;
-        }
-
-        if (!data) {
-            const { data: newUser, error: createError } = await supabase
-                .from('wxs_game')
-                .insert([{
-                    ...profileData,
-                    balance: 100.00,
-                    turnover: 0,
-                    max_win: 0,
-                    total_win: 0,
-                    bets_count: 0,
-                    wins_count: 0,
-                    deposits: 0,
-                    withdrawals: 0
-                }])
-                .select()
-                .single();
-
-            if (createError) {
-                console.error('Ошибка создания записи в Supabase:', createError);
-                return;
-            }
-            data = newUser;
-        } else {
-            const { data: updatedUser } = await supabase
-                .from('wxs_game')
-                .update(profileData)
-                .eq('telegram_id', tgUser.id)
-                .select()
-                .single();
-
-            if (updatedUser) data = updatedUser;
-        }
-
-        currentBalance = Number(data.balance) || 0;
-        currentTurnover = Number(data.turnover) || 0;
-        currentMaxWin = Number(data.max_win) || 0;
-        currentTotalWin = Number(data.total_win) || 0;
-        currentBetsCount = Number(data.bets_count) || 0;
-        currentWinsCount = Number(data.wins_count) || 0;
-        currentDeposits = Number(data.deposits) || 0;
-        currentWithdrawals = Number(data.withdrawals) || 0;
-
-        updateProfileUI(data);
-    }
-
-    async function saveUserData() {
-        const tgUser = tg?.initDataUnsafe?.user;
-        if (!tgUser) return;
-
-        const { error } = await supabase
-            .from('wxs_game')
-            .update({
-                balance: Number(currentBalance.toFixed(2)),
-                turnover: Number(currentTurnover.toFixed(2)),
-                max_win: Number(currentMaxWin.toFixed(2)),
-                total_win: Number(currentTotalWin.toFixed(2)),
-                bets_count: currentBetsCount,
-                wins_count: currentWinsCount,
-                deposits: Number(currentDeposits.toFixed(2)),
-                withdrawals: Number(currentWithdrawals.toFixed(2))
-            })
+            .update(profileData)
             .eq('telegram_id', tgUser.id);
-
-        if (error) {
-            console.error('Ошибка сохранения в Supabase:', error);
-        }
     }
 
-    /* =========================
-       СОСТОЯНИЕ ПРИЛОЖЕНИЯ
-    ========================= */
+    // 3. Записываем полученные данные в переменные игры
+    currentTurnover = Number(data.turnover) || 0;
+    currentMaxWin = Number(data.max_win) || 0;
+    currentTotalWin = Number(data.total_win) || 0;
+    currentBetsCount = Number(data.bets_count) || 0;
+    currentWinsCount = Number(data.wins_count) || 0;
+    currentDeposits = Number(data.deposits) || 0;
+    currentWithdrawals = Number(data.withdrawals) || 0;
+    
+    // Обновляем UI приложения
+    updateProfileUI(data);
+}
 
-    let balanceMode = "deposit";
-    let selectedMethod = "CryptoBot";
-    let selectedMethodSub = "Криптовалюта";
-    let selectedMethodIcon = "cryptobot.png";
+/* =========================
+   БЕЗОПАСНАЯ РАБОТА С ДЕНЬГАМИ
+   (округление, блокировка гонок, откат при сбое сохранения)
+========================= */
 
-    const COLOR_PALETTE = [
-        { id: 'slate', start: '#2c3e50', end: '#1a252f' },
-        { id: 'purple', start: '#8e44ad', end: '#2c3e50' },
-        { id: 'green', start: '#27ae60', end: '#114b27' },
-        { id: 'brown', start: '#d35400', end: '#2c1e13' },
-        { id: 'dark', start: '#1f1f1f', end: '#0a0a0a' },
-        { id: 'crimson', start: '#c0392b', end: '#3d0c07' },
-        { id: 'ocean', start: '#2980b9', end: '#0f3047' },
-        { id: 'gold', start: '#f39c12', end: '#4a3004' }
-    ];
+// Округление до центов — не даёт ошибке плавающей точки накапливаться
+// после тысяч операций сложения/вычитания.
+function roundMoney(value) {
+    const n = Number(value);
+    if (!isFinite(n)) return 0;
+    return Math.round((n + Number.EPSILON) * 100) / 100;
+}
 
-    let profileDesign = { colorId: 'slate', start: '#2c3e50', end: '#1a252f' };
+// Единая блокировка на ВСЕ операции, которые тратят или начисляют баланс
+// (мины, колесо, депозит/вывод). Не даёт двум денежным операциям
+// выполняться параллельно — например, двойной клик по кнопке пополнения
+// или клик по двум играм почти одновременно.
+let isEconomyLocked = false;
+
+function lockEconomy() {
+    if (isEconomyLocked) return false;
+    isEconomyLocked = true;
+    return true;
+}
+
+function unlockEconomy() {
+    isEconomyLocked = false;
+}
+
+// Снимок и откат состояния баланса — используется, если запись в Supabase
+// не удалась: без отката локальная переменная "разъезжается" с базой,
+// и после перезагрузки страницы либо пропадает выигрыш, либо списание
+// не засчитывается (по факту — бесплатный раунд).
+function snapshotBalanceState() {
+    return {
+        balance: currentBalance,
+        turnover: currentTurnover,
+        maxWin: currentMaxWin,
+        totalWin: currentTotalWin,
+        betsCount: currentBetsCount,
+        winsCount: currentWinsCount,
+        deposits: currentDeposits,
+        withdrawals: currentWithdrawals
+    };
+}
+
+function restoreBalanceState(snap) {
+    currentBalance = snap.balance;
+    currentTurnover = snap.turnover;
+    currentMaxWin = snap.maxWin;
+    currentTotalWin = snap.totalWin;
+    currentBetsCount = snap.betsCount;
+    currentWinsCount = snap.winsCount;
+    currentDeposits = snap.deposits;
+    currentWithdrawals = snap.withdrawals;
+    setUIBalance(currentBalance);
+}
+
+// Очередь сохранений: гарантирует, что запросы к Supabase уходят и
+// (в рамках одной вкладки) обрабатываются строго по одному, а не
+// параллельно — иначе при переупорядочивании ответов сети более старый
+// снимок баланса мог перезаписать в БД более новый.
+let saveQueue = Promise.resolve();
+
+// Сохранение текущих значений в Supabase.
+// Возвращает true/false — вызывающий код ОБЯЗАН проверять результат
+// и откатывать локальное состояние при false, иначе деньги "теряются"
+// (списание/начисление применилось только в браузере, а не в базе).
+async function saveUserData() {
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) return true; // локальный режим вне Telegram — сохранять некуда
+
+    // округляем перед отправкой, чтобы в БД не улетела "грязная" плавающая точка
+    currentBalance = roundMoney(currentBalance);
+    currentTurnover = roundMoney(currentTurnover);
+    currentTotalWin = roundMoney(currentTotalWin);
+    currentDeposits = roundMoney(currentDeposits);
+    currentWithdrawals = roundMoney(currentWithdrawals);
+
+    const payload = {
+        balance: currentBalance,
+        turnover: currentTurnover,
+        max_win: currentMaxWin,
+        total_win: currentTotalWin,
+        bets_count: currentBetsCount,
+        wins_count: currentWinsCount,
+        deposits: currentDeposits,
+        withdrawals: currentWithdrawals
+    };
+
+    const runUpdate = () => supabase
+        .from('wxs_game')
+        .update(payload)
+        .eq('telegram_id', tgUser.id);
+
+    // подвешиваем запрос в конец очереди, чтобы не было гонки с предыдущим сохранением
+    const task = saveQueue.then(runUpdate, runUpdate);
+    saveQueue = task.then(() => {}, () => {}); // одна неудача не должна блокировать очередь навсегда
+
+    let error;
     try {
-        const savedDesign = localStorage.getItem('wxs_profile');
-        if (savedDesign) profileDesign = JSON.parse(savedDesign);
+        ({ error } = await task);
     } catch (e) {
-        console.warn('Ошибка чтения localStorage:', e);
+        error = e;
     }
 
-    let colorBets = { green: 0, red: 0, blue: 0, yellow: 0, gold: 0 };
-    let activeColor = 'green';
+    if (error) {
+        console.error('Ошибка сохранения в Supabase:', error);
+        return false;
+    }
+    return true;
+}
 
-    let transactions = [
-        { type: 'deposit', method: 'CryptoBot', icon: 'cryptobot.png', amount: 50.00, date: 'Сегодня, 14:20', status: 'success' },
-        { type: 'withdraw', method: 'xRocket', icon: 'xrocket.png', amount: 20.00, date: 'Вчера, 18:05', status: 'success' },
-        { type: 'deposit', method: 'CryptoBot', icon: 'cryptobot.png', amount: 95.50, date: '21 Июля', status: 'success' }
-    ];
+// Повторная попытка сохранения — используется только для начисления
+// выигрыша, где потеря данных особенно чувствительна для пользователя
+// (раунд уже сыгран и показан, "тихо" терять выигрыш недопустимо).
+async function saveUserDataWithRetry(attempts = 2) {
+    for (let i = 0; i < attempts; i++) {
+        const ok = await saveUserData();
+        if (ok) return true;
+    }
+    return false;
+}
 
-    const COLOR_CONFIG = {
-        green:  { label: '1x',  mult: 2,  color: '#2ecc71', name: 'Зеленый' },
-        red:    { label: '2x',  mult: 3,  color: '#e74c3c', name: 'Красный' },
-        blue:   { label: '3x',  mult: 4,  color: '#3498db', name: 'Синий' },
-        yellow: { label: '5x',  mult: 6,  color: '#f1c40f', name: 'Желтый' },
-        gold:   { label: '50x', mult: 51, color: '#ffd700', name: 'Золото' }
-    };
+/* =========================
+   СОСТОЯНИЕ ПРИЛОЖЕНИЯ
+========================= */
 
-    const sectors = [
-        { type: 'gold',   ...COLOR_CONFIG.gold },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'blue',   ...COLOR_CONFIG.blue },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'yellow', ...COLOR_CONFIG.yellow },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'blue',   ...COLOR_CONFIG.blue },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'yellow', ...COLOR_CONFIG.yellow },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'blue',   ...COLOR_CONFIG.blue },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'yellow', ...COLOR_CONFIG.yellow },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'blue',   ...COLOR_CONFIG.blue },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red },
-        { type: 'green',  ...COLOR_CONFIG.green },
-        { type: 'red',    ...COLOR_CONFIG.red }
-    ];
+let balanceMode = "deposit";
+let selectedMethod = "CryptoBot";
+let selectedMethodSub = "Криптовалюта";
+let selectedMethodIcon = "cryptobot.png";
 
-    let wheelRotation = 0;
-    let wheelSpinning = false;
-    let isBetProcessing = false;
+const COLOR_PALETTE = [
+    { id: 'slate', start: '#2c3e50', end: '#1a252f' },
+    { id: 'purple', start: '#8e44ad', end: '#2c3e50' },
+    { id: 'green', start: '#27ae60', end: '#114b27' },
+    { id: 'brown', start: '#d35400', end: '#2c1e13' },
+    { id: 'dark', start: '#1f1f1f', end: '#0a0a0a' },
+    { id: 'crimson', start: '#c0392b', end: '#3d0c07' },
+    { id: 'ocean', start: '#2980b9', end: '#0f3047' },
+    { id: 'gold', start: '#f39c12', end: '#4a3004' }
+];
 
-    /* =========================
-       ИГРОВОЕ СОСТОЯНИЕ МИН
-    ========================= */
+let profileDesign = JSON.parse(localStorage.getItem('wxs_profile')) || {
+    colorId: 'slate',
+    start: '#2c3e50',
+    end: '#1a252f'
+};
 
-    let minesGame = {
-        active: false,
-        bet: 0.10,
-        minesCount: 3,
-        field: [],
-        revealed: [],
-        gemsFound: 0,
-        isProcessing: false
-    };
+let colorBets = { green: 0, red: 0, blue: 0, yellow: 0, gold: 0 };
+let activeColor = 'green';
 
-    function selectMinesCount(count, btn) {
-        if (minesGame.active) return;
-        minesGame.minesCount = Math.min(24, Math.max(1, parseInt(count) || 3));
+// Раньше здесь были захардкожены 3 фейковые "успешные" транзакции —
+// их видел КАЖДЫЙ новый пользователь, хотя по факту они никогда не
+// происходили. Начинаем с пустой истории.
+// ⚠️ История также нигде не сохраняется в Supabase — при обновлении
+// страницы она исчезает (сам баланс при этом сохранён и не теряется).
+// Для персистентной истории нужна отдельная таблица (например,
+// wxs_transactions) и запись в неё при каждой операции.
+let transactions = [];
 
-        document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
+// ⚠️ ВНИМАНИЕ: при 32 секторах и распределении ниже (gold — 1 сектор из 32)
+// множитель gold=50 давал математическое ожидание 1.5625 (156%) — ставка
+// только на gold была гарантированно прибыльной для игрока в долгосроке
+// (казино гарантированно теряло деньги на этом секторе). Снижен до 20x
+// (EV ≈ 0.625, соответствует порядку остальных цветов). Если меняете
+// частоту секторов gold в массиве sectors ниже — пересчитайте mult так,
+// чтобы (кол-во_секторов_цвета / всего_секторов) * mult оставалось < 1.
+const COLOR_CONFIG = {
+    green:  { label: '1x',  mult: 1,  color: '#2ecc71', name: 'Зеленый' },
+    red:    { label: '2x',  mult: 2,  color: '#e74c3c', name: 'Красный' },
+    blue:   { label: '3x',  mult: 3,  color: '#3498db', name: 'Синий' },
+    yellow: { label: '5x',  mult: 5,  color: '#f1c40f', name: 'Желтый' },
+    gold:   { label: '20x', mult: 20, color: '#ffd700', name: 'Золото' }
+};
 
-        renderMinesCoefBar();
+const sectors = [
+    { type: 'gold',   ...COLOR_CONFIG.gold },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'blue',   ...COLOR_CONFIG.blue },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'yellow', ...COLOR_CONFIG.yellow },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'blue',   ...COLOR_CONFIG.blue },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'yellow', ...COLOR_CONFIG.yellow },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'blue',   ...COLOR_CONFIG.blue },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'yellow', ...COLOR_CONFIG.yellow },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'blue',   ...COLOR_CONFIG.blue },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red },
+    { type: 'green',  ...COLOR_CONFIG.green },
+    { type: 'red',    ...COLOR_CONFIG.red }
+];
+
+let wheelRotation = 0;
+let wheelSpinning = false;
+let isBetProcessing = false;
+
+/* =========================
+   ИГРОВОЕ СОСТОЯНИЕ МИН
+========================= */
+
+let minesGame = {
+    active: false,
+    bet: 0.10,
+    minesCount: 3,
+    field: [],
+    revealed: [],
+    gemsFound: 0,
+    isProcessing: false
+};
+
+function selectMinesCount(count, btn) {
+    if (minesGame.active) return;
+    minesGame.minesCount = count;
+
+    document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    renderMinesCoefBar();
+}
+
+function adjustMinesBet(factor) {
+    if (minesGame.active) return;
+    const input = document.getElementById('minesBetInput');
+    if (!input) return;
+
+    let current = parseFloat(input.value);
+    if (isNaN(current) || current < 0.10) {
+        current = 0.10;
+    } else {
+        current = Math.max(0.10, current * factor);
+    }
+    input.value = current.toFixed(2);
+}
+
+function setMinesMaxBet() {
+    if (minesGame.active) return;
+    const input = document.getElementById('minesBetInput');
+    if (input) input.value = currentBalance.toFixed(2);
+}
+
+function getMinesMultiplier(gemsFound, minesCount) {
+    if (gemsFound === 0) return 1.0;
+    const totalTiles = 25;
+    let mult = 1.0;
+    for (let i = 0; i < gemsFound; i++) {
+        mult *= (totalTiles - i) / (totalTiles - minesCount - i);
+    }
+    return Math.floor(mult * 100) / 100;
+}
+
+function renderMinesCoefBar() {
+    const bar = document.getElementById('minesCoefBar');
+    if (!bar) return;
+
+    let html = '';
+    const maxGems = 25 - minesGame.minesCount;
+    for (let step = 1; step <= Math.min(10, maxGems); step++) {
+        const mult = getMinesMultiplier(step, minesGame.minesCount);
+        const isActive = step === minesGame.gemsFound;
+        html += `
+            <div class="coef-item ${isActive ? 'active' : ''}">
+                <span class="step-num">${step}</span>
+                <strong class="mult-val">${mult.toFixed(2)}x</strong>
+            </div>
+        `;
+    }
+    bar.innerHTML = html;
+}
+
+function initMinesGrid() {
+    const grid = document.getElementById('minesGrid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    for (let i = 0; i < 25; i++) {
+        grid.innerHTML += `<div class="mine-tile disabled" id="tile-${i}" onclick="clickMinesTile(${i})"></div>`;
+    }
+    renderMinesCoefBar();
+}
+
+function handleMinesAction() {
+    if (minesGame.isProcessing) return;
+    
+    if (minesGame.active) {
+        cashoutMines();
+    } else {
+        startMinesGame();
+    }
+}
+
+async function startMinesGame() {
+    if (minesGame.isProcessing) return;
+    if (!lockEconomy()) return;
+
+    const input = document.getElementById('minesBetInput');
+    const bet = roundMoney(parseFloat(input.value));
+
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
     }
 
-    function adjustMinesBet(factor) {
-        if (minesGame.active) return;
-        const input = document.getElementById('minesBetInput');
-        if (!input) return;
+    minesGame.isProcessing = true;
+    const snapshot = snapshotBalanceState();
 
-        let current = parseFloat(input.value);
-        if (isNaN(current) || current < 0.10) {
-            current = 0.10;
-        } else {
-            current = Math.max(0.10, current * factor);
-        }
-        input.value = current.toFixed(2);
-    }
+    // Списываем ставку
+    currentBalance = roundMoney(currentBalance - bet);
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(currentBalance);
 
-    function setMinesMaxBet() {
-        if (minesGame.active) return;
-        const input = document.getElementById('minesBetInput');
-        if (input) input.value = Math.max(0.10, currentBalance).toFixed(2);
-    }
-
-    function getMinesMultiplier(gemsFound, minesCount) {
-        if (gemsFound === 0) return 1.0;
-        const totalTiles = 25;
-        let mult = 0.95; // Учитывает House Edge ~5%
-        for (let i = 0; i < gemsFound; i++) {
-            mult *= (totalTiles - i) / (totalTiles - minesCount - i);
-        }
-        return Math.floor(mult * 100) / 100;
-    }
-
-    function renderMinesCoefBar() {
-        const bar = document.getElementById('minesCoefBar');
-        if (!bar) return;
-
-        let html = '';
-        const maxGems = 25 - minesGame.minesCount;
-        for (let step = 1; step <= Math.min(10, maxGems); step++) {
-            const mult = getMinesMultiplier(step, minesGame.minesCount);
-            const isActive = step === minesGame.gemsFound;
-            html += `
-                <div class="coef-item ${isActive ? 'active' : ''}">
-                    <span class="step-num">${step}</span>
-                    <strong class="mult-val">${mult.toFixed(2)}x</strong>
-                </div>
-            `;
-        }
-        bar.innerHTML = html;
-    }
-
-    function initMinesGrid() {
-        const grid = document.getElementById('minesGrid');
-        if (!grid) return;
-
-        grid.innerHTML = '';
-        for (let i = 0; i < 25; i++) {
-            grid.innerHTML += `<div class="mine-tile disabled" id="tile-${i}" onclick="window.clickMinesTile(${i})"></div>`;
-        }
-        renderMinesCoefBar();
-    }
-
-    function handleMinesAction() {
-        if (minesGame.isProcessing) return;
-
-        if (minesGame.active) {
-            cashoutMines();
-        } else {
-            startMinesGame();
-        }
-    }
-
-    async function startMinesGame() {
-        if (minesGame.isProcessing) return;
-
-        const input = document.getElementById('minesBetInput');
-        const bet = parseFloat(input?.value);
-
-        if (isNaN(bet) || bet < 0.10) {
-            showMessage("Минимальная ставка — 0.10 $!");
-            return;
-        }
-        if (bet > currentBalance) {
-            showMessage("Недостаточно средств!");
-            return;
-        }
-
-        minesGame.isProcessing = true;
-
-        currentBalance -= bet;
-        currentTurnover += bet;
-        currentBetsCount++;
-        setUIBalance(currentBalance);
-        await saveUserData();
-
-        minesGame.active = true;
-        minesGame.bet = bet;
-        minesGame.gemsFound = 0;
-        minesGame.revealed = Array(25).fill(false);
-        
-        // Генерация игрового поля методом тасования Фишера-Йейтса (Fisher-Yates Shuffle)
-        let newField = Array(25).fill('gem');
-        for (let i = 0; i < minesGame.minesCount; i++) {
-            newField[i] = 'bomb';
-        }
-        for (let i = 24; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [newField[i], newField[j]] = [newField[j], newField[i]];
-        }
-        minesGame.field = newField;
-
-        const actionBtn = document.getElementById('minesActionBtn');
-        const autoBtn = document.getElementById('minesAutoBtn');
-        if (actionBtn) actionBtn.textContent = 'ОТКРОЙТЕ КЛЕТКУ';
-        if (autoBtn) autoBtn.disabled = false;
-
-        for (let i = 0; i < 25; i++) {
-            const tile = document.getElementById(`tile-${i}`);
-            if (tile) {
-                tile.className = 'mine-tile';
-                tile.innerHTML = '';
-                tile.removeAttribute('style');
-            }
-        }
-
-        renderMinesCoefBar();
+    const debited = await saveUserData();
+    if (!debited) {
+        // Списание не сохранилось в БД — откатываем локально и НЕ начинаем
+        // раунд, иначе это была бы бесплатная игра (ставка спишется только
+        // в браузере, а после перезагрузки страницы вернётся старый баланс).
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         minesGame.isProcessing = false;
+        unlockEconomy();
+        return;
     }
 
-    async function clickMinesTile(index) {
-        if (!minesGame.active || minesGame.revealed[index] || minesGame.isProcessing) return;
+    minesGame.active = true;
+    minesGame.bet = bet;
+    minesGame.gemsFound = 0;
+    minesGame.revealed = Array(25).fill(false);
+    minesGame.field = Array(25).fill('gem');
 
-        minesGame.revealed[index] = true;
-        const tile = document.getElementById(`tile-${index}`);
-
-        if (minesGame.field[index] === 'bomb') {
-            if (tile) {
-                tile.className = 'mine-tile revealed-bomb';
-                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
-            }
-            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
-            await endMinesGame(false);
-        } else {
-            minesGame.gemsFound++;
-            if (tile) {
-                tile.className = 'mine-tile revealed-gem';
-                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
-            }
-
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-
-            const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
-            const currentWin = (minesGame.bet * mult).toFixed(2);
-
-            const actionBtn = document.getElementById('minesActionBtn');
-            if (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${currentWin}$`;
-
-            renderMinesCoefBar();
-
-            if (minesGame.gemsFound === 25 - minesGame.minesCount) {
-                await cashoutMines();
-            }
+    let placedMines = 0;
+    while (placedMines < minesGame.minesCount) {
+        let randIndex = Math.floor(Math.random() * 25);
+        if (minesGame.field[randIndex] !== 'bomb') {
+            minesGame.field[randIndex] = 'bomb';
+            placedMines++;
         }
     }
 
-    function autoPickMinesTile() {
-        if (!minesGame.active || minesGame.isProcessing) return;
-        let unrevealed = [];
-        for (let i = 0; i < 25; i++) {
-            if (!minesGame.revealed[i]) unrevealed.push(i);
-        }
-        if (unrevealed.length > 0) {
-            let rand = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-            clickMinesTile(rand);
+    const actionBtn = document.getElementById('minesActionBtn');
+    const autoBtn = document.getElementById('minesAutoBtn');
+    if (actionBtn) actionBtn.textContent = 'ОТКРОЙТЕ КЛЕТКУ';
+    if (autoBtn) autoBtn.disabled = false;
+
+    for (let i = 0; i < 25; i++) {
+        const tile = document.getElementById(`tile-${i}`);
+        if (tile) {
+            tile.className = 'mine-tile';
+            tile.innerHTML = '';
+            tile.removeAttribute('style');
         }
     }
 
-    async function cashoutMines() {
-        if (minesGame.gemsFound < 1) {
-            showMessage("Откройте хотя бы одну ячейку!");
-            return;
-        }
+    renderMinesCoefBar();
+    minesGame.isProcessing = false;
+    unlockEconomy();
+}
 
-        if (minesGame.isProcessing) return;
-        minesGame.isProcessing = true;
+function clickMinesTile(index) {
+    if (!minesGame.active || minesGame.revealed[index] || minesGame.isProcessing) return;
+
+    minesGame.revealed[index] = true;
+    const tile = document.getElementById(`tile-${index}`);
+
+    if (minesGame.field[index] === 'bomb') {
+        tile.className = 'mine-tile revealed-bomb';
+        tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+        endMinesGame(false);
+    } else {
+        minesGame.gemsFound++;
+        tile.className = 'mine-tile revealed-gem';
+        
+        tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
         const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
-        const winAmount = minesGame.bet * mult;
-
-        currentBalance += winAmount;
-        currentTotalWin += winAmount;
-        currentWinsCount++;
-        if (mult > currentMaxWin) currentMaxWin = mult;
-
-        setUIBalance(currentBalance);
-        await saveUserData();
-
-        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-        showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
-
-        await endMinesGame(true);
-    }
-
-    async function endMinesGame(isWin) {
-        minesGame.active = false;
-
-        for (let i = 0; i < 25; i++) {
-            const tile = document.getElementById(`tile-${i}`);
-            if (!tile) continue;
-
-            tile.classList.add('disabled');
-
-            if (!minesGame.revealed[i]) {
-                tile.classList.add('end-show');
-                if (minesGame.field[i] === 'bomb') {
-                    tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
-                } else {
-                    tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
-                }
-            }
-        }
+        const currentWin = (minesGame.bet * mult).toFixed(2);
 
         const actionBtn = document.getElementById('minesActionBtn');
-        const autoBtn = document.getElementById('minesAutoBtn');
-        if (actionBtn) actionBtn.textContent = 'Начать игру';
-        if (autoBtn) autoBtn.disabled = true;
+        if (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${currentWin}$`;
 
+        renderMinesCoefBar();
+
+        if (minesGame.gemsFound === 25 - minesGame.minesCount) {
+            cashoutMines();
+        }
+    }
+}
+
+function autoPickMinesTile() {
+    if (!minesGame.active || minesGame.isProcessing) return;
+    let unrevealed = [];
+    for (let i = 0; i < 25; i++) {
+        if (!minesGame.revealed[i]) unrevealed.push(i);
+    }
+    if (unrevealed.length > 0) {
+        let rand = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+        clickMinesTile(rand);
+    }
+}
+
+async function cashoutMines() {
+    if (minesGame.gemsFound < 1) {
+        showMessage("Откройте хотя бы одну ячейку!");
+        return;
+    }
+
+    if (minesGame.isProcessing) return;
+    if (!lockEconomy()) return;
+    minesGame.isProcessing = true;
+
+    const snapshot = snapshotBalanceState();
+
+    const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
+    const winAmount = roundMoney(minesGame.bet * mult);
+
+    currentBalance = roundMoney(currentBalance + winAmount);
+    currentTotalWin = roundMoney(currentTotalWin + winAmount);
+    currentWinsCount++;
+    if (mult > currentMaxWin) currentMaxWin = mult;
+
+    setUIBalance(currentBalance);
+    const credited = await saveUserDataWithRetry();
+
+    if (!credited) {
+        // Не удалось сохранить выигрыш даже после повторной попытки.
+        // Откатываем локальный баланс и НЕ завершаем раунд — поле
+        // остаётся открытым, чтобы пользователь мог нажать "Забрать"
+        // ещё раз, когда соединение восстановится. Раньше игра
+        // завершалась в любом случае, и выигрыш при сбое сети
+        // безвозвратно пропадал после перезагрузки страницы.
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
         minesGame.isProcessing = false;
+        unlockEconomy();
+        return;
     }
 
-    /* =========================
-       БАЛАНС И UI
-    ========================= */
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
 
-    function setUIBalance(newBalance) {
-        currentBalance = parseFloat(newBalance) || 0.00;
-        const formatted = currentBalance.toFixed(2) + " $";
-        const turnoverValue = "$" + currentTurnover.toFixed(2);
-        const maxMultValue = "x" + currentMaxWin.toFixed(2);
-        const totalWinValue = "$" + currentTotalWin.toFixed(2);
-        const betsCountValue = String(currentBetsCount);
+    endMinesGame(true);
+    unlockEconomy();
+}
 
-        const elementsMap = {
-            "topBalance": formatted,
-            "balanceCardValue": formatted,
-            "profileBalance": formatted,
-            "statTurnover": turnoverValue,
-            "statMaxMult": maxMultValue,
-            "statTotalWin": totalWinValue,
-            "statBetsCount": betsCountValue,
-            "betBalanceText": `Баланс: ${formatted}`
-        };
+function endMinesGame(isWin) {
+    minesGame.active = false;
 
-        Object.keys(elementsMap).forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = elementsMap[id];
-        });
+    for (let i = 0; i < 25; i++) {
+        const tile = document.getElementById(`tile-${i}`);
+        if (!tile) continue;
 
-        document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
-            el.textContent = formatted;
-        });
+        tile.classList.add('disabled');
 
-        updateLevelUI();
-        updateTotalBet();
-    }
-
-    /* =========================
-       НАВИГАЦИЯ
-    ========================= */
-
-    function hideAllPages() {
-        const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage"];
-        pages.forEach(id => {
-            const page = document.getElementById(id);
-            if (page) page.classList.add("hidden");
-        });
-        closeMethodsDropdown();
-    }
-
-    function showPage(id) {
-        hideAllPages();
-        const page = document.getElementById(id);
-        if (page) page.classList.remove("hidden");
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-
-    function goHome() {
-        showPage("homePage");
-        updateNav("home");
-    }
-
-    function openGamesMenu() {
-        const homePage = document.getElementById('homePage');
-        const gamesSection = document.getElementById('gamesListSection');
-
-        if (homePage && homePage.classList.contains('hidden')) {
-            showPage("homePage");
-        }
-
-        updateNav("games");
-
-        if (gamesSection) {
-            gamesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    }
-
-    function openWheel() {
-        showPage("wheelPage");
-        updateNav("games");
-        drawWheel();
-        renderColorTabs();
-        selectColorTab(activeColor);
-    }
-
-    function openMines() {
-        showPage("minesPage");
-        updateNav("games");
-        initMinesGrid();
-    }
-
-    function openBalance(mode = "deposit") {
-        showPage("balancePage");
-        setBalanceMode(mode);
-        updateNav("balance");
-        renderTransactions();
-    }
-
-    function openProfile() {
-        showPage("profilePage");
-        updateNav("profile");
-        applyDesign();
-        renderCustomizerControls();
-        updateLevelUI();
-    }
-
-    function openBonus() {
-        showPage("bonusPage");
-        updateNav("bonus");
-    }
-
-    function updateNav(active) {
-        const navItems = document.querySelectorAll(".nav-item");
-        navItems.forEach(item => item.classList.remove("active"));
-
-        const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
-        const activeElement = document.getElementById(map[active]);
-        if (activeElement) activeElement.classList.add("active");
-    }
-
-    /* =========================
-       ОТРИСОВКА SVG КОЛЕСА
-    ========================= */
-
-    function drawWheel() {
-        const wheelSvg = document.getElementById('wheelSvg');
-        const rewardList = document.getElementById('rewardList');
-        if (!wheelSvg) return;
-
-        const total = sectors.length;
-        const sliceAngle = 360 / total;
-        const radius = 150;
-        const center = 150;
-
-        let svgContent = '';
-
-        sectors.forEach((sector, i) => {
-            const startAngle = i * sliceAngle - 90;
-            const endAngle = startAngle + sliceAngle;
-
-            const x1 = center + radius * Math.cos((Math.PI * startAngle) / 180);
-            const y1 = center + radius * Math.sin((Math.PI * startAngle) / 180);
-            const x2 = center + radius * Math.cos((Math.PI * endAngle) / 180);
-            const y2 = center + radius * Math.sin((Math.PI * endAngle) / 180);
-
-            const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} Z`;
-
-            const textAngle = startAngle + sliceAngle / 2;
-            const textRadius = radius * 0.75;
-            const textX = center + textRadius * Math.cos((Math.PI * textAngle) / 180);
-            const textY = center + textRadius * Math.sin((Math.PI * textAngle) / 180);
-
-            svgContent += `
-                <path d="${pathData}" fill="${sector.color}" class="wheel-sector" />
-                <text x="${textX}" y="${textY}" class="wheel-sector-text" style="font-size: 8px;" transform="rotate(${textAngle + 90}, ${textX}, ${textY})">
-                    ${sector.label}
-                </text>
-            `;
-        });
-
-        wheelSvg.innerHTML = svgContent;
-
-        if (rewardList) {
-            rewardList.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
-                const cfg = COLOR_CONFIG[key];
-                return `
-                    <div style="background:#161616; border:1px solid #222; padding:10px; border-radius:12px; display:flex; align-items:center; gap:8px;">
-                        <span style="background:${cfg.color}; width:16px; height:16px; border-radius:50%; display:inline-block;"></span>
-                        <b style="font-size:12px;">${cfg.name} (${cfg.label})</b>
-                    </div>
-                `;
-            }).join('');
-        }
-    }
-
-    /* =========================
-       ТАБЫ ЦВЕТОВ И СТАВКИ КОЛЕСА
-    ========================= */
-
-    function renderColorTabs() {
-        const row = document.getElementById('colorTabsRow');
-        if (!row) return;
-
-        row.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
-            const cfg = COLOR_CONFIG[key];
-            const hasBet = colorBets[key] > 0;
-
-            return `
-                <div class="color-tab-btn ${key === activeColor ? 'active' : ''}" 
-                     id="tab-${key}" 
-                     onclick="window.selectColorTab('${key}')">
-                    <span class="tab-indicator" style="background: ${cfg.color};"></span>
-                    <span class="tab-name">${cfg.name}</span>
-                    <span class="tab-mult" id="tab-val-${key}">
-                        ${hasBet ? colorBets[key].toFixed(2) + ' $' : cfg.label}
-                    </span>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function selectColorTab(color) {
-        if (wheelSpinning) return;
-
-        const currentInput = document.getElementById('activeBetInput');
-        if (currentInput) {
-            onActiveColorInput(currentInput.value);
-        }
-
-        activeColor = color;
-
-        document.querySelectorAll('.color-tab-btn').forEach(btn => btn.classList.remove('active'));
-        const currentTab = document.getElementById(`tab-${color}`);
-        if (currentTab) currentTab.classList.add('active');
-
-        const cfg = COLOR_CONFIG[color];
-        const titleBox = document.getElementById('activeColorTitle');
-        if (titleBox) {
-            titleBox.innerHTML = `
-                <span class="color-indicator" style="background: ${cfg.color};"></span>
-                <div>
-                    <span>Ставка на ${cfg.name}</span><br>
-                    <span style="color: #888888; font-size: 11px; font-weight: 700;">(${cfg.label})</span>
-                </div>
-            `;
-        }
-
-        if (currentInput) {
-            const savedVal = colorBets[color];
-            currentInput.value = savedVal > 0 ? savedVal.toFixed(2) : '';
-        }
-
-        updateTotalBet();
-    }
-
-    function onActiveColorInput(val) {
-        let parsed = parseFloat(val);
-        if (isNaN(parsed) || parsed < 0.10) {
-            colorBets[activeColor] = 0;
-        } else {
-            colorBets[activeColor] = parsed;
-        }
-
-        const tabVal = document.getElementById(`tab-val-${activeColor}`);
-        if (tabVal) {
-            const cfg = COLOR_CONFIG[activeColor];
-            tabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor].toFixed(2)} $` : cfg.label;
-        }
-
-        updateTotalBet();
-    }
-
-    function applyMinToActive() {
-        if (wheelSpinning) return;
-        colorBets[activeColor] = 0.10;
-
-        const input = document.getElementById('activeBetInput');
-        if (input) input.value = '0.10';
-
-        const tabVal = document.getElementById(`tab-val-${activeColor}`);
-        if (tabVal) tabVal.textContent = '0.10 $';
-
-        updateTotalBet();
-    }
-
-    function applyPercentToActive(pct) {
-        if (wheelSpinning) return;
-
-        let otherBetsSum = 0;
-        Object.keys(colorBets).forEach(key => {
-            if (key !== activeColor) otherBetsSum += colorBets[key];
-        });
-
-        const availableBalance = currentBalance - otherBetsSum;
-        if (availableBalance < 0.10) {
-            showMessage("Недостаточно средств для минимальной ставки!");
-            return;
-        }
-
-        let amount = Math.floor(availableBalance * pct * 100) / 100;
-        if (amount < 0.10) {
-            amount = 0.10;
-        }
-
-        colorBets[activeColor] = amount;
-
-        const input = document.getElementById('activeBetInput');
-        if (input) input.value = amount.toFixed(2);
-
-        const tabVal = document.getElementById(`tab-val-${activeColor}`);
-        if (tabVal) {
-            tabVal.textContent = `${amount.toFixed(2)} $`;
-        }
-
-        updateTotalBet();
-    }
-
-    function resetActiveBet() {
-        if (wheelSpinning) return;
-        colorBets[activeColor] = 0;
-
-        const input = document.getElementById('activeBetInput');
-        if (input) input.value = '';
-
-        const tabVal = document.getElementById(`tab-val-${activeColor}`);
-        if (tabVal) {
-            const cfg = COLOR_CONFIG[activeColor];
-            tabVal.textContent = cfg.label;
-        }
-
-        updateTotalBet();
-    }
-
-    function updateTotalBet() {
-        const totalInfo = document.getElementById('totalBetInfo');
-        let totalSum = 0;
-
-        Object.values(colorBets).forEach(val => {
-            totalSum += val;
-        });
-
-        if (totalInfo) {
-            totalInfo.textContent = `Общая ставка: ${totalSum.toFixed(2)} $`;
-        }
-    }
-
-    /* =========================
-       ВРАЩЕНИЕ КОЛЕСА
-    ========================= */
-
-    async function spinWheel() {
-        if (wheelSpinning || isBetProcessing) return;
-
-        const button = document.getElementById('spinButton');
-        if (!button) return;
-
-        isBetProcessing = true;
-        button.disabled = true;
-
-        const currentInput = document.getElementById('activeBetInput');
-        if (currentInput && currentInput.value !== '') {
-            onActiveColorInput(currentInput.value);
-        }
-
-        let totalBet = 0;
-        Object.keys(colorBets).forEach(key => {
-            colorBets[key] = parseFloat(colorBets[key]) || 0;
-            totalBet += colorBets[key];
-        });
-
-        if (totalBet < 0.10) {
-            showMessage("Минимальная общая ставка — 0.10 $!");
-            button.disabled = false;
-            isBetProcessing = false;
-            return;
-        }
-
-        if (totalBet > currentBalance) {
-            showMessage("Недостаточно средств на балансе!");
-            button.disabled = false;
-            isBetProcessing = false;
-            return;
-        }
-
-        currentBalance -= totalBet;
-        currentTurnover += totalBet;
-        currentBetsCount++;
-        setUIBalance(currentBalance);
-        await saveUserData();
-
-        wheelSpinning = true;
-        button.innerHTML = '<span>↻ Вращение...</span>';
-
-        const result = document.getElementById('wheelResult');
-        const resultValue = document.getElementById('resultValue');
-        const wheelSvg = document.getElementById('wheelSvg');
-        const wheelStage = document.querySelector('.wheel-stage');
-
-        if (result) result.classList.remove('show');
-        if (resultValue) resultValue.textContent = '?';
-
-        const rewardIndex = Math.floor(Math.random() * sectors.length);
-        const totalSectors = sectors.length;
-        const sectorAngle = 360 / totalSectors;
-
-        const padding = 0.15;
-        const randomOffset = (Math.random() * (1 - 2 * padding) + padding) * sectorAngle;
-
-        const targetAngleInSector = (rewardIndex * sectorAngle) + randomOffset;
-        const stopAngle = 360 - targetAngleInSector;
-
-        const fullSpins = 6;
-        wheelRotation += fullSpins * 360 + (stopAngle - (wheelRotation % 360));
-
-        if (wheelSvg) wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
-
-        setTimeout(() => {
-            if (wheelStage) wheelStage.classList.add('zoomed');
-        }, 3600);
-
-        setTimeout(async () => {
-            if (wheelStage) wheelStage.classList.remove('zoomed');
-
-            const wonSector = sectors[rewardIndex];
-            const sectorType = wonSector.type;
-
-            const betOnWonColor = parseFloat(colorBets[sectorType]) || 0;
-            const multiplier = parseFloat(wonSector.mult) || 0;
-
-            let totalWin = 0;
-
-            if (betOnWonColor > 0 && multiplier > 0) {
-                totalWin = betOnWonColor * multiplier;
-                currentBalance += totalWin;
-                currentTotalWin += totalWin;
-                currentWinsCount++;
-                if (multiplier > currentMaxWin) currentMaxWin = multiplier;
-                setUIBalance(currentBalance);
-                await saveUserData();
-            }
-
-            if (resultValue) {
-                if (totalWin > 0) {
-                    resultValue.textContent = `Победа +${totalWin.toFixed(2)} $ (${wonSector.label})`;
-                    resultValue.style.color = '#2ecc71';
-                } else {
-                    resultValue.textContent = `Выпал ${wonSector.name} (${wonSector.label})`;
-                    resultValue.style.color = '#e74c3c';
-                }
-            }
-
-            if (result) result.classList.add('show');
-
-            if (tg?.HapticFeedback) {
-                tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
-            }
-
-            wheelSpinning = false;
-            isBetProcessing = false;
-            button.disabled = false;
-            button.innerHTML = '<span>↻ Сделать ставку</span>';
-
-        }, 5000);
-    }
-
-    /* =========================
-       ПОПОЛНЕНИЕ И ВЫВОД
-    ========================= */
-
-    function renderTransactions() {
-        const list = document.getElementById("historyList");
-        const count = document.getElementById("txCount");
-        if (!list) return;
-
-        if (count) count.textContent = `${transactions.length} операций`;
-
-        if (transactions.length === 0) {
-            list.innerHTML = `<div style="text-align:center; color:#666; font-size:13px; padding:15px;">История пуста</div>`;
-            return;
-        }
-
-        list.innerHTML = transactions.map(tx => {
-            const isDep = tx.type === 'deposit';
-            const sign = isDep ? '+' : '-';
-            const title = isDep ? 'Пополнение' : 'Вывод средств';
-            const statusText = tx.status === 'success' ? 'Успешно' : 'В обработке';
-
-            const iconHTML = tx.icon.includes('.')
-                ? `<img src="${tx.icon}" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;">`
-                : tx.icon;
-
-            return `
-                <div class="history-item">
-                    <div class="tx-left">
-                        <div class="tx-icon ${tx.type}">
-                            ${isDep ? '↙' : '↗'}
-                        </div>
-                        <div class="tx-details">
-                            <span class="tx-title">${title}</span>
-                            <span class="tx-subtitle">${iconHTML} ${tx.method} • ${tx.date}</span>
-                        </div>
-                    </div>
-                    <div class="tx-right">
-                        <span class="tx-amount ${tx.type}">${sign}${tx.amount.toFixed(2)} $</span>
-                        <span class="tx-status ${tx.status}">${statusText}</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function closeMethodsDropdown() {
-        const dropdown = document.getElementById("methodsDropdown");
-        const arrow = document.getElementById("methodArrow");
-        if (dropdown) dropdown.classList.remove("open");
-        if (arrow) arrow.textContent = "▼";
-    }
-
-    function setBalanceMode(mode) {
-        balanceMode = mode;
-        closeMethodsDropdown();
-
-        const depositTab = document.getElementById("depositTab");
-        const withdrawTab = document.getElementById("withdrawTab");
-        const title = document.getElementById("formTitle");
-        const subtitle = document.getElementById("formSubtitle");
-        const action = document.getElementById("balanceAction");
-
-        if (!depositTab || !withdrawTab || !title || !subtitle || !action) return;
-
-        depositTab.classList.remove("active");
-        withdrawTab.classList.remove("active");
-
-        if (mode === "deposit") {
-            depositTab.classList.add("active");
-            title.textContent = "Пополнение баланса";
-            subtitle.textContent = "Выберите удобный способ пополнения";
-            action.textContent = "Пополнить";
-        }
-
-        if (mode === "withdraw") {
-            withdrawTab.classList.add("active");
-            title.textContent = "Вывод средств";
-            subtitle.textContent = "Выберите способ вывода средств";
-            action.textContent = "Вывести";
-        }
-    }
-
-    function toggleMethods() {
-        const dropdown = document.getElementById("methodsDropdown");
-        const arrow = document.getElementById("methodArrow");
-
-        if (!dropdown) return;
-        dropdown.classList.toggle("open");
-
-        if (arrow) {
-            arrow.textContent = dropdown.classList.contains("open") ? "▲" : "▼";
-        }
-    }
-
-    function selectMethod(method, icon, sub) {
-        selectedMethod = method;
-        selectedMethodIcon = icon;
-        selectedMethodSub = sub;
-
-        const selected = document.getElementById("selectedMethod");
-        const selectedSub = document.getElementById("selectedMethodSub");
-        const iconElement = document.getElementById("selectedMethodIcon");
-
-        if (selected) selected.textContent = method;
-        if (selectedSub) selectedSub.textContent = sub;
-
-        if (iconElement) {
-            if (icon.includes('.')) {
-                iconElement.src = icon;
+        if (!minesGame.revealed[i]) {
+            tile.classList.add('end-show');
+            if (minesGame.field[i] === 'bomb') {
+                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             } else {
-                iconElement.textContent = icon;
+                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+            }
+        }
+    }
+
+    const actionBtn = document.getElementById('minesActionBtn');
+    const autoBtn = document.getElementById('minesAutoBtn');
+    if (actionBtn) actionBtn.textContent = 'Начать игру';
+    if (autoBtn) autoBtn.disabled = true;
+
+    minesGame.isProcessing = false;
+}
+
+/* =========================
+   БАЛАНС И UI
+========================= */
+
+function setUIBalance(newBalance) {
+    currentBalance = parseFloat(newBalance) || 0.00;
+    const formatted = currentBalance.toFixed(2) + " $";
+    const turnoverValue = "$" + currentTurnover.toFixed(2);
+    const maxMultValue = "x" + currentMaxWin.toFixed(2);
+    const totalWinValue = "$" + currentTotalWin.toFixed(2);
+    const betsCountValue = String(currentBetsCount);
+
+    const elementsMap = {
+        "topBalance": formatted,
+        "balanceCardValue": formatted,
+        "profileBalance": formatted,
+        "statTurnover": turnoverValue,
+        "statMaxMult": maxMultValue,
+        "statTotalWin": totalWinValue,
+        "statBetsCount": betsCountValue,
+        "betBalanceText": `Баланс: ${formatted}`
+    };
+
+    Object.keys(elementsMap).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = elementsMap[id];
+    });
+
+    document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
+        el.textContent = formatted;
+    });
+
+    updateLevelUI();
+    updateTotalBet();
+}
+
+/* =========================
+   НАВИГАЦИЯ
+========================= */
+
+function hideAllPages() {
+    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage"];
+    pages.forEach(id => {
+        const page = document.getElementById(id);
+        if (page) page.classList.add("hidden");
+    });
+    closeMethodsDropdown();
+}
+
+function showPage(id) {
+    hideAllPages();
+    const page = document.getElementById(id);
+    if (page) page.classList.remove("hidden");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function goHome() {
+    showPage("homePage");
+    updateNav("home");
+}
+
+function openGamesMenu() {
+    const homePage = document.getElementById('homePage');
+    const gamesSection = document.getElementById('gamesListSection');
+
+    if (homePage && homePage.classList.contains('hidden')) {
+        showPage("homePage");
+    }
+
+    updateNav("games");
+
+    if (gamesSection) {
+        gamesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function openWheel() {
+    showPage("wheelPage");
+    updateNav("games");
+    drawWheel();
+    renderColorTabs();
+    selectColorTab(activeColor);
+}
+
+function openMines() {
+    showPage("minesPage");
+    updateNav("games");
+    initMinesGrid();
+}
+
+function openBalance(mode = "deposit") {
+    showPage("balancePage");
+    setBalanceMode(mode);
+    updateNav("balance");
+    renderTransactions();
+}
+
+function openProfile() {
+    showPage("profilePage");
+    updateNav("profile");
+    applyDesign();
+    renderCustomizerControls();
+    updateLevelUI();
+}
+
+function openBonus() {
+    showPage("bonusPage");
+    updateNav("bonus");
+}
+
+function updateNav(active) {
+    const navItems = document.querySelectorAll(".nav-item");
+    navItems.forEach(item => item.classList.remove("active"));
+
+    const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
+    const activeElement = document.getElementById(map[active]);
+    if (activeElement) activeElement.classList.add("active");
+}
+
+/* =========================
+   ОТРИСОВКА SVG КОЛЕСА
+========================= */
+
+function drawWheel() {
+    const wheelSvg = document.getElementById('wheelSvg');
+    const rewardList = document.getElementById('rewardList');
+    if (!wheelSvg) return;
+
+    const total = sectors.length;
+    const sliceAngle = 360 / total;
+    const radius = 150;
+    const center = 150;
+
+    let svgContent = '';
+
+    sectors.forEach((sector, i) => {
+        const startAngle = i * sliceAngle - 90;
+        const endAngle = startAngle + sliceAngle;
+
+        const x1 = center + radius * Math.cos((Math.PI * startAngle) / 180);
+        const y1 = center + radius * Math.sin((Math.PI * startAngle) / 180);
+        const x2 = center + radius * Math.cos((Math.PI * endAngle) / 180);
+        const y2 = center + radius * Math.sin((Math.PI * endAngle) / 180);
+
+        const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} Z`;
+
+        const textAngle = startAngle + sliceAngle / 2;
+        const textRadius = radius * 0.75;
+        const textX = center + textRadius * Math.cos((Math.PI * textAngle) / 180);
+        const textY = center + textRadius * Math.sin((Math.PI * textAngle) / 180);
+
+        svgContent += `
+            <path d="${pathData}" fill="${sector.color}" class="wheel-sector" />
+            <text x="${textX}" y="${textY}" class="wheel-sector-text" style="font-size: 8px;" transform="rotate(${textAngle + 90}, ${textX}, ${textY})">
+                ${sector.label}
+            </text>
+        `;
+    });
+
+    wheelSvg.innerHTML = svgContent;
+
+    if (rewardList) {
+        rewardList.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
+            const cfg = COLOR_CONFIG[key];
+            return `
+                <div style="background:#161616; border:1px solid #222; padding:10px; border-radius:12px; display:flex; align-items:center; gap:8px;">
+                    <span style="background:${cfg.color}; width:16px; height:16px; border-radius:50%; display:inline-block;"></span>
+                    <b style="font-size:12px;">${cfg.name} (${cfg.label})</b>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+/* =========================
+   ТАБЫ ЦВЕТОВ И СТАВКИ КОЛЕСА
+========================= */
+
+function renderColorTabs() {
+    const row = document.getElementById('colorTabsRow');
+    if (!row) return;
+
+    row.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
+        const cfg = COLOR_CONFIG[key];
+        const hasBet = colorBets[key] > 0;
+
+        return `
+            <div class="color-tab-btn ${key === activeColor ? 'active' : ''}" 
+                 id="tab-${key}" 
+                 onclick="selectColorTab('${key}')">
+                <span class="tab-indicator" style="background: ${cfg.color};"></span>
+                <span class="tab-name">${cfg.name}</span>
+                <span class="tab-mult" id="tab-val-${key}">
+                    ${hasBet ? colorBets[key] + ' $' : cfg.label}
+                </span>
+            </div>
+        `;
+    }).join('');
+}
+
+function selectColorTab(color) {
+    if (wheelSpinning) return;
+
+    const currentInput = document.getElementById('activeBetInput');
+    if (currentInput) {
+        onActiveColorInput(currentInput.value);
+    }
+
+    activeColor = color;
+
+    document.querySelectorAll('.color-tab-btn').forEach(btn => btn.classList.remove('active'));
+    const currentTab = document.getElementById(`tab-${color}`);
+    if (currentTab) currentTab.classList.add('active');
+
+    const cfg = COLOR_CONFIG[color];
+    const titleBox = document.getElementById('activeColorTitle');
+    if (titleBox) {
+        titleBox.innerHTML = `
+            <span class="color-indicator" style="background: ${cfg.color};"></span>
+            <div>
+                <span>Ставка на ${cfg.name}</span><br>
+                <span style="color: #888888; font-size: 11px; font-weight: 700;">(${cfg.label})</span>
+            </div>
+        `;
+    }
+
+    if (currentInput) {
+        const savedVal = colorBets[color];
+        currentInput.value = savedVal > 0 ? savedVal : '';
+    }
+
+    updateTotalBet();
+}
+
+function onActiveColorInput(val) {
+    let parsed = parseFloat(val);
+    if (isNaN(parsed) || parsed < 0.10) {
+        colorBets[activeColor] = 0;
+    } else {
+        colorBets[activeColor] = parsed;
+    }
+
+    const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    if (tabVal) {
+        const cfg = COLOR_CONFIG[activeColor];
+        tabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor]} $` : cfg.label;
+    }
+
+    updateTotalBet();
+}
+
+function applyMinToActive() {
+    if (wheelSpinning) return;
+    colorBets[activeColor] = 0.10;
+
+    const input = document.getElementById('activeBetInput');
+    if (input) input.value = '0.10';
+
+    const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    if (tabVal) tabVal.textContent = '0.10 $';
+
+    updateTotalBet();
+}
+
+function applyPercentToActive(pct) {
+    if (wheelSpinning) return;
+
+    let otherBetsSum = 0;
+    Object.keys(colorBets).forEach(key => {
+        if (key !== activeColor) otherBetsSum += colorBets[key];
+    });
+
+    const availableBalance = currentBalance - otherBetsSum;
+    if (availableBalance < 0.10) {
+        showMessage("Недостаточно средств для минимальной ставки!");
+        return;
+    }
+
+    let amount = Math.floor(availableBalance * pct * 100) / 100;
+    if (amount < 0.10) {
+        amount = 0.10;
+    }
+
+    colorBets[activeColor] = amount;
+
+    const input = document.getElementById('activeBetInput');
+    if (input) input.value = amount.toFixed(2);
+
+    const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    if (tabVal) {
+        tabVal.textContent = `${amount.toFixed(2)} $`;
+    }
+
+    updateTotalBet();
+}
+
+function resetActiveBet() {
+    if (wheelSpinning) return;
+    colorBets[activeColor] = 0;
+
+    const input = document.getElementById('activeBetInput');
+    if (input) input.value = '';
+
+    const tabVal = document.getElementById(`tab-val-${activeColor}`);
+    if (tabVal) {
+        const cfg = COLOR_CONFIG[activeColor];
+        tabVal.textContent = cfg.label;
+    }
+
+    updateTotalBet();
+}
+
+function updateTotalBet() {
+    const totalInfo = document.getElementById('totalBetInfo');
+    let totalSum = 0;
+
+    Object.values(colorBets).forEach(val => {
+        totalSum += val;
+    });
+
+    if (totalInfo) {
+        totalInfo.textContent = `Общая ставка: ${totalSum.toFixed(2)} $`;
+    }
+}
+
+/* =========================
+   ВРАЩЕНИЕ КОЛЕСА
+========================= */
+
+async function spinWheel() {
+    if (wheelSpinning || isBetProcessing) return;
+    if (!lockEconomy()) return;
+
+    const button = document.getElementById('spinButton');
+    if (!button) { unlockEconomy(); return; }
+
+    isBetProcessing = true;
+    button.disabled = true;
+
+    const currentInput = document.getElementById('activeBetInput');
+    if (currentInput && currentInput.value !== '') {
+        onActiveColorInput(currentInput.value);
+    }
+
+    let totalBet = 0;
+    Object.keys(colorBets).forEach(key => {
+        colorBets[key] = roundMoney(parseFloat(colorBets[key]) || 0);
+        totalBet += colorBets[key];
+    });
+    totalBet = roundMoney(totalBet);
+
+    if (totalBet < 0.10) {
+        showMessage("Минимальная общая ставка — 0.10 $!");
+        button.disabled = false;
+        isBetProcessing = false;
+        unlockEconomy();
+        return;
+    }
+
+    if (totalBet > currentBalance) {
+        showMessage("Недостаточно средств на балансе!");
+        button.disabled = false;
+        isBetProcessing = false;
+        unlockEconomy();
+        return;
+    }
+
+    // Фиксируем ставки по цветам НА МОМЕНТ СПИНА — колесо крутится 5 секунд,
+    // а colorBets теоретически можно менять из других мест кода в это время.
+    const betsAtSpinTime = { ...colorBets };
+    const snapshot = snapshotBalanceState();
+
+    // Списываем ставку колеса
+    currentBalance = roundMoney(currentBalance - totalBet);
+    currentTurnover = roundMoney(currentTurnover + totalBet);
+    currentBetsCount++;
+    setUIBalance(currentBalance);
+
+    const debited = await saveUserData();
+    if (!debited) {
+        // Списание не сохранилось — откатываем и не крутим колесо,
+        // иначе это был бы бесплатный спин.
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        button.disabled = false;
+        isBetProcessing = false;
+        unlockEconomy();
+        return;
+    }
+
+    wheelSpinning = true;
+    button.innerHTML = '<span>↻ Вращение...</span>';
+
+    const result = document.getElementById('wheelResult');
+    const resultValue = document.getElementById('resultValue');
+    const wheelSvg = document.getElementById('wheelSvg');
+    const wheelStage = document.querySelector('.wheel-stage');
+
+    if (result) result.classList.remove('show');
+    if (resultValue) resultValue.textContent = '?';
+
+    const rewardIndex = Math.floor(Math.random() * sectors.length);
+    const totalSectors = sectors.length;
+    const sectorAngle = 360 / totalSectors;
+
+    const padding = 0.15; 
+    const randomOffset = (Math.random() * (1 - 2 * padding) + padding) * sectorAngle;
+
+    const targetAngleInSector = (rewardIndex * sectorAngle) + randomOffset;
+    const stopAngle = 360 - targetAngleInSector;
+
+    const fullSpins = 6;
+    wheelRotation += fullSpins * 360 + (stopAngle - (wheelRotation % 360));
+
+    if (wheelSvg) wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
+
+    setTimeout(() => {
+        if (wheelStage) wheelStage.classList.add('zoomed');
+    }, 3600);
+
+    setTimeout(async () => {
+        if (wheelStage) wheelStage.classList.remove('zoomed');
+
+        const wonSector = sectors[rewardIndex];
+        const sectorType = wonSector.type; 
+        
+        const betOnWonColor = parseFloat(betsAtSpinTime[sectorType]) || 0;
+        const multiplier = parseFloat(wonSector.mult) || 0;
+
+        let totalWin = 0;
+
+        if (betOnWonColor > 0 && multiplier > 0) {
+            totalWin = roundMoney(betOnWonColor * multiplier);
+            const winSnapshot = snapshotBalanceState();
+
+            currentBalance = roundMoney(currentBalance + totalWin);
+            currentTotalWin = roundMoney(currentTotalWin + totalWin);
+            currentWinsCount++;
+            if (multiplier > currentMaxWin) currentMaxWin = multiplier;
+            setUIBalance(currentBalance);
+
+            const credited = await saveUserDataWithRetry();
+            if (!credited) {
+                // Выигрыш не удалось сохранить даже после повтора —
+                // откатываем локально и явно предупреждаем пользователя,
+                // вместо того чтобы молча "потерять" его после перезагрузки.
+                restoreBalanceState(winSnapshot);
+                totalWin = 0;
+                showMessage("Ошибка сети: выигрыш не был зачислен. Обратитесь в поддержку и укажите время спина.");
             }
         }
 
-        closeMethodsDropdown();
+        if (resultValue) {
+            if (totalWin > 0) {
+                resultValue.textContent = `Победа +${totalWin.toFixed(2)} $ (${wonSector.label})`;
+                resultValue.style.color = '#2ecc71';
+            } else {
+                resultValue.textContent = `Выпал ${wonSector.name} (${wonSector.label})`;
+                resultValue.style.color = '#e74c3c';
+            }
+        }
+
+        if (result) result.classList.add('show');
+
+        if (tg?.HapticFeedback) {
+            tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
+        }
+
+        wheelSpinning = false;
+        isBetProcessing = false;
+        button.disabled = false;
+        button.innerHTML = '<span>↻ Сделать ставку</span>';
+        unlockEconomy();
+
+    }, 5000);
+}
+
+/* =========================
+   ПОПОЛНЕНИЕ И ВЫВОД
+========================= */
+
+function renderTransactions() {
+    const list = document.getElementById("historyList");
+    const count = document.getElementById("txCount");
+    if (!list) return;
+
+    if (count) count.textContent = `${transactions.length} операций`;
+
+    if (transactions.length === 0) {
+        list.innerHTML = `<div style="text-align:center; color:#666; font-size:13px; padding:15px;">История пуста</div>`;
+        return;
     }
 
-    async function demoBalanceAction() {
-        const input = document.getElementById("amountInput");
-        if (!input) return;
+    list.innerHTML = transactions.map(tx => {
+        const isDep = tx.type === 'deposit';
+        const sign = isDep ? '+' : '-';
+        const title = isDep ? 'Пополнение' : 'Вывод средств';
+        const statusText = tx.status === 'success' ? 'Успешно' : 'В обработке';
 
-        const amount = parseFloat(input.value);
+        const iconHTML = tx.icon.includes('.')
+            ? `<img src="${tx.icon}" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;">`
+            : tx.icon;
 
-        if (!amount || amount <= 0) {
-            showMessage("Введите сумму");
-            return;
+        return `
+            <div class="history-item">
+                <div class="tx-left">
+                    <div class="tx-icon ${tx.type}">
+                        ${isDep ? '↙' : '↗'}
+                    </div>
+                    <div class="tx-details">
+                        <span class="tx-title">${title}</span>
+                        <span class="tx-subtitle">${iconHTML} ${tx.method} • ${tx.date}</span>
+                    </div>
+                </div>
+                <div class="tx-right">
+                    <span class="tx-amount ${tx.type}">${sign}${tx.amount.toFixed(2)} $</span>
+                    <span class="tx-status ${tx.status}">${statusText}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function closeMethodsDropdown() {
+    const dropdown = document.getElementById("methodsDropdown");
+    const arrow = document.getElementById("methodArrow");
+    if (dropdown) dropdown.classList.remove("open");
+    if (arrow) arrow.textContent = "▼";
+}
+
+function setBalanceMode(mode) {
+    balanceMode = mode;
+    closeMethodsDropdown();
+
+    const depositTab = document.getElementById("depositTab");
+    const withdrawTab = document.getElementById("withdrawTab");
+    const title = document.getElementById("formTitle");
+    const subtitle = document.getElementById("formSubtitle");
+    const action = document.getElementById("balanceAction");
+
+    if (!depositTab || !withdrawTab || !title || !subtitle || !action) return;
+
+    depositTab.classList.remove("active");
+    withdrawTab.classList.remove("active");
+
+    if (mode === "deposit") {
+        depositTab.classList.add("active");
+        title.textContent = "Пополнение баланса";
+        subtitle.textContent = "Выберите удобный способ пополнения";
+        action.textContent = "Пополнить";
+    }
+
+    if (mode === "withdraw") {
+        withdrawTab.classList.add("active");
+        title.textContent = "Вывод средств";
+        subtitle.textContent = "Выберите способ вывода средств";
+        action.textContent = "Вывести";
+    }
+}
+
+function toggleMethods() {
+    const dropdown = document.getElementById("methodsDropdown");
+    const arrow = document.getElementById("methodArrow");
+
+    if (!dropdown) return;
+    dropdown.classList.toggle("open");
+
+    if (arrow) {
+        arrow.textContent = dropdown.classList.contains("open") ? "▲" : "▼";
+    }
+}
+
+function selectMethod(method, icon, sub) {
+    selectedMethod = method;
+    selectedMethodIcon = icon;
+    selectedMethodSub = sub;
+
+    const selected = document.getElementById("selectedMethod");
+    const selectedSub = document.getElementById("selectedMethodSub");
+    const iconElement = document.getElementById("selectedMethodIcon");
+
+    if (selected) selected.textContent = method;
+    if (selectedSub) selectedSub.textContent = sub;
+
+    if (iconElement) {
+        if (icon.includes('.')) {
+            iconElement.src = icon;
+        } else {
+            iconElement.textContent = icon;
         }
+    }
 
-        if (balanceMode === "deposit") {
-            currentBalance += amount;
-            currentDeposits += amount;
-            setUIBalance(currentBalance);
-            await saveUserData();
+    closeMethodsDropdown();
+}
 
-            transactions.unshift({
-                type: 'deposit',
-                method: selectedMethod,
-                icon: selectedMethodIcon,
-                amount: amount,
-                date: 'Только что',
-                status: 'success'
-            });
-            renderTransactions();
+// ⚠️ ВНИМАНИЕ: это функция-ЗАГЛУШКА. Она не проверяет никакой реальный
+// платёж — ввод любой суммы и клик "Пополнить" реально начисляет баланс.
+// Это готовый способ бесконечно "дюпать" валюту, независимо от блокировок
+// ниже. Перед продакшеном ОБЯЗАТЕЛЬНО замените это на:
+//   - создание инвойса через API CryptoBot/xRocket на бэкенде,
+//   - зачисление баланса ТОЛЬКО по подтверждённому вебхуку от платёжного
+//     провайдера (никогда не доверяя сумме, введённой в этой форме),
+//   - аналогично для вывода — реальную отправку средств, а не просто
+//     локальное уменьшение баланса.
+async function demoBalanceAction() {
+    const input = document.getElementById("amountInput");
+    if (!input) return;
+    if (!lockEconomy()) return;
 
-            showMessage(`Пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
-            return;
-        }
+    const amount = roundMoney(parseFloat(input.value));
 
-        if (amount > currentBalance) {
-            showMessage("Недостаточно средств");
-            return;
-        }
+    if (!amount || isNaN(amount) || amount <= 0) {
+        showMessage("Введите сумму");
+        unlockEconomy();
+        return;
+    }
 
-        currentBalance -= amount;
-        currentWithdrawals += amount;
+    const snapshot = snapshotBalanceState();
+
+    if (balanceMode === "deposit") {
+        currentBalance = roundMoney(currentBalance + amount);
+        currentDeposits = roundMoney(currentDeposits + amount);
         setUIBalance(currentBalance);
-        await saveUserData();
+
+        const ok = await saveUserDataWithRetry();
+        if (!ok) {
+            restoreBalanceState(snapshot);
+            showMessage("Не удалось сохранить пополнение. Попробуйте снова.");
+            unlockEconomy();
+            return;
+        }
 
         transactions.unshift({
-            type: 'withdraw',
+            type: 'deposit',
             method: selectedMethod,
             icon: selectedMethodIcon,
             amount: amount,
             date: 'Только что',
-            status: 'pending'
+            status: 'success'
         });
         renderTransactions();
 
-        showMessage(`Заявка на вывод ${amount.toFixed(2)} $ через ${selectedMethod} принята`);
+        showMessage(`Пополнено ${amount.toFixed(2)} $ через ${selectedMethod}`);
+        unlockEconomy();
+        return;
     }
 
-    function claimBonus() {
-        showMessage("Ежедневный бонус временно недоступен");
+    if (amount > currentBalance) {
+        showMessage("Недостаточно средств");
+        unlockEconomy();
+        return;
     }
 
-    function showMessage(text) {
-        if (tg?.showAlert) {
-            tg.showAlert(text);
-            return;
-        }
-        alert(text);
+    currentBalance = roundMoney(currentBalance - amount);
+    currentWithdrawals = roundMoney(currentWithdrawals + amount);
+    setUIBalance(currentBalance);
+
+    const ok = await saveUserData();
+    if (!ok) {
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось создать заявку на вывод. Попробуйте снова.");
+        unlockEconomy();
+        return;
     }
 
-    /* =========================
-       ПРОФИЛЬ И КАСТОМИЗАЦИЯ ФОНА
-    ========================= */
-
-    function applyDesign() {
-        const cover = document.getElementById('profileCover');
-        if (cover) {
-            cover.style.background = `linear-gradient(180deg, ${profileDesign.start} 0%, ${profileDesign.end} 100%)`;
-        }
-    }
-
-    function renderCustomizerControls() {
-        const colorGrid = document.getElementById('colorPickerGrid');
-        if (colorGrid) {
-            colorGrid.innerHTML = COLOR_PALETTE.map(item => `
-                <div class="color-option ${item.id === profileDesign.colorId ? 'active' : ''}" 
-                     style="background: linear-gradient(135deg, ${item.start}, ${item.end});"
-                     onclick="window.selectGradient('${item.id}', '${item.start}', '${item.end}')">
-                </div>
-            `).join('');
-        }
-    }
-
-    function selectGradient(id, start, end) {
-        profileDesign.colorId = id;
-        profileDesign.start = start;
-        profileDesign.end = end;
-        renderCustomizerControls();
-        applyDesign();
-    }
-
-    function toggleProfileCustomizer() {
-        const box = document.getElementById('customizerBox');
-        if (box) box.classList.toggle('hidden');
-    }
-
-    function saveProfileCustomization() {
-        try {
-            localStorage.setItem('wxs_profile', JSON.stringify(profileDesign));
-        } catch (e) {
-            console.warn('Не удалось сохранить профиль:', e);
-        }
-        applyDesign();
-        toggleProfileCustomizer();
-        showMessage("Настройки сохранены!");
-    }
-
-    /* =========================
-       ЗАПУСК ПРИ СТАРТЕ
-    ========================= */
-
-    document.addEventListener("DOMContentLoaded", async () => {
-        console.log("🚀 Mini App запущен!");
-
-        await loadUserData();
-        updateLevelUI();
-        goHome();
-        applyDesign();
-
-        document.addEventListener('gesturestart', (e) => e.preventDefault());
-
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', (e) => {
-            const now = Date.now();
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, { passive: false });
-
-        document.addEventListener('touchmove', (e) => {
-            if (e.touches.length > 1) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+    transactions.unshift({
+        type: 'withdraw',
+        method: selectedMethod,
+        icon: selectedMethodIcon,
+        amount: amount,
+        date: 'Только что',
+        status: 'pending'
     });
+    renderTransactions();
 
-    // Экспорт в window для элементов HTML
-    window.adjustMinesBet = adjustMinesBet;
-    window.applyMinToActive = applyMinToActive;
-    window.applyPercentToActive = applyPercentToActive;
-    window.autoPickMinesTile = autoPickMinesTile;
-    window.claimBonus = claimBonus;
-    window.demoBalanceAction = demoBalanceAction;
-    window.goHome = goHome;
-    window.handleMinesAction = handleMinesAction;
-    window.onActiveColorInput = onActiveColorInput;
-    window.openBalance = openBalance;
-    window.openBonus = openBonus;
-    window.openGamesMenu = openGamesMenu;
-    window.openMines = openMines;
-    window.openProfile = openProfile;
-    window.openWheel = openWheel;
-    window.resetActiveBet = resetActiveBet;
-    window.saveProfileCustomization = saveProfileCustomization;
-    window.selectMethod = selectMethod;
-    window.selectMinesCount = selectMinesCount;
-    window.setBalanceMode = setBalanceMode;
-    window.setMinesMaxBet = setMinesMaxBet;
-    window.showMessage = showMessage;
-    window.spinWheel = spinWheel;
-    window.toggleMethods = toggleMethods;
-    window.toggleProfileCustomizer = toggleProfileCustomizer;
-    window.clickMinesTile = clickMinesTile;
-    window.selectColorTab = selectColorTab;
-    window.selectGradient = selectGradient;
+    showMessage(`Заявка на вывод ${amount.toFixed(2)} $ через ${selectedMethod} принята`);
+    unlockEconomy();
+}
+
+function claimBonus() {
+    showMessage("Ежедневный бонус временно недоступен");
+}
+
+function showMessage(text) {
+    if (tg?.showAlert) {
+        tg.showAlert(text);
+        return;
+    }
+    alert(text);
+}
+
+/* =========================
+   ПРОФИЛЬ И КАСТОМИЗАЦИЯ ФОНА
+========================= */
+
+function applyDesign() {
+    const cover = document.getElementById('profileCover');
+    if (cover) {
+        cover.style.background = `linear-gradient(180deg, ${profileDesign.start} 0%, ${profileDesign.end} 100%)`;
+    }
+}
+
+function renderCustomizerControls() {
+    const colorGrid = document.getElementById('colorPickerGrid');
+    if (colorGrid) {
+        colorGrid.innerHTML = COLOR_PALETTE.map(item => `
+            <div class="color-option ${item.id === profileDesign.colorId ? 'active' : ''}" 
+                 style="background: linear-gradient(135deg, ${item.start}, ${item.end});"
+                 onclick="selectGradient('${item.id}', '${item.start}', '${item.end}')">
+            </div>
+        `).join('');
+    }
+}
+
+function selectGradient(id, start, end) {
+    profileDesign.colorId = id;
+    profileDesign.start = start;
+    profileDesign.end = end;
+    renderCustomizerControls();
+    applyDesign();
+}
+
+function toggleProfileCustomizer() {
+    const box = document.getElementById('customizerBox');
+    if (box) box.classList.toggle('hidden');
+}
+
+function saveProfileCustomization() {
+    localStorage.setItem('wxs_profile', JSON.stringify(profileDesign));
+    applyDesign();
+    toggleProfileCustomizer();
+    showMessage("Настройки сохранены!");
+}
+
+/* =========================
+   ЗАПУСК ПРИ СТАРТЕ
+========================= */
+
+document.addEventListener("DOMContentLoaded", async () => {
+    console.log("🚀 Mini App запущен!");
+    
+    if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    }
+
+    await loadUserData();
+    updateLevelUI();
+    goHome();
+    applyDesign();
+
+    /* Доп. защита от зума жестами (pinch) и двойным тапом,
+       на случай если touch-action в CSS игнорируется браузером */
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+            e.preventDefault(); // блокируем pinch-zoom двумя пальцами
+        }
+    }, { passive: false });
+});
+
+// Экспорт функций в глобальную область для onclick-обработчиков в HTML
+window.adjustMinesBet = adjustMinesBet;
+window.applyMinToActive = applyMinToActive;
+window.applyPercentToActive = applyPercentToActive;
+window.autoPickMinesTile = autoPickMinesTile;
+window.claimBonus = claimBonus;
+window.demoBalanceAction = demoBalanceAction;
+window.goHome = goHome;
+window.handleMinesAction = handleMinesAction;
+window.onActiveColorInput = onActiveColorInput;
+window.openBalance = openBalance;
+window.openBonus = openBonus;
+window.openGamesMenu = openGamesMenu;
+window.openMines = openMines;
+window.openProfile = openProfile;
+window.openWheel = openWheel;
+window.resetActiveBet = resetActiveBet;
+window.saveProfileCustomization = saveProfileCustomization;
+window.selectMethod = selectMethod;
+window.selectMinesCount = selectMinesCount;
+window.setBalanceMode = setBalanceMode;
+window.setMinesMaxBet = setMinesMaxBet;
+window.showMessage = showMessage;
+window.spinWheel = spinWheel;
+window.toggleMethods = toggleMethods;
+window.toggleProfileCustomizer = toggleProfileCustomizer;
+window.clickMinesTile = clickMinesTile;
+window.selectColorTab = selectColorTab;
+window.selectGradient = selectGradient;
 
 })();
