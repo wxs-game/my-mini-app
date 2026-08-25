@@ -1557,3 +1557,4 @@ window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
 
 })();
+
