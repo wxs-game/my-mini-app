@@ -22,7 +22,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Всё игровое состояние (баланс, RNG, ставки, начисления) считается в
 // браузере пользователя и отправляется в Supabase публичным anon-ключом.
 // Это значит, что ЛЮБОЙ пользователь через консоль разработчика может:
-//   1) вызвать supabase.from('wxs_game').update({balance: 999999}) напрямую,
+//   1) вызвать supabase.from('wxs-game').update({balance: 999999}) напрямую,
 //      минуя всю игровую логику ниже;
 //   2) подменить tg.initDataUnsafe.user.id (эти данные НЕ подписаны и
 //      никак не проверяются) и получить доступ к чужой записи в БД;
@@ -35,7 +35,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 //   - перенести списание ставки / начисление выигрыша / депозит-вывод
 //     в Supabase Edge Function или Postgres RPC с SECURITY DEFINER,
 //     вызываемую под service_role;
-//   - в RLS-политиках таблицы wxs_game запретить клиенту UPDATE полей
+//   - в RLS-политиках таблицы wxs-game запретить клиенту UPDATE полей
 //     balance/turnover/max_win/total_win/bets_count/wins_count/
 //     deposits/withdrawals напрямую (разрешить только чтение своей строки);
 //   - проверять initData на бэкенде по HMAC секретного токена бота
@@ -170,10 +170,34 @@ async function loadUserData() {
 
     // 1. Запрашиваем данные из Supabase
     let { data, error } = await supabase
-        .from('wxs_game')
+        .from('wxs-game')
         .select('*')
         .eq('telegram_id', tgUser.id)
         .maybeSingle();
+
+    // PGRST116 = "нашлось больше одной строки" — значит для этого
+    // telegram_id уже существует ДУБЛИКАТ (обычно из-за гонки между двумя
+    // одновременными запусками, когда обе успели пройти проверку "юзера
+    // нет" и обе вставили новую строку, т.к. в БД не было UNIQUE-ограничения
+    // на telegram_id). Раньше это полностью ломало загрузку профиля.
+    // Временный обход: берём САМУЮ РАННЮЮ строку (наименьший id), чтобы
+    // не потерять исходный баланс/историю пользователя, и предупреждаем
+    // в консоли, что нужно почистить дубликаты в самой базе (см. чат).
+    if (error && error.code === 'PGRST116') {
+        console.error('В таблице wxs-game найдено несколько строк для telegram_id=' + tgUser.id + '. Нужно удалить дубликаты в Supabase и добавить UNIQUE-ограничение на telegram_id.');
+        const { data: dupRows, error: dupError } = await supabase
+            .from('wxs-game')
+            .select('*')
+            .eq('telegram_id', tgUser.id)
+            .order('id', { ascending: true });
+
+        if (dupError || !dupRows || dupRows.length === 0) {
+            showMessage("Не удалось загрузить профиль (дубликаты записей). Обратитесь в поддержку.");
+            return;
+        }
+        data = dupRows[0];
+        error = null;
+    }
 
     if (error) {
         console.error('Ошибка загрузки из Supabase:', error);
@@ -181,11 +205,17 @@ async function loadUserData() {
         return;
     }
 
-    // 2. Если пользователя нет — создаем новую запись с бонусом 100$
+    // 2. Если пользователя нет — создаём новую запись с бонусом 100$.
+    // Используем upsert с onConflict по telegram_id вместо select+insert:
+    // это атомарная операция на стороне БД, которая не даёт возникнуть
+    // гонке "оба запроса не нашли юзера -> оба вставили новую строку".
+    // ⚠️ Работает только если в Supabase на колонке telegram_id стоит
+    // UNIQUE-ограничение (см. инструкцию в чате) — без него upsert не
+    // сможет определить конфликт и по-прежнему будет плодить дубликаты.
     if (!data) {
         const { data: newUser, error: createError } = await supabase
-            .from('wxs_game')
-            .insert([{
+            .from('wxs-game')
+            .upsert([{
                 ...profileData,
                 balance: 100.00, // Выдаем 100 $ для тестов
                 turnover: 0,
@@ -195,19 +225,20 @@ async function loadUserData() {
                 wins_count: 0,
                 deposits: 0,
                 withdrawals: 0
-            }])
+            }], { onConflict: 'telegram_id', ignoreDuplicates: false })
             .select()
             .single();
 
         if (createError) {
             console.error('Ошибка создания записи в Supabase:', createError);
+            showMessage("Не удалось создать профиль. Проверьте соединение и перезапустите приложение.");
             return;
         }
         data = newUser;
     } else {
         // Обновляем данные профиля (имя, аватар), если они изменились в Telegram
         await supabase
-            .from('wxs_game')
+            .from('wxs-game')
             .update(profileData)
             .eq('telegram_id', tgUser.id);
     }
@@ -316,7 +347,7 @@ async function saveUserData() {
     };
 
     const runUpdate = () => supabase
-        .from('wxs_game')
+        .from('wxs-game')
         .update(payload)
         .eq('telegram_id', tgUser.id);
 
