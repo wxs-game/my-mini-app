@@ -11,7 +11,7 @@ if (tg) {
 
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
 // ⚠️ Ваша база данных Supabase:
-const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 
 // Используем имя supabase, чтобы не менять вызовы по всему коду
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -131,7 +131,7 @@ function updateLevelUI() {
 
 function updateProfileUI(data) {
     const name = data.nickname || data.username || "Игрок";
-    
+
     // Элементы профиля и шапки
     const usernameElem = document.getElementById("username");
     const profileName = document.getElementById("profileName");
@@ -251,7 +251,7 @@ async function loadUserData() {
     currentWinsCount = Number(data.wins_count) || 0;
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
-    
+
     // Обновляем UI приложения
     updateProfileUI(data);
 }
@@ -523,7 +523,10 @@ function getMinesMultiplier(gemsFound, minesCount) {
     for (let i = 0; i < gemsFound; i++) {
         mult *= (totalTiles - i) / (totalTiles - minesCount - i);
     }
-    return Math.floor(mult * 100) / 100;
+    // 0.95 = 95% RTP (снижает итоговые коэффициенты на 5%)
+    // Если нужно сделать коэффициенты ещё меньше, замените 0.95 на 0.90 или 0.85
+    const houseEdgeMargin = 0.95;
+    return Math.floor(mult * houseEdgeMargin * 100) / 100;
 }
 
 function renderMinesCoefBar() {
@@ -532,7 +535,9 @@ function renderMinesCoefBar() {
 
     let html = '';
     const maxGems = 25 - minesGame.minesCount;
-    for (let step = 1; step <= Math.min(10, maxGems); step++) {
+
+    // Раньше было Math.min(10, maxGems), теперь цикл идет до конца (до maxGems)
+    for (let step = 1; step <= maxGems; step++) {
         const mult = getMinesMultiplier(step, minesGame.minesCount);
         const isActive = step === minesGame.gemsFound;
         html += `
@@ -543,6 +548,12 @@ function renderMinesCoefBar() {
         `;
     }
     bar.innerHTML = html;
+
+    // Прокручивает ленту к активному элементу по центру
+    const activeElem = bar.querySelector('.coef-item.active');
+    if (activeElem) {
+        activeElem.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
 }
 
 function initMinesGrid() {
@@ -558,7 +569,7 @@ function initMinesGrid() {
 
 function handleMinesAction() {
     if (minesGame.isProcessing) return;
-    
+
     if (minesGame.active) {
         cashoutMines();
     } else {
@@ -653,7 +664,7 @@ function clickMinesTile(index) {
     } else {
         minesGame.gemsFound++;
         tile.className = 'mine-tile revealed-gem';
-        
+
         tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
 
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
@@ -1160,7 +1171,7 @@ async function spinWheel() {
     const totalSectors = sectors.length;
     const sectorAngle = 360 / totalSectors;
 
-    const padding = 0.15; 
+    const padding = 0.15;
     const randomOffset = (Math.random() * (1 - 2 * padding) + padding) * sectorAngle;
 
     const targetAngleInSector = (rewardIndex * sectorAngle) + randomOffset;
@@ -1179,8 +1190,8 @@ async function spinWheel() {
         if (wheelStage) wheelStage.classList.remove('zoomed');
 
         const wonSector = sectors[rewardIndex];
-        const sectorType = wonSector.type; 
-        
+        const sectorType = wonSector.type;
+
         const betOnWonColor = parseFloat(betsAtSpinTime[sectorType]) || 0;
         const multiplier = parseFloat(wonSector.mult) || 0;
 
@@ -1495,7 +1506,7 @@ function saveProfileCustomization() {
 
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Mini App запущен!");
-    
+
     if (window.Telegram?.WebApp) {
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
@@ -1557,4 +1568,3 @@ window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
 
 })();
-
