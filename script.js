@@ -170,7 +170,7 @@ async function loadUserData() {
 
     // 1. Запрашиваем данные из Supabase
     let { data, error } = await supabase
-        .from('wxs-game')
+        .from('wxs_game')
         .select('*')
         .eq('telegram_id', tgUser.id)
         .maybeSingle();
@@ -184,9 +184,9 @@ async function loadUserData() {
     // не потерять исходный баланс/историю пользователя, и предупреждаем
     // в консоли, что нужно почистить дубликаты в самой базе (см. чат).
     if (error && error.code === 'PGRST116') {
-        console.error('В таблице wxs-game найдено несколько строк для telegram_id=' + tgUser.id + '. Нужно удалить дубликаты в Supabase и добавить UNIQUE-ограничение на telegram_id.');
+        console.error('В таблице wxs_game найдено несколько строк для telegram_id=' + tgUser.id + '. Нужно удалить дубликаты в Supabase и добавить UNIQUE-ограничение на telegram_id.');
         const { data: dupRows, error: dupError } = await supabase
-            .from('wxs-game')
+            .from('wxs_game')
             .select('*')
             .eq('telegram_id', tgUser.id)
             .order('id', { ascending: true });
@@ -214,7 +214,7 @@ async function loadUserData() {
     // сможет определить конфликт и по-прежнему будет плодить дубликаты.
     if (!data) {
         const { data: newUser, error: createError } = await supabase
-            .from('wxs-game')
+            .from('wxs_game')
             .upsert([{
                 ...profileData,
                 balance: 100.00, // Выдаем 100 $ для тестов
@@ -238,7 +238,7 @@ async function loadUserData() {
     } else {
         // Обновляем данные профиля (имя, аватар), если они изменились в Telegram
         await supabase
-            .from('wxs-game')
+            .from('wxs_game')
             .update(profileData)
             .eq('telegram_id', tgUser.id);
     }
@@ -347,7 +347,7 @@ async function saveUserData() {
     };
 
     const runUpdate = () => supabase
-        .from('wxs-game')
+        .from('wxs_game')
         .update(payload)
         .eq('telegram_id', tgUser.id);
 
