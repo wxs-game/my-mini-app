@@ -19,43 +19,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ==========================================
 // АДРЕС БЭКЕНДА (api.py), поднятого через ngrok
 // ==========================================
-// ⚠️ Пока используется бесплатный ngrok-домен, он мог бы меняться при
-// каждом перезапуске туннеля — но у тебя указан фиксированный поддомен
-// (--url=...), так что он останется стабильным между перезапусками,
-// пока ты не изменишь его в самой команде ngrok.
 const API_BASE = 'https://cable-coral-ahead.ngrok-free.dev';
-
-// ==========================================
-// ⚠️ КРИТИЧЕСКИ ВАЖНО — ограничение архитектуры (не устраняется правками ниже)
-// ==========================================
-// Всё игровое состояние (баланс, RNG, ставки, начисления) считается в
-// браузере пользователя и отправляется в Supabase публичным anon-ключом.
-// Это значит, что ЛЮБОЙ пользователь через консоль разработчика может:
-//   1) вызвать supabase.from('wxs-game').update({balance: 999999}) напрямую,
-//      минуя всю игровую логику ниже;
-//   2) подменить tg.initDataUnsafe.user.id (эти данные НЕ подписаны и
-//      никак не проверяются) и получить доступ к чужой записи в БД;
-//   3) переопределить Math.random(), чтобы предсказуемо выигрывать в
-//      "Мины" и "Колесо".
-// Правки в этом файле устраняют логические баги и гонки состояний
-// (потерю выигрыша при сбое сети, дублирование операций, "бесплатные"
-// раунды при неудачном списании и т.д.), но НЕ закрывают пункты 1-3 —
-// это возможно только на сервере:
-//   - перенести списание ставки / начисление выигрыша / депозит-вывод
-//     в Supabase Edge Function или Postgres RPC с SECURITY DEFINER,
-//     вызываемую под service_role;
-//   - в RLS-политиках таблицы wxs-game запретить клиенту UPDATE полей
-//     balance/turnover/max_win/total_win/bets_count/wins_count/
-//     deposits/withdrawals напрямую (разрешить только чтение своей строки);
-//   - проверять initData на бэкенде по HMAC секретного токена бота
-//     (см. https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app)
-//     вместо доверия tg.initDataUnsafe.
-// Депозит через CryptoBot (см. demoBalanceAction ниже) уже не начисляет
-// баланс на фронте — зачисление происходит только на бэкенде по
-// подтверждённому вебхуку от CryptoBot. Это закрывает "дюп" через
-// пополнение, но пункты 1-3 выше по-прежнему актуальны для всех
-// остальных операций (мины, колесо).
-// ==========================================
 
 // Переменные состояния пользователя
 let currentBalance = 0.00;
@@ -70,10 +34,6 @@ let currentWithdrawals = 0.00;
 // ==========================================
 // СИСТЕМА УРОВНЕЙ (на основе очков)
 // ==========================================
-// Очки начисляются так:
-//   +75 очков за каждый 1$ оборота
-//   +5 очков за победу
-//   +10 очков за поражение
 const LEVELS = [
     { level: 1, points: 0,     title: "Новичок" },
     { level: 2, points: 1500,  title: "Гой" },
@@ -81,7 +41,7 @@ const LEVELS = [
     { level: 4, points: 7500,  title: "Додеп" },
     { level: 5, points: 11250, title: "Лудик" },
     { level: 6, points: 15000, title: "Король пепе" },
-    { level: 7, points: 15001, title: "Легенда" } // 15000+ очков
+    { level: 7, points: 15001, title: "Легенда" }
 ];
 
 function calculatePoints() {
@@ -104,7 +64,6 @@ function getLevelInfo(points) {
 
     let percent;
     if (!next) {
-        // Максимальный уровень достигнут — полоса всегда заполнена
         percent = 100;
     } else {
         const range = next.points - current.points;
@@ -146,7 +105,6 @@ function updateLevelUI() {
 function updateProfileUI(data) {
     const name = data.nickname || data.username || "Игрок";
 
-    // Элементы профиля и шапки
     const usernameElem = document.getElementById("username");
     const profileName = document.getElementById("profileName");
     const profileUsername = document.getElementById("profileUsername");
@@ -167,6 +125,7 @@ function updateProfileUI(data) {
 
     setUIBalance(data.balance);
 }
+
 async function loadUserData() {
     const tgUser = tg?.initDataUnsafe?.user;
 
@@ -182,21 +141,12 @@ async function loadUserData() {
         photo_url: tgUser.photo_url || ''
     };
 
-    // 1. Запрашиваем данные из Supabase
     let { data, error } = await supabase
         .from('wxs_game')
         .select('*')
         .eq('telegram_id', tgUser.id)
         .maybeSingle();
 
-    // PGRST116 = "нашлось больше одной строки" — значит для этого
-    // telegram_id уже существует ДУБЛИКАТ (обычно из-за гонки между двумя
-    // одновременными запусками, когда обе успели пройти проверку "юзера
-    // нет" и обе вставили новую строку, т.к. в БД не было UNIQUE-ограничения
-    // на telegram_id). Раньше это полностью ломало загрузку профиля.
-    // Временный обход: берём САМУЮ РАННЮЮ строку (наименьший id), чтобы
-    // не потерять исходный баланс/историю пользователя, и предупреждаем
-    // в консоли, что нужно почистить дубликаты в самой базе (см. чат).
     if (error && error.code === 'PGRST116') {
         console.error('В таблице wxs_game найдено несколько строк для telegram_id=' + tgUser.id + '. Нужно удалить дубликаты в Supabase и добавить UNIQUE-ограничение на telegram_id.');
         const { data: dupRows, error: dupError } = await supabase
@@ -219,19 +169,12 @@ async function loadUserData() {
         return;
     }
 
-    // 2. Если пользователя нет — создаём новую запись с бонусом 100$.
-    // Используем upsert с onConflict по telegram_id вместо select+insert:
-    // это атомарная операция на стороне БД, которая не даёт возникнуть
-    // гонке "оба запроса не нашли юзера -> оба вставили новую строку".
-    // ⚠️ Работает только если в Supabase на колонке telegram_id стоит
-    // UNIQUE-ограничение (см. инструкцию в чате) — без него upsert не
-    // сможет определить конфликт и по-прежнему будет плодить дубликаты.
     if (!data) {
         const { data: newUser, error: createError } = await supabase
             .from('wxs_game')
             .upsert([{
                 ...profileData,
-                balance: 100.00, // Выдаем 100 $ для тестов
+                balance: 100.00,
                 turnover: 0,
                 max_win: 0,
                 total_win: 0,
@@ -250,14 +193,12 @@ async function loadUserData() {
         }
         data = newUser;
     } else {
-        // Обновляем данные профиля (имя, аватар), если они изменились в Telegram
         await supabase
             .from('wxs_game')
             .update(profileData)
             .eq('telegram_id', tgUser.id);
     }
 
-    // 3. Записываем полученные данные в переменные игры
     currentTurnover = Number(data.turnover) || 0;
     currentMaxWin = Number(data.max_win) || 0;
     currentTotalWin = Number(data.total_win) || 0;
@@ -266,27 +207,19 @@ async function loadUserData() {
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
 
-    // Обновляем UI приложения
     updateProfileUI(data);
 }
 
 /* =========================
    БЕЗОПАСНАЯ РАБОТА С ДЕНЬГАМИ
-   (округление, блокировка гонок, откат при сбое сохранения)
 ========================= */
 
-// Округление до центов — не даёт ошибке плавающей точки накапливаться
-// после тысяч операций сложения/вычитания.
 function roundMoney(value) {
     const n = Number(value);
     if (!isFinite(n)) return 0;
     return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-// Единая блокировка на ВСЕ операции, которые тратят или начисляют баланс
-// (мины, колесо, депозит/вывод). Не даёт двум денежным операциям
-// выполняться параллельно — например, двойной клик по кнопке пополнения
-// или клик по двум играм почти одновременно.
 let isEconomyLocked = false;
 
 function lockEconomy() {
@@ -299,10 +232,6 @@ function unlockEconomy() {
     isEconomyLocked = false;
 }
 
-// Снимок и откат состояния баланса — используется, если запись в Supabase
-// не удалась: без отката локальная переменная "разъезжается" с базой,
-// и после перезагрузки страницы либо пропадает выигрыш, либо списание
-// не засчитывается (по факту — бесплатный раунд).
 function snapshotBalanceState() {
     return {
         balance: currentBalance,
@@ -328,21 +257,12 @@ function restoreBalanceState(snap) {
     setUIBalance(currentBalance);
 }
 
-// Очередь сохранений: гарантирует, что запросы к Supabase уходят и
-// (в рамках одной вкладки) обрабатываются строго по одному, а не
-// параллельно — иначе при переупорядочивании ответов сети более старый
-// снимок баланса мог перезаписать в БД более новый.
 let saveQueue = Promise.resolve();
 
-// Сохранение текущих значений в Supabase.
-// Возвращает true/false — вызывающий код ОБЯЗАН проверять результат
-// и откатывать локальное состояние при false, иначе деньги "теряются"
-// (списание/начисление применилось только в браузере, а не в базе).
 async function saveUserData() {
     const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) return true; // локальный режим вне Telegram — сохранять некуда
+    if (!tgUser) return true;
 
-    // округляем перед отправкой, чтобы в БД не улетела "грязная" плавающая точка
     currentBalance = roundMoney(currentBalance);
     currentTurnover = roundMoney(currentTurnover);
     currentTotalWin = roundMoney(currentTotalWin);
@@ -365,9 +285,8 @@ async function saveUserData() {
         .update(payload)
         .eq('telegram_id', tgUser.id);
 
-    // подвешиваем запрос в конец очереди, чтобы не было гонки с предыдущим сохранением
     const task = saveQueue.then(runUpdate, runUpdate);
-    saveQueue = task.then(() => {}, () => {}); // одна неудача не должна блокировать очередь навсегда
+    saveQueue = task.then(() => {}, () => {});
 
     let error;
     try {
@@ -383,9 +302,6 @@ async function saveUserData() {
     return true;
 }
 
-// Повторная попытка сохранения — используется только для начисления
-// выигрыша, где потеря данных особенно чувствительна для пользователя
-// (раунд уже сыгран и показан, "тихо" терять выигрыш недопустимо).
 async function saveUserDataWithRetry(attempts = 2) {
     for (let i = 0; i < attempts; i++) {
         const ok = await saveUserData();
@@ -423,22 +339,8 @@ let profileDesign = JSON.parse(localStorage.getItem('wxs_profile')) || {
 let colorBets = { green: 0, red: 0, blue: 0, yellow: 0, gold: 0 };
 let activeColor = 'green';
 
-// Раньше здесь были захардкожены 3 фейковые "успешные" транзакции —
-// их видел КАЖДЫЙ новый пользователь, хотя по факту они никогда не
-// происходили. Начинаем с пустой истории.
-// ⚠️ История также нигде не сохраняется в Supabase — при обновлении
-// страницы она исчезает (сам баланс при этом сохранён и не теряется).
-// Для персистентной истории нужна отдельная таблица (например,
-// wxs_transactions) и запись в неё при каждой операции.
 let transactions = [];
 
-// ⚠️ ВНИМАНИЕ: при 32 секторах и распределении ниже (gold — 1 сектор из 32)
-// множитель gold=50 давал математическое ожидание 1.5625 (156%) — ставка
-// только на gold была гарантированно прибыльной для игрока в долгосроке
-// (казино гарантированно теряло деньги на этом секторе). Снижен до 20x
-// (EV ≈ 0.625, соответствует порядку остальных цветов). Если меняете
-// частоту секторов gold в массиве sectors ниже — пересчитайте mult так,
-// чтобы (кол-во_секторов_цвета / всего_секторов) * mult оставалось < 1.
 const COLOR_CONFIG = {
     green:  { label: '1x',  mult: 1,  color: '#2ecc71', name: 'Зеленый' },
     red:    { label: '2x',  mult: 2,  color: '#e74c3c', name: 'Красный' },
@@ -527,21 +429,34 @@ function onCustomMinesInputChange(val) {
     // Ограничения от 3 до 24
     num = Math.max(3, Math.min(24, num));
 
-    // Пишем в реальное игровое состояние (раньше уходило в неопределённую переменную)
+    // Пишем в реальное игровое состояние
     minesGame.minesCount = num;
 
-    // Если пользователь ввёл число за пределами диапазона — визуально клэмпим поле
+    // Клэмпим визуальное значение поля, если пользователь вышел за диапазон
     if (input && parseInt(input.value) !== num) {
         input.value = num;
     }
 
-    // Подсвечиваем кнопку пресета, если число совпадает,
-    // иначе снимаем подсветку со всех
+    // Подсвечиваем кнопку пресета, если число совпадает, иначе снимаем подсветку со всех
     document.querySelectorAll('.mines-count-btn').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.innerText) === num);
     });
 
     // Пересчитываем полосу коэффициентов под новое количество мин
+    renderMinesCoefBar();
+}
+
+function selectMinesCount(count, btn) {
+    if (minesGame.active) return;
+    minesGame.minesCount = count;
+
+    // Синхронизируем капсулу ручного ввода с выбранным пресетом
+    const input = document.getElementById('customMinesInput');
+    if (input) input.value = count;
+
+    document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
     renderMinesCoefBar();
 }
 
@@ -572,8 +487,6 @@ function getMinesMultiplier(gemsFound, minesCount) {
     for (let i = 0; i < gemsFound; i++) {
         mult *= (totalTiles - i) / (totalTiles - minesCount - i);
     }
-    // 0.95 = 95% RTP (снижает итоговые коэффициенты на 5%)
-    // Если нужно сделать коэффициенты ещё меньше, замените 0.95 на 0.90 или 0.85
     const houseEdgeMargin = 0.95;
     return Math.floor(mult * houseEdgeMargin * 100) / 100;
 }
@@ -585,7 +498,6 @@ function renderMinesCoefBar() {
     let html = '';
     const maxGems = 25 - minesGame.minesCount;
 
-    // Раньше было Math.min(10, maxGems), теперь цикл идет до конца (до maxGems)
     for (let step = 1; step <= maxGems; step++) {
         const mult = getMinesMultiplier(step, minesGame.minesCount);
         const isActive = step === minesGame.gemsFound;
@@ -598,7 +510,6 @@ function renderMinesCoefBar() {
     }
     bar.innerHTML = html;
 
-    // Прокручивает ленту к активному элементу по центру
     const activeElem = bar.querySelector('.coef-item.active');
     if (activeElem) {
         activeElem.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
@@ -647,7 +558,6 @@ async function startMinesGame() {
     minesGame.isProcessing = true;
     const snapshot = snapshotBalanceState();
 
-    // Списываем ставку
     currentBalance = roundMoney(currentBalance - bet);
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
@@ -655,9 +565,6 @@ async function startMinesGame() {
 
     const debited = await saveUserData();
     if (!debited) {
-        // Списание не сохранилось в БД — откатываем локально и НЕ начинаем
-        // раунд, иначе это была бы бесплатная игра (ставка спишется только
-        // в браузере, а после перезагрузки страницы вернётся старый баланс).
         restoreBalanceState(snapshot);
         showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         minesGame.isProcessing = false;
@@ -768,12 +675,6 @@ async function cashoutMines() {
     const credited = await saveUserDataWithRetry();
 
     if (!credited) {
-        // Не удалось сохранить выигрыш даже после повторной попытки.
-        // Откатываем локальный баланс и НЕ завершаем раунд — поле
-        // остаётся открытым, чтобы пользователь мог нажать "Забрать"
-        // ещё раз, когда соединение восстановится. Раньше игра
-        // завершалась в любом случае, и выигрыш при сбое сети
-        // безвозвратно пропадал после перезагрузки страницы.
         restoreBalanceState(snapshot);
         showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
         minesGame.isProcessing = false;
@@ -1182,12 +1083,9 @@ async function spinWheel() {
         return;
     }
 
-    // Фиксируем ставки по цветам НА МОМЕНТ СПИНА — колесо крутится 5 секунд,
-    // а colorBets теоретически можно менять из других мест кода в это время.
     const betsAtSpinTime = { ...colorBets };
     const snapshot = snapshotBalanceState();
 
-    // Списываем ставку колеса
     currentBalance = roundMoney(currentBalance - totalBet);
     currentTurnover = roundMoney(currentTurnover + totalBet);
     currentBetsCount++;
@@ -1195,8 +1093,6 @@ async function spinWheel() {
 
     const debited = await saveUserData();
     if (!debited) {
-        // Списание не сохранилось — откатываем и не крутим колесо,
-        // иначе это был бы бесплатный спин.
         restoreBalanceState(snapshot);
         showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         button.disabled = false;
@@ -1258,9 +1154,6 @@ async function spinWheel() {
 
             const credited = await saveUserDataWithRetry();
             if (!credited) {
-                // Выигрыш не удалось сохранить даже после повтора —
-                // откатываем локально и явно предупреждаем пользователя,
-                // вместо того чтобы молча "потерять" его после перезагрузки.
                 restoreBalanceState(winSnapshot);
                 totalWin = 0;
                 showMessage("Ошибка сети: выигрыш не был зачислен. Обратитесь в поддержку и укажите время спина.");
@@ -1413,17 +1306,6 @@ function selectMethod(method, icon, sub) {
 // ==========================================
 // ПОПОЛНЕНИЕ ЧЕРЕЗ CRYPTOBOT (реальная оплата)
 // ==========================================
-// Депозит теперь идёт через бэкенд (api.py): создаётся инвойс CryptoBot,
-// открывается его платёжное мини-приложение, а баланс зачисляется
-// НЕ отсюда, а на бэкенде — только после подтверждённого вебхука
-// "invoice_paid". Это убирает "дюп" через форму пополнения, который был
-// в старой демо-версии (там баланс начислялся локально по одному клику).
-//
-// Вывод средств (withdraw) остаётся локальной заглушкой — она НЕ
-// проверяет реальную возможность вывода и НЕ отправляет деньги. Перед
-// продакшеном её тоже нужно перевести на бэкенд (например, ручную
-// модерацию заявок или CryptoBot transfer API), иначе пользователь может
-// "вывести" произвольную сумму без реального списания на вашей стороне.
 async function demoBalanceAction() {
     if (!lockEconomy()) return;
 
@@ -1476,9 +1358,6 @@ async function demoBalanceAction() {
                 throw new Error('pay_url missing in response');
             }
 
-            // Открываем мини-приложение CryptoBot с созданным инвойсом.
-            // openTelegramLink доступен только внутри Telegram — вне его
-            // используем обычный переход по ссылке как запасной вариант.
             if (tg?.openTelegramLink) {
                 tg.openTelegramLink(payUrl);
             } else {
@@ -1506,7 +1385,6 @@ async function demoBalanceAction() {
         return;
     }
 
-    // ⚠️ Вывод средств — по-прежнему ЗАГЛУШКА, ничего реально не выводит.
     if (amount > currentBalance) {
         showMessage("Недостаточно средств");
         unlockEconomy();
@@ -1613,8 +1491,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     goHome();
     applyDesign();
 
-    /* Доп. защита от зума жестами (pinch) и двойным тапом,
-       на случай если touch-action в CSS игнорируется браузером */
     document.addEventListener('gesturestart', (e) => e.preventDefault());
 
     let lastTouchEnd = 0;
@@ -1628,7 +1504,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     document.addEventListener('touchmove', (e) => {
         if (e.touches.length > 1) {
-            e.preventDefault(); // блокируем pinch-zoom двумя пальцами
+            e.preventDefault();
         }
     }, { passive: false });
 });
@@ -1638,11 +1514,13 @@ window.adjustMinesBet = adjustMinesBet;
 window.applyMinToActive = applyMinToActive;
 window.applyPercentToActive = applyPercentToActive;
 window.autoPickMinesTile = autoPickMinesTile;
+window.changeMinesBy = changeMinesBy;
 window.claimBonus = claimBonus;
 window.demoBalanceAction = demoBalanceAction;
 window.goHome = goHome;
 window.handleMinesAction = handleMinesAction;
 window.onActiveColorInput = onActiveColorInput;
+window.onCustomMinesInputChange = onCustomMinesInputChange;
 window.openBalance = openBalance;
 window.openBonus = openBonus;
 window.openGamesMenu = openGamesMenu;
@@ -1662,7 +1540,5 @@ window.toggleProfileCustomizer = toggleProfileCustomizer;
 window.clickMinesTile = clickMinesTile;
 window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
-window.changeMinesBy = changeMinesBy;
-window.onCustomMinesInputChange = onCustomMinesInputChange;
 
 })();
