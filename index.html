@@ -72,6 +72,29 @@
         #crashTrailDot {
             animation: crashDotPulse 1s ease-in-out infinite;
         }
+
+        /* Коэффициент во время полёта — сверху слева, с неоновым glow.
+           Обновляется каждый кадр, поэтому рост цифр выглядит плавным. */
+        .crash-mult-topleft {
+            position: absolute;
+            top: 14px;
+            left: 18px;
+            font-family: 'Orbitron', 'Arial Black', sans-serif;
+            font-weight: 900;
+            font-size: 38px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+            color: #3dff9a;
+            text-shadow: 0 0 8px rgba(61,255,154,0.9), 0 0 22px rgba(61,255,154,0.7), 0 0 46px rgba(46,204,113,0.45);
+            z-index: 7;
+            display: none;
+            pointer-events: none;
+            transition: color 0.15s ease, text-shadow 0.15s ease;
+        }
+        .crash-mult-topleft.crashed {
+            color: #ff4d4d;
+            text-shadow: 0 0 8px rgba(255,77,77,0.9), 0 0 22px rgba(255,77,77,0.7), 0 0 46px rgba(255,43,43,0.45);
+        }
     </style>
 </head>
 
@@ -322,6 +345,7 @@
                     <strong id="crashMultiplier" style="display:block; font-size: 34px; font-weight: 900; color:#fff;">1.00x</strong>
                     <div id="crashStatus" style="font-size: 12px; color:#888; font-weight:700; margin-top:4px;">Загрузка...</div>
                 </div>
+                <div id="crashMultTopLeft" class="crash-mult-topleft">1.00x</div>
                 <div id="crashCountdown" class="crash-countdown"></div>
             </div>
 
