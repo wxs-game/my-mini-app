@@ -1146,42 +1146,182 @@ main {
     margin-top: 6px;
 }
 
-.mine-shaft {
-    position: relative;
-    width: 100%;
-    height: 384px;
+.pickaxe-controls-panel {
     background: #090909;
-    border-radius: 12px;
+    border: 1px solid #222222;
+    border-radius: 20px;
+    padding: 16px;
+    text-align: left;
+}
+
+/* Золотая подсветка поля ставки при фокусе — единая для всех игр */
+.card-input-wrap {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-input-wrap:focus-within {
+    border-color: #ffc800;
+    box-shadow: 0 0 0 3px rgba(255, 200, 0, 0.15);
+}
+
+/* ==========================================
+   ШАХТА — БЕСКОНЕЧНОЕ ПОЛЕ БЛОКОВ (в стиле вокселей)
+========================================== */
+:root {
+    --block-size: 44px;
+    --grid-cols: 7;
+}
+
+.mine-viewport {
+    position: relative;
+    width: calc(var(--block-size) * var(--grid-cols));
+    max-width: 100%;
+    height: 330px;
+    margin: 0 auto;
     overflow: hidden;
+    border-radius: 16px;
     border: 2px solid #1f1f1f;
+    background: linear-gradient(180deg, #274a17 0%, #182a10 22%, #0c0c0c 75%, #050505 100%);
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.65), inset 0 2px 0 rgba(255,255,255,0.04);
 }
 
-.mine-grid {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(12, 32px);
-    height: 100%;
-}
-
-.mine-tile-block {
-    border: 1px solid rgba(0, 0, 0, 0.2);
-}
-
-.tile-grass { background: #5b8731; border-top: 4px solid #7cbd3f; }
-.tile-stone { background: #696969; }
-.tile-ore { background: #4a4a4a; position: relative; }
-
-.falling-pickaxe {
+.mine-world {
     position: absolute;
-    width: 12.5%;
-    height: 32px;
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10;
-    transition: all 0.04s linear;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, 0);
+    will-change: transform;
 }
+
+.mine-grid-canvas {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), var(--block-size));
+}
+
+.mine-block {
+    width: var(--block-size);
+    height: var(--block-size);
+    position: relative;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.b-air { background: transparent; border-color: transparent; }
+
+/* Трава */
+.b-grass {
+    background: linear-gradient(#5fc23f 0 34%, #8a5a2f 34% 100%);
+    box-shadow: inset 0 -5px 0 rgba(0,0,0,0.25), inset 0 3px 0 rgba(255,255,255,0.18);
+}
+.b-grass::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(0,0,0,0.14) 1.5px, transparent 1.5px);
+    background-size: 7px 7px;
+    background-position: 2px 26px;
+    opacity: .6;
+}
+
+/* Камень */
+.b-stone {
+    background: #6d6d6d;
+    box-shadow: inset 0 -5px 0 rgba(0,0,0,0.3), inset 0 3px 0 rgba(255,255,255,0.08);
+}
+.b-stone::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(rgba(255,255,255,0.10) 2.5px, transparent 2.5px),
+        radial-gradient(rgba(0,0,0,0.22) 2.5px, transparent 2.5px);
+    background-position: 6px 8px, 26px 24px;
+    background-size: 16px 16px, 20px 20px;
+}
+
+/* Руды — тёмная порода + вкрапления цвета */
+.mine-block[data-ore] {
+    background: #4c4c4c;
+    box-shadow: inset 0 -5px 0 rgba(0,0,0,0.3), inset 0 3px 0 rgba(255,255,255,0.06);
+}
+.mine-block[data-ore]::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-repeat: no-repeat;
+}
+.b-coal::after    { background-image: radial-gradient(#161616 3px, transparent 3px); background-position: 9px 10px, 26px 15px, 16px 30px; background-size: 30px 30px, 30px 30px, 30px 30px; }
+.b-copper::after  { background-image: radial-gradient(#e08a4c 3px, transparent 3px); background-position: 9px 10px, 27px 16px, 15px 30px; background-size: 30px 30px, 30px 30px, 30px 30px; }
+.b-iron::after    { background-image: radial-gradient(#e8d3ae 3px, transparent 3px); background-position: 9px 10px, 27px 16px, 15px 30px; background-size: 30px 30px, 30px 30px, 30px 30px; }
+.b-lapis::after   { background-image: radial-gradient(#2b5fd6 3.5px, transparent 3.5px); background-position: 9px 10px, 27px 16px, 15px 30px; background-size: 30px 30px, 30px 30px, 30px 30px; }
+.b-emerald::after { background-image: radial-gradient(#20d66d 3.5px, transparent 3.5px); background-position: 9px 10px, 27px 16px, 15px 30px; background-size: 30px 30px, 30px 30px, 30px 30px; }
+.b-diamond::after { background-image: radial-gradient(#4fe0ff 3.5px, transparent 3.5px); background-position: 9px 10px, 27px 16px, 15px 30px; background-size: 30px 30px, 30px 30px, 30px 30px; }
+.b-diamond { box-shadow: inset 0 -5px 0 rgba(0,0,0,0.3), inset 0 3px 0 rgba(255,255,255,0.06), 0 0 10px rgba(79,224,255,0.25); }
+
+/* Трещины при попадании кирки по прочной руде (не разрушилась с 1 удара) */
+.mine-block.crack-1 { filter: brightness(0.86); }
+.mine-block.crack-2 { filter: brightness(0.68); }
+.mine-block.crack-3 { filter: brightness(0.5); }
+.mine-block.crack-1::before,
+.mine-block.crack-2::before,
+.mine-block.crack-3::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+        linear-gradient(35deg, transparent 46%, rgba(0,0,0,0.55) 47%, rgba(0,0,0,0.55) 49%, transparent 50%),
+        linear-gradient(-50deg, transparent 60%, rgba(0,0,0,0.5) 61%, rgba(0,0,0,0.5) 63%, transparent 64%);
+    pointer-events: none;
+}
+
+/* Анимация уничтожения блока */
+@keyframes blockBreak {
+    0%   { transform: scale(1); opacity: 1; filter: brightness(1.6); }
+    100% { transform: scale(0.35) rotate(25deg); opacity: 0; filter: brightness(0.4); }
+}
+.block-break-anim {
+    animation: blockBreak 0.22s ease-out forwards;
+}
+
+/* Летящая кирка */
+.pickaxe-sprite {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 38px;
+    height: 38px;
+    font-size: 30px;
+    line-height: 38px;
+    text-align: center;
+    z-index: 5;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 5px rgba(0,0,0,0.65)) drop-shadow(0 0 8px rgba(255,200,0,0.35));
+    transform-origin: 50% 50%;
+}
+
+/* HUD поверх шахты */
+.mine-hud {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+    z-index: 6;
+    pointer-events: none;
+}
+.hud-item {
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+#hudHp { color: #ff5a5a; }
+#hudWin { color: #3dff9a; }
+#hudDepth { color: #ffc800; }
 
 /* ==========================================
    ИГРА КОЛЕСО ФОРТУНЫ (3D ЗОЛОТО, ЗУМ И ТАБЫ)
