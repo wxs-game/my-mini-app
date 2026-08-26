@@ -1246,6 +1246,162 @@ function renderCrashUI() {
 }
 
 /* =========================
+   ИГРА «КИРКА»
+========================= */
+const PICKAXES = [
+    { level: 1, name: "Деревянная", hp: 80,  weight: 50, color: "#8B5A2B", emoji: "🪵" },
+    { level: 2, name: "Каменная",   hp: 110, weight: 25, color: "#808080", emoji: "🪨" },
+    { level: 3, name: "Медная",     hp: 140, weight: 13, color: "#B87333", emoji: "🥉" },
+    { level: 4, name: "Железная",   hp: 170, weight: 7,  color: "#D3D3D3", emoji: "⚔️" },
+    { level: 5, name: "Золотая",    hp: 200, weight: 4,  color: "#FFD700", emoji: "👑" },
+    { level: 6, name: "Алмазная",   hp: 250, weight: 1,  color: "#00FFFF", emoji: "💎" }
+];
+
+let isPickaxeRunning = false;
+
+function getRandomPickaxe() {
+    const totalWeight = PICKAXES.reduce((sum, p) => sum + p.weight, 0);
+    let rand = Math.random() * totalWeight;
+    for (const pickaxe of PICKAXES) {
+        if (rand < pickaxe.weight) return pickaxe;
+        rand -= pickaxe.weight;
+    }
+    return PICKAXES[0];
+}
+
+function openPickaxe() {
+    showPage("pickaxePage");
+    updateNav("games");
+    renderMineGrid();
+}
+
+function renderMineGrid() {
+    const grid = document.getElementById('mineGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    // Генерируем шахту 8 колонок на 12 строк
+    for (let r = 0; r < 12; r++) {
+        for (let c = 0; c < 8; c++) {
+            const tile = document.createElement('div');
+            tile.className = 'mine-tile-block';
+            if (r === 0) tile.classList.add('tile-grass');
+            else if (r < 4) tile.classList.add('tile-stone');
+            else tile.classList.add('tile-ore');
+            grid.appendChild(tile);
+        }
+    }
+}
+
+async function startPickaxeGame() {
+    if (isPickaxeRunning) return;
+    if (!lockEconomy()) return;
+
+    const betInput = document.getElementById('pickaxeBetInput');
+    const bet = roundMoney(parseFloat(betInput.value));
+
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    isPickaxeRunning = true;
+    const btn = document.getElementById('pickaxeActionBtn');
+    btn.disabled = true;
+
+    // Списание баланса
+    const snapshot = snapshotBalanceState();
+    currentBalance = roundMoney(currentBalance - bet);
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(currentBalance);
+
+    const debited = await saveUserData();
+    if (!debited) {
+        restoreBalanceState(snapshot);
+        showMessage("Ошибка сети при списании ставки.");
+        isPickaxeRunning = false;
+        btn.disabled = false;
+        unlockEconomy();
+        return;
+    }
+
+    // 1. Рулетка выбора кирки
+    const selectedPickaxe = getRandomPickaxe();
+    const display = document.getElementById('pickaxeDisplay');
+    const nameLabel = document.getElementById('pickaxeName');
+    
+    let spinCount = 0;
+    const rouletteInterval = setInterval(() => {
+        const temp = PICKAXES[Math.floor(Math.random() * PICKAXES.length)];
+        display.textContent = temp.emoji;
+        nameLabel.textContent = `${temp.name} (${temp.hp} HP)`;
+        spinCount++;
+        if (spinCount > 15) {
+            clearInterval(rouletteInterval);
+            display.textContent = selectedPickaxe.emoji;
+            nameLabel.textContent = `${selectedPickaxe.name} (${selectedPickaxe.hp} HP)`;
+            animatePickaxeDrop(selectedPickaxe, bet);
+        }
+    }, 100);
+}
+
+function animatePickaxeDrop(pickaxe, bet) {
+    let currentHp = pickaxe.hp;
+    const fallingPickaxe = document.getElementById('fallingPickaxe');
+    fallingPickaxe.textContent = pickaxe.emoji;
+    fallingPickaxe.classList.remove('hidden');
+
+    let row = 0;
+    let col = Math.floor(Math.random() * 8);
+
+    const dropInterval = setInterval(async () => {
+        if (currentHp <= 0 || row >= 12) {
+            clearInterval(dropInterval);
+            fallingPickaxe.classList.add('hidden');
+            
+            // Расчет выигрыша на основе глубинного множителя и прочности
+            const depthMult = 1 + (row * 0.25);
+            const winAmount = roundMoney(bet * depthMult);
+
+            currentBalance = roundMoney(currentBalance + winAmount);
+            currentTotalWin = roundMoney(currentTotalWin + winAmount);
+            currentWinsCount++;
+            setUIBalance(currentBalance);
+
+            await saveUserDataWithRetry();
+            showMessage(`Кирка сломалась! Выигрыш: +${winAmount.toFixed(2)}$ (${depthMult.toFixed(2)}x)`);
+
+            isPickaxeRunning = false;
+            document.getElementById('pickaxeActionBtn').disabled = false;
+            unlockEconomy();
+            return;
+        }
+
+        // Логика шага: -1 HP за блок
+        currentHp--;
+        document.getElementById('pickaxeName').textContent = `${pickaxe.name} (${currentHp}/${pickaxe.hp} HP)`;
+
+        // Смещение вниз и случайно влево/вправо
+        row++;
+        col += Math.random() > 0.5 ? 1 : -1;
+        col = Math.max(0, Math.min(7, col));
+
+        // Визуальное позиционирование
+        fallingPickaxe.style.top = `${row * 32}px`;
+        fallingPickaxe.style.left = `${col * 12.5}%`;
+        
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+    }, 40);
+}
+
+/* =========================
    БАЛАНС И UI
 ========================= */
 
