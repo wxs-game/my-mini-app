@@ -187,43 +187,55 @@
         </section>
     </main>
 
-    <!-- ==================== КИРКА ==================== -->
-    <main id="pickaxePage" class="pickaxe-page hidden">
-        <div class="page-header" style="margin-top: 10px;">
-            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
-            <h1>Кирка</h1>
-            <div class="header-space"></div>
+<!-- ==================== КИРКА ==================== -->
+<main id="pickaxePage" class="pickaxe-page hidden">
+    <div class="page-header" style="margin-top: 10px;">
+        <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+        <h1>Кирка</h1>
+        <div class="header-space"></div>
+    </div>
+
+    <section class="wheel-card">
+        <!-- Барабан рулетки кирки -->
+        <div id="pickaxeRoulette" class="pickaxe-roulette">
+            <div id="pickaxeDisplay" class="pickaxe-display">⛏️</div>
+            <div id="pickaxeName" class="pickaxe-name">Нажмите «БРОСИТЬ КИРКУ»</div>
         </div>
 
-        <section class="wheel-card">
-            <!-- Барабан выпадения кирки -->
-            <div id="pickaxeRoulette" class="pickaxe-roulette">
-                <div id="pickaxeDisplay" class="pickaxe-display">⛏️</div>
-                <div id="pickaxeName" class="pickaxe-name">Деревянная кирка (80 HP)</div>
+        <!-- Игровой экран шахты (Бесконечный скролл) -->
+        <div id="mineViewport" class="mine-viewport">
+            <div id="mineWorld" class="mine-world">
+                <div id="mineGrid" class="mine-grid-canvas"></div>
+                <div id="activePickaxeSprite" class="pickaxe-sprite hidden">⛏️</div>
             </div>
-
-            <!-- Шахта / Игровое поле -->
-            <div id="mineShaft" class="mine-shaft">
-                <div id="fallingPickaxe" class="falling-pickaxe hidden">⛏️</div>
-                <div id="mineGrid" class="mine-grid"></div>
+            <!-- Информационный оверлей поверх шахты -->
+            <div class="mine-hud">
+                <div class="hud-item">HP: <span id="hudHp">0</span></div>
+                <div class="hud-item">Выигрыш: <span id="hudWin">0.00 $</span></div>
             </div>
+        </div>
 
-            <!-- Панель управления -->
-            <div class="ctrl-box" style="margin-top: 12px;">
-                <div class="mines-bet-header">
-                    <label>СУММА СТАВКИ</label>
-                    <div class="card-input-wrap">
-                        <input type="number" id="pickaxeBetInput" placeholder="0.10" min="0.1" step="any">
-                        <span class="currency-symbol">$</span>
-                    </div>
+        <!-- Панель ставки -->
+        <div class="ctrl-box" style="margin-top: 12px;">
+            <div class="mines-bet-header">
+                <label>СУММА СТАВКИ</label>
+                <div class="card-input-wrap">
+                    <input type="number" id="pickaxeBetInput" placeholder="0.10" min="0.1" step="any">
+                    <span class="currency-symbol">$</span>
                 </div>
             </div>
+            <div class="ctrl-btns-row" style="margin-top: 10px;">
+                <button class="pct-btn" onclick="adjustPickaxeBet(0.5)">½</button>
+                <button class="pct-btn" onclick="adjustPickaxeBet(2)">x2</button>
+                <button class="pct-btn" onclick="setPickaxeMaxBet()">MAX</button>
+            </div>
+        </div>
 
-            <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 10px; width: 100%;">
-                БРОСИТЬ КИРКУ
-            </button>
-        </section>
-    </main>
+        <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 10px; width: 100%;">
+            БРОСИТЬ КИРКУ
+        </button>
+    </section>
+</main>
 
     <!-- ==================== МИНЫ ==================== -->
     <main id="minesPage" class="mines-page hidden">
