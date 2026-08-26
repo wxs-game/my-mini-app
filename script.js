@@ -745,6 +745,21 @@ let crashLoopStarted = false;
 let crashHistory = [];      // последние коэффициенты, самый новый — первый
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
 let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
+let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты (вместо эмодзи)
+
+// Загружает анимацию ракеты из твоего Telegram-стикера один раз
+// (файл rocket-animation.json должен лежать рядом со script.js).
+function initCrashRocketAnim() {
+    const container = document.getElementById('crashRocket');
+    if (!container || crashRocketAnim || typeof lottie === 'undefined') return;
+    crashRocketAnim = lottie.loadAnimation({
+        container,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: 'rocket-animation.json'
+    });
+}
 
 function openCrash() {
     showPage("crashPage");
@@ -755,6 +770,7 @@ function openCrash() {
 function initCrashPage() {
     renderCrashHistory();
     renderCrashUI();
+    initCrashRocketAnim();
 }
 
 // Движок раундов запускается один раз при старте приложения и работает
@@ -862,15 +878,21 @@ function endCrashRound() {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
 
-    // Взрыв: ракета превращается в 💥, статус и коэффициент фиксируются
-    // на экране на 3 секунды — без всплывающего сообщения от Telegram
+    // Взрыв: анимация ракеты прячется, вместо неё на 3 секунды показывается
+    // 💥 в той же точке — без всплывающего сообщения от Telegram
     const stageEl = document.getElementById('crashStage');
     const rocketEl = document.getElementById('crashRocket');
+    const explosionEl = document.getElementById('crashExplosion');
     const statusEl = document.getElementById('crashStatus');
     const multEl = document.getElementById('crashMultiplier');
     const actionBtn = document.getElementById('crashActionBtn');
 
-    if (rocketEl) rocketEl.textContent = '💥';
+    if (crashRocketAnim) crashRocketAnim.pause();
+    if (rocketEl) rocketEl.style.opacity = '0';
+    if (explosionEl) {
+        explosionEl.style.transform = rocketEl ? rocketEl.style.transform : 'translate(0px, 0px)';
+        explosionEl.style.display = 'block';
+    }
     if (statusEl) statusEl.textContent = `Взорвалось на ${crashGame.crashPoint.toFixed(2)}x`;
     if (multEl) multEl.style.color = '#e74c3c';
     if (actionBtn) {
@@ -1030,9 +1052,13 @@ function renderCrashUI() {
         multEl.style.color = '#fff';
 
         if (rocketEl) {
-            rocketEl.textContent = '🚀';
+            rocketEl.style.opacity = '1';
             rocketEl.style.transform = 'translate(0px, 0px) rotate(-45deg)';
         }
+        if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
+
+        const explosionElWaiting = document.getElementById('crashExplosion');
+        if (explosionElWaiting) explosionElWaiting.style.display = 'none';
 
         const stageElWaiting = document.getElementById('crashStage');
         if (stageElWaiting) stageElWaiting.style.transform = 'translate(0px, 0px)';
@@ -1065,8 +1091,8 @@ function renderCrashUI() {
         rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(-45deg)`;
 
         // След ракеты — рисуем линию траектории по мере полёта
-        const trailX = 16 + 17 + x;
-        const trailY = (220 - 16 - 17) + y;
+        const trailX = 16 + 27 + x;
+        const trailY = (220 - 16 - 27) + y;
         crashTrailPoints.push(`${trailX},${trailY}`);
         const trailLine = document.getElementById('crashTrailLine');
         if (trailLine) trailLine.setAttribute('points', crashTrailPoints.join(' '));
