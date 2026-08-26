@@ -502,50 +502,46 @@ let minesGame = {
 
 // Изменение количества мин кнопками "-" и "+" в капсуле
 function changeMinesBy(delta) {
+    if (minesGame.active) return; // нельзя менять во время раунда
     const input = document.getElementById('customMinesInput');
     if (!input) return;
 
-    let val = (parseInt(input.value) || selectedMines) + delta;
-    
-    // Ограничиваем диапазон от 1 до 24 мин
-    val = Math.max(1, Math.min(24, val));
-    
+    let val = (parseInt(input.value) || minesGame.minesCount) + delta;
+
+    // Ограничиваем диапазон от 3 до 24 мин
+    val = Math.max(3, Math.min(24, val));
+
     input.value = val;
     onCustomMinesInputChange(val);
 }
 
 // Обработка ручного ввода числа в капсуле
 function onCustomMinesInputChange(val) {
-    let num = parseInt(val);
-    
-    if (isNaN(num)) return;
-    
-    // Ограничения от 1 до 24
-    num = Math.max(1, Math.min(24, num));
-    selectedMines = num;
+    if (minesGame.active) return;
 
-    // Подсвечиваем соответствующую кнопку пресета, если число совпадает, 
-    // либо убираем подсветку со всех, если введено кастомное число (например, 7 или 12)
-    const btns = document.querySelectorAll('.mines-count-btn');
-    btns.forEach(btn => {
-        if (parseInt(btn.innerText) === num) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+    const input = document.getElementById('customMinesInput');
+    let num = parseInt(val);
+
+    if (isNaN(num)) return;
+
+    // Ограничения от 3 до 24
+    num = Math.max(3, Math.min(24, num));
+
+    // Пишем в реальное игровое состояние (раньше уходило в неопределённую переменную)
+    minesGame.minesCount = num;
+
+    // Если пользователь ввёл число за пределами диапазона — визуально клэмпим поле
+    if (input && parseInt(input.value) !== num) {
+        input.value = num;
+    }
+
+    // Подсвечиваем кнопку пресета, если число совпадает,
+    // иначе снимаем подсветку со всех
+    document.querySelectorAll('.mines-count-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.innerText) === num);
     });
 
-    // Здесь также можно обновить сетку мин под новое количество:
-    // updateMinesGrid();
-}
-
-function selectMinesCount(count, btn) {
-    if (minesGame.active) return;
-    minesGame.minesCount = count;
-
-    document.querySelectorAll('.mines-count-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-
+    // Пересчитываем полосу коэффициентов под новое количество мин
     renderMinesCoefBar();
 }
 
