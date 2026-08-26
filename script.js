@@ -1250,12 +1250,12 @@ function renderCrashUI() {
 ========================= */
 
 const PICKAXE_TYPES = [
-    { name: "Деревянная", hp: 40,  weight: 50, emoji: "🪵" },
-    { name: "Каменная",   hp: 70,  weight: 25, emoji: "🪨" },
-    { name: "Медная",     hp: 100, weight: 13, emoji: "🥉" },
-    { name: "Железная",   hp: 140, weight: 7,  emoji: "⚔️" },
-    { name: "Золотая",    hp: 180, weight: 4,  emoji: "👑" },
-    { name: "Алмазная",   hp: 240, weight: 1,  emoji: "💎" }
+    { id: "wood",    name: "Деревянная", hp: 40,  weight: 50, emoji: "🪵" },
+    { id: "stone",   name: "Каменная",   hp: 70,  weight: 25, emoji: "🪨" },
+    { id: "copper",  name: "Медная",     hp: 100, weight: 13, emoji: "🥉" },
+    { id: "iron",    name: "Железная",   hp: 140, weight: 7,  emoji: "⚔️" },
+    { id: "gold",    name: "Золотая",    hp: 180, weight: 4,  emoji: "👑" },
+    { id: "diamond", name: "Алмазная",   hp: 240, weight: 1,  emoji: "💎" }
 ];
 
 // Типы блоков. baseDur/depthStep — прочность руды: чем глубже, тем больше ударов
@@ -1277,6 +1277,194 @@ const BLOCK_TYPES = {
 };
 const ORE_IDS = ['coal', 'copper', 'iron', 'lapis', 'emerald', 'diamond'];
 
+/* =========================
+   СВОИ КАРТИНКИ ДЛЯ БЛОКОВ И КИРОК
+   Позволяет загрузить изображение (файл) для каждого типа блока и каждой
+   кирки вместо нарисованной CSS-текстуры / эмодзи. Хранится локально
+   в браузере (localStorage), поэтому картинки сохраняются между запусками
+   на этом устройстве.
+========================= */
+const CUSTOM_IMAGES_KEY = 'wxs_custom_images_v1';
+// Список id, для которых разрешена своя картинка (воздух — не нужен)
+const CUSTOMIZABLE_BLOCK_IDS = Object.values(BLOCK_TYPES)
+    .map(t => t.id)
+    .filter(id => id !== 'air');
+const CUSTOMIZABLE_PICKAXE_IDS = PICKAXE_TYPES.map(p => p.id);
+
+let customImages = { blocks: {}, pickaxes: {} };
+
+function loadCustomImages() {
+    try {
+        const raw = localStorage.getItem(CUSTOM_IMAGES_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            customImages = {
+                blocks: parsed.blocks || {},
+                pickaxes: parsed.pickaxes || {}
+            };
+        }
+    } catch (e) {
+        console.warn('Не удалось загрузить свои картинки:', e);
+        customImages = { blocks: {}, pickaxes: {} };
+    }
+}
+
+function saveCustomImages() {
+    try {
+        localStorage.setItem(CUSTOM_IMAGES_KEY, JSON.stringify(customImages));
+    } catch (e) {
+        console.warn('Не удалось сохранить свои картинки (возможно, превышен лимит хранилища):', e);
+        showMessage("Не удалось сохранить картинку — она слишком большая или закончилось место в хранилище браузера.");
+    }
+}
+
+// Применяет (или сбрасывает) кастомную картинку блока на конкретном DOM-элементе.
+// Важно: не трогаем сам класс блока (crack/hit-flash и т.д.) — просто
+// накладываем картинку поверх фона через отдельный CSS-класс.
+function applyCustomBlockImage(div, blockId) {
+    const url = customImages.blocks[blockId];
+    if (url) {
+        div.style.backgroundImage = `url("${url}")`;
+        div.classList.add('custom-img');
+    } else {
+        div.style.backgroundImage = '';
+        div.classList.remove('custom-img');
+    }
+}
+
+// Применяет (или сбрасывает) кастомную картинку кирки на элементе-спрайте
+// (эмодзи-текст скрывается, вместо него — фон-изображение).
+function applyCustomPickaxeVisual(el, pickaxeObj) {
+    const url = customImages.pickaxes[pickaxeObj.id];
+    if (url) {
+        el.textContent = '';
+        el.style.backgroundImage = `url("${url}")`;
+        el.classList.add('custom-img');
+    } else {
+        el.style.backgroundImage = '';
+        el.classList.remove('custom-img');
+        el.textContent = pickaxeObj.emoji;
+    }
+}
+
+// Читает выбранный пользователем файл и возвращает его как data URL (base64).
+function readImageFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        if (!file) { reject(new Error('Файл не выбран')); return; }
+        if (!file.type.startsWith('image/')) { reject(new Error('Нужен файл изображения')); return; }
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('Ошибка чтения файла'));
+        reader.readAsDataURL(file);
+    });
+}
+
+// Вызывается из <input type="file"> в панели кастомизации для блока.
+async function onBlockImageSelected(blockId, inputEl) {
+    const file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+    try {
+        const dataUrl = await readImageFileAsDataURL(file);
+        customImages.blocks[blockId] = dataUrl;
+        saveCustomImages();
+        refreshAllRenderedBlockImages();
+        renderImageCustomizerPanel();
+    } catch (e) {
+        showMessage("Не удалось загрузить картинку: " + e.message);
+    } finally {
+        inputEl.value = '';
+    }
+}
+
+// Вызывается из <input type="file"> в панели кастомизации для кирки.
+async function onPickaxeImageSelected(pickaxeId, inputEl) {
+    const file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+    try {
+        const dataUrl = await readImageFileAsDataURL(file);
+        customImages.pickaxes[pickaxeId] = dataUrl;
+        saveCustomImages();
+        renderImageCustomizerPanel();
+    } catch (e) {
+        showMessage("Не удалось загрузить картинку: " + e.message);
+    } finally {
+        inputEl.value = '';
+    }
+}
+
+function resetBlockImage(blockId) {
+    delete customImages.blocks[blockId];
+    saveCustomImages();
+    refreshAllRenderedBlockImages();
+    renderImageCustomizerPanel();
+}
+
+function resetPickaxeImage(pickaxeId) {
+    delete customImages.pickaxes[pickaxeId];
+    saveCustomImages();
+    renderImageCustomizerPanel();
+}
+
+// Перекрашивает уже отрисованные в DOM блоки шахты после смены/сброса картинки,
+// чтобы результат было видно сразу, не дожидаясь новой генерации сетки.
+function refreshAllRenderedBlockImages() {
+    document.querySelectorAll('#mineGrid .mine-block[data-block-id]').forEach(div => {
+        applyCustomBlockImage(div, div.dataset.blockId);
+    });
+}
+
+function toggleImageCustomizer() {
+    const box = document.getElementById('imageCustomizerBox');
+    if (!box) return;
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden')) {
+        renderImageCustomizerPanel();
+    }
+}
+
+const BLOCK_LABELS = {
+    grass: '🌱 Трава', stone: '🪨 Камень', coal: '⚫ Уголь', copper: '🟠 Медь',
+    iron: '⚪ Железо', lapis: '🔵 Лазурит', emerald: '🟢 Изумруд', diamond: '💎 Алмаз'
+};
+
+function renderImageCustomizerPanel() {
+    const blocksGrid = document.getElementById('imageCustomBlocksGrid');
+    const pickaxesGrid = document.getElementById('imageCustomPickaxesGrid');
+    if (blocksGrid) {
+        blocksGrid.innerHTML = CUSTOMIZABLE_BLOCK_IDS.map(id => {
+            const url = customImages.blocks[id];
+            const label = BLOCK_LABELS[id] || id;
+            return `
+                <div class="img-custom-slot">
+                    <div class="img-custom-preview" style="${url ? `background-image:url('${url}')` : ''}">${url ? '' : '—'}</div>
+                    <div class="img-custom-label">${label}</div>
+                    <label class="img-custom-upload-btn">
+                        Загрузить
+                        <input type="file" accept="image/*" onchange="onBlockImageSelected('${id}', this)">
+                    </label>
+                    ${url ? `<button class="img-custom-reset-btn" onclick="resetBlockImage('${id}')">Сбросить</button>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+    if (pickaxesGrid) {
+        pickaxesGrid.innerHTML = PICKAXE_TYPES.map(p => {
+            const url = customImages.pickaxes[p.id];
+            return `
+                <div class="img-custom-slot">
+                    <div class="img-custom-preview" style="${url ? `background-image:url('${url}')` : ''}">${url ? '' : p.emoji}</div>
+                    <div class="img-custom-label">${p.name}</div>
+                    <label class="img-custom-upload-btn">
+                        Загрузить
+                        <input type="file" accept="image/*" onchange="onPickaxeImageSelected('${p.id}', this)">
+                    </label>
+                    ${url ? `<button class="img-custom-reset-btn" onclick="resetPickaxeImage('${p.id}')">Сбросить</button>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+}
+
 // Пороги глубины и базовые шансы (%) появления руды — используются как "затравка"
 // для жилы (см. pickOreSeed). Сама жила потом разрастается вокруг затравки.
 const ORE_TIERS = [
@@ -1295,10 +1483,15 @@ const VEIN_HORIZONTAL_CHANCE = 0.38;
 const GRID_COLS = 7;
 const BLOCK_SIZE = 44; // Должно совпадать с --block-size в style.css
 const SPRITE_SIZE = 38;
-const GRAVITY = 0.55;       // Ускорение свободного падения кирки (px/кадр²)
-const MAX_FALL_SPEED = 19;  // Максимальная скорость падения
-const BOUNCE_SPEED = -3.4;  // Лёгкий отскок при ударе о ещё не разрушенную руду (не перебивает ощущение падения)
-const START_FALL_SPEED = 2.4;
+// Падение замедлено в ~4 раза относительно исходных значений — кирка теперь
+// разгоняется гораздо плавнее, удары по блокам легче отслеживать глазами.
+const GRAVITY = 0.14;       // Ускорение свободного падения кирки (px/кадр²)
+const MAX_FALL_SPEED = 6;   // Максимальная скорость падения
+const BOUNCE_SPEED = -1.6;  // Лёгкий отскок при ударе о ещё не разрушенную руду
+const BOUNCE_MAX = -3;      // Верхний предел скорости отскока (реалистичное затухание)
+const BOUNCE_RESTITUTION = 0.5; // Доля скорости удара, возвращаемая при отскоке
+const START_FALL_SPEED = 0.6;
+const SQUASH_FRAMES = 12;   // Длительность визуального "сплющивания" кирки при ударе
 
 let mineGridMap = [];  // Массив блоков шахты (каждая ячейка — независимый объект с durability)
 let isPickaxeRunning = false;
@@ -1401,8 +1594,10 @@ function appendRowsDOM(fromIndex, rows) {
             div.className = `mine-block ${block.class}`;
             div.dataset.row = rIdx;
             div.dataset.col = cIdx;
+            div.dataset.blockId = block.id;
             if (block.isOre) div.dataset.ore = "1";
             applyBlockTexture(div);
+            applyCustomBlockImage(div, block.id);
             frag.appendChild(div);
         });
     });
@@ -1461,8 +1656,10 @@ function renderGridDOM() {
             div.className = `mine-block ${block.class}`;
             div.dataset.row = rIdx;
             div.dataset.col = cIdx;
+            div.dataset.blockId = block.id;
             if (block.isOre) div.dataset.ore = "1";
             applyBlockTexture(div);
+            applyCustomBlockImage(div, block.id);
             gridEl.appendChild(div);
         });
     });
@@ -1526,12 +1723,12 @@ async function startPickaxeGame() {
     let spins = 0;
     const rouletteTimer = setInterval(() => {
         const randP = PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
-        display.textContent = randP.emoji;
+        applyCustomPickaxeVisual(display, randP);
         nameLabel.textContent = `${randP.name} (${randP.hp} HP)`;
         spins++;
         if (spins > 14) {
             clearInterval(rouletteTimer);
-            display.textContent = picked.emoji;
+            applyCustomPickaxeVisual(display, picked);
             nameLabel.textContent = `${picked.name} (${picked.hp} HP)`;
             runMiningPhysics(picked, bet);
         }
@@ -1554,6 +1751,7 @@ function runMiningPhysics(pickaxe, bet) {
     let brokenRow = 0; // ниже этой строки всё уже пройдено кабиной
     let cameraY = 0;    // Плавная, МОНОТОННАЯ камера — никогда не откатывается назад,
                          // поэтому отскок от прочной руды не выглядит как "полёт вверх"
+    let squashTimer = 0; // кадры, оставшиеся до конца эффекта "сплющивания" при ударе
 
     const sprite = document.getElementById('activePickaxeSprite');
     const worldEl = document.getElementById('mineWorld');
@@ -1562,7 +1760,7 @@ function runMiningPhysics(pickaxe, bet) {
     const hudWin = document.getElementById('hudWin');
     const hudDepth = document.getElementById('hudDepth');
 
-    sprite.textContent = pickaxe.emoji;
+    applyCustomPickaxeVisual(sprite, pickaxe);
     sprite.classList.remove('hidden');
     hudHp.textContent = hp;
     hudWin.textContent = "0.00 $";
@@ -1633,7 +1831,18 @@ function runMiningPhysics(pickaxe, bet) {
             cell.class = 'b-air';
             if (el) {
                 el.classList.add('block-break-anim');
-                setTimeout(() => { el.className = 'mine-block b-air'; }, 220);
+                // Гарантированное 100%-е исчезновение блока: элемент НЕ удаляется
+                // из DOM (это сломало бы раскладку CSS grid, которая опирается
+                // на порядок элементов), но полностью сбрасывается — включая
+                // data-ore и кастомную картинку, которые раньше могли "просвечивать"
+                // через ::before/::after даже после смены класса на b-air.
+                setTimeout(() => {
+                    el.className = 'mine-block b-air';
+                    el.dataset.blockId = 'air';
+                    el.removeAttribute('data-ore');
+                    el.style.backgroundImage = '';
+                    el.style.removeProperty('--tb');
+                }, 220);
             }
             spawnImpactDust(rowIdx, colIdx, true);
             spawnWinPopup(rowIdx, colIdx, cell.multiplier);
@@ -1677,9 +1886,11 @@ function runMiningPhysics(pickaxe, bet) {
 
             if (result.solid && !result.broken) {
                 // Ударилась о прочную руду — отскакивает вверх пропорционально скорости
-                // удара (реальная физика отскока), дальше не проходит, потом падает снова.
+                // удара (коэффициент восстановления, как у настоящего упругого отскока),
+                // дальше не проходит в этом кадре, потом падает снова под гравитацией.
                 posY = rowToHit * BLOCK_SIZE - 0.5;
-                vy = Math.max(-8, Math.min(BOUNCE_SPEED, -Math.abs(vy) * 0.42));
+                vy = Math.max(BOUNCE_MAX, Math.min(BOUNCE_SPEED, -Math.abs(vy) * BOUNCE_RESTITUTION));
+                squashTimer = SQUASH_FRAMES; // визуальное сплющивание в момент контакта
                 targetRow = brokenRow; // остаёмся на месте
                 break;
             }
@@ -1702,10 +1913,21 @@ function runMiningPhysics(pickaxe, bet) {
         // Лёгкое покачивание кирки при полёте (визуальная "реальная физика")
         xOffset = Math.sin(rotation * Math.PI / 180) * 3;
 
+        // Сплющивание ("squash & stretch") в момент удара о блок — плавно
+        // затухает за SQUASH_FRAMES кадров, придавая отскоку ощущение реального
+        // физического контакта, а не просто смены направления скорости.
+        let scaleX = 1, scaleY = 1;
+        if (squashTimer > 0) {
+            const p = squashTimer / SQUASH_FRAMES; // 1 → 0
+            scaleX = 1 + 0.4 * p;
+            scaleY = 1 - 0.4 * p;
+            squashTimer--;
+        }
+
         // Позиция спрайта: центр колонки curCol + покачивание
         const colCenterOffset = (curCol - Math.floor(GRID_COLS / 2)) * BLOCK_SIZE;
         sprite.style.transform =
-            `translate(calc(-50% + ${colCenterOffset + xOffset}px), ${posY}px) rotate(${rotation}deg)`;
+            `translate(calc(-50% + ${colCenterOffset + xOffset}px), ${posY}px) rotate(${rotation}deg) scale(${scaleX}, ${scaleY})`;
 
         // Камера плавно следует за киркой по пикселям, но НИКОГДА не откатывается
         // назад — иначе короткие отскоки от прочной руды выглядят как "падение вверх".
@@ -2496,6 +2718,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.Telegram.WebApp.expand();
     }
 
+    loadCustomImages();
     await loadUserData();
     updateLevelUI();
     goHome();
@@ -2559,6 +2782,11 @@ window.openPickaxe = openPickaxe;
 window.startPickaxeGame = startPickaxeGame;
 window.adjustPickaxeBet = adjustPickaxeBet;
 window.setPickaxeMaxBet = setPickaxeMaxBet;
+window.toggleImageCustomizer = toggleImageCustomizer;
+window.onBlockImageSelected = onBlockImageSelected;
+window.onPickaxeImageSelected = onPickaxeImageSelected;
+window.resetBlockImage = resetBlockImage;
+window.resetPickaxeImage = resetPickaxeImage;
 
 
 })();
