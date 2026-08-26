@@ -500,6 +500,45 @@ let minesGame = {
     isProcessing: false
 };
 
+// Изменение количества мин кнопками "-" и "+" в капсуле
+function changeMinesBy(delta) {
+    const input = document.getElementById('customMinesInput');
+    if (!input) return;
+
+    let val = (parseInt(input.value) || selectedMines) + delta;
+    
+    // Ограничиваем диапазон от 1 до 24 мин
+    val = Math.max(1, Math.min(24, val));
+    
+    input.value = val;
+    onCustomMinesInputChange(val);
+}
+
+// Обработка ручного ввода числа в капсуле
+function onCustomMinesInputChange(val) {
+    let num = parseInt(val);
+    
+    if (isNaN(num)) return;
+    
+    // Ограничения от 1 до 24
+    num = Math.max(1, Math.min(24, num));
+    selectedMines = num;
+
+    // Подсвечиваем соответствующую кнопку пресета, если число совпадает, 
+    // либо убираем подсветку со всех, если введено кастомное число (например, 7 или 12)
+    const btns = document.querySelectorAll('.mines-count-btn');
+    btns.forEach(btn => {
+        if (parseInt(btn.innerText) === num) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Здесь также можно обновить сетку мин под новое количество:
+    // updateMinesGrid();
+}
+
 function selectMinesCount(count, btn) {
     if (minesGame.active) return;
     minesGame.minesCount = count;
