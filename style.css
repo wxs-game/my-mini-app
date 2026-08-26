@@ -1891,3 +1891,39 @@ main {
     align-items: center;
     user-select: none;
 }
+
+/* ==================== КАПСУЛА ВЫБОРА МИН ==================== */
+
+/* Стилизация контейнера-капсулы */
+.mines-stepper-capsule {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.mines-stepper-capsule:focus-within {
+  border-color: rgba(255, 200, 0, 0.4) !important; /* Легкая подсветка при фокусе */
+}
+
+/* Скрытие стандартных стрелок у input type="number" */
+#customMinesInput::-webkit-outer-spin-button,
+#customMinesInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+#customMinesInput[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Кнопки + и - */
+.stepper-btn {
+  transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.stepper-btn:hover {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.stepper-btn:active {
+  transform: scale(0.9);
+}
+
