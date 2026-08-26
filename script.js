@@ -846,6 +846,15 @@ function beginFlyingPhase() {
     crashTrailPoints = [];
     const trailLine = document.getElementById('crashTrailLine');
     if (trailLine) trailLine.setAttribute('points', '');
+    const trailDotStart = document.getElementById('crashTrailDot');
+    if (trailDotStart) trailDotStart.style.opacity = '0';
+
+    const topLeftMult = document.getElementById('crashMultTopLeft');
+    if (topLeftMult) {
+        topLeftMult.textContent = '1.00x';
+        topLeftMult.classList.remove('crashed');
+        topLeftMult.style.display = 'block';
+    }
 
     renderCrashUI();
     tickCrash();
@@ -900,24 +909,47 @@ function endCrashRound() {
     }
 
     // Взрыв: анимация ракеты прячется, вместо неё на 3 секунды показывается
-    // 💥 в той же точке — без всплывающего сообщения от Telegram
+    // 💥 ровно в той точке, где оборвался полёт ракеты — без текстовых
+    // подписей и без всплывающего сообщения от Telegram
     const stageEl = document.getElementById('crashStage');
     const rocketEl = document.getElementById('crashRocket');
     const explosionEl = document.getElementById('crashExplosion');
-    const statusEl = document.getElementById('crashStatus');
     const multEl = document.getElementById('crashMultiplier');
+    const topLeftMult = document.getElementById('crashMultTopLeft');
     const actionBtn = document.getElementById('crashActionBtn');
 
     if (crashRocketAnim) crashRocketAnim.pause();
     if (rocketEl) rocketEl.style.opacity = '0';
+
+    // Стираем след траектории и светящуюся точку сразу по завершении раунда
+    const trailLineAtEnd = document.getElementById('crashTrailLine');
+    if (trailLineAtEnd) trailLineAtEnd.setAttribute('points', '');
     const trailDotAtEnd = document.getElementById('crashTrailDot');
     if (trailDotAtEnd) trailDotAtEnd.style.opacity = '0';
+    crashTrailPoints = [];
+
+    // TODO: когда будет готова .tgs-анимация взрыва — подключить её сюда
+    // тем же способом, что и ракету (см. initCrashRocketAnim): загрузить
+    // Lottie-анимацию в #crashExplosion через lottie.loadAnimation({...})
+    // и запускать её здесь через .goToAndPlay(0, true) вместо эмодзи 💥.
     if (explosionEl) {
-        explosionEl.style.transform = rocketEl ? rocketEl.style.transform : 'translate(0px, 0px)';
+        // Берём только смещение (translate) из последней позиции ракеты,
+        // без её угла поворота — взрыв должен остаться ровным, но точно
+        // на месте, где оборвался полёт.
+        let offsetTransform = 'translate(0px, 0px)';
+        if (rocketEl && rocketEl.style.transform) {
+            const m = rocketEl.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+            if (m) offsetTransform = `translate(${m[1]}px, ${m[2]}px)`;
+        }
+        explosionEl.style.transform = offsetTransform;
         explosionEl.style.display = 'block';
     }
-    if (statusEl) statusEl.textContent = `Взорвалось на ${crashGame.crashPoint.toFixed(2)}x`;
     if (multEl) multEl.style.color = '#e74c3c';
+    if (topLeftMult) {
+        topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        topLeftMult.classList.add('crashed');
+        topLeftMult.style.display = 'block';
+    }
     if (actionBtn) {
         actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
         actionBtn.disabled = true;
@@ -1113,6 +1145,9 @@ function renderCrashUI() {
         const trailDotWaiting = document.getElementById('crashTrailDot');
         if (trailDotWaiting) trailDotWaiting.style.opacity = '0';
 
+        const topLeftMultWaiting = document.getElementById('crashMultTopLeft');
+        if (topLeftMultWaiting) topLeftMultWaiting.style.display = 'none';
+
         if (betInput) betInput.disabled = crashGame.betPlaced;
 
         if (crashGame.betPlaced) {
@@ -1126,22 +1161,22 @@ function renderCrashUI() {
     }
 
     // phase === 'flying'
-    statusEl.textContent = 'Полёт! 🚀';
-    multEl.textContent = crashGame.currentMult.toFixed(2) + 'x';
-    multEl.style.color = '#2ecc71';
+    // Никакого текста статуса во время полёта — коэффициент теперь
+    // показывается отдельным светящимся числом сверху слева.
+    const topLeftMult = document.getElementById('crashMultTopLeft');
+    if (topLeftMult) {
+        topLeftMult.textContent = crashGame.currentMult.toFixed(2) + 'x';
+        topLeftMult.classList.remove('crashed');
+        topLeftMult.style.display = 'block';
+    }
 
     const countdownElFlying = document.getElementById('crashCountdown');
     if (countdownElFlying) countdownElFlying.style.display = 'none';
     const centerInfoElFlying = document.getElementById('crashCenterInfo');
-    if (centerInfoElFlying) centerInfoElFlying.style.opacity = '1';
+    if (centerInfoElFlying) centerInfoElFlying.style.opacity = '0';
     if (rocketEl) rocketEl.style.opacity = '1';
 
     if (rocketEl) {
-        // Изогнутая траектория (как на референсе): сначала диагональный
-        // подъём, затем плавный изгиб почти в вертикаль. x — с замедлением
-        // (ease-out), y — с ускорением (ease-in), поэтому кривая закругляется вверх.
-        const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
-
         const rocketSize = 170;
         const stageElForSize = document.getElementById('crashStage');
         const stageW = stageElForSize ? stageElForSize.clientWidth : 300;
@@ -1149,28 +1184,55 @@ function renderCrashUI() {
         const maxX = Math.max(40, stageW - rocketSize - 32);
         const maxY = Math.max(40, stageH - rocketSize - 32);
 
-        const x = maxX * Math.pow(progress, 0.55);
-        const y = -maxY * Math.pow(progress, 1.8);
+        // Общий прогресс полёта по логарифмической шкале множителя.
+        const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
 
-        // Угол наклона ракеты нарастает по ходу движения — от лёгкого
-        // диагонального старта до почти вертикального полёта вверх.
-        const angle = -30 - progress * 58;
+        // Ракета в исходном спрайте нарисована под углом -30° (её "родное"
+        // положение — то же самое, что видно в фазе ожидания). Полёт
+        // начинается горизонтально (0°): ракета почти не двигается с
+        // места и разворачивается на месте до этого родного угла, и
+        // только потом устремляется по изогнутой траектории вверх-вправо
+        // (x — замедление/ease-out, y — ускорение/ease-in, отчего кривая
+        // закругляется и уходит почти в вертикаль, как на референсе).
+        const PIVOT_PHASE = 0.12;   // доля прогресса на разворот на месте
+        const ANGLE_START = 0;      // старт — горизонтально
+        const ANGLE_ORIGINAL = -30; // "родной" угол ракеты
+        const ANGLE_END = -85;      // угол в конце полёта, почти вертикально
+
+        let x, y, angle;
+
+        if (progress <= PIVOT_PHASE) {
+            const p = progress / PIVOT_PHASE;
+            const eased = 1 - Math.pow(1 - p, 2); // ease-out
+            angle = ANGLE_START + (ANGLE_ORIGINAL - ANGLE_START) * eased;
+            // Лёгкое скольжение вперёд во время разворота на месте
+            x = maxX * 0.03 * eased;
+            y = 0;
+        } else {
+            const p = (progress - PIVOT_PHASE) / (1 - PIVOT_PHASE);
+            x = maxX * (0.03 + 0.97 * Math.pow(p, 0.55));
+            y = -maxY * Math.pow(p, 1.8);
+            angle = ANGLE_ORIGINAL + (ANGLE_END - ANGLE_ORIGINAL) * p;
+        }
 
         rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(${angle}deg)`;
 
-        // След ракеты — рисуем светящуюся линию траектории по мере полёта
-        const trailX = 16 + rocketSize / 2 + x;
-        const trailY = (stageH - 16 - rocketSize / 2) + y;
-        crashTrailPoints.push(`${trailX},${trailY}`);
-        const trailLine = document.getElementById('crashTrailLine');
-        if (trailLine) trailLine.setAttribute('points', crashTrailPoints.join(' '));
+        // След ракеты рисуем только после разворота на месте — линия
+        // должна совпадать с реальным визуальным перемещением ракеты.
+        if (progress > PIVOT_PHASE) {
+            const trailX = 16 + rocketSize / 2 + x;
+            const trailY = (stageH - 16 - rocketSize / 2) + y;
+            crashTrailPoints.push(`${trailX},${trailY}`);
+            const trailLine = document.getElementById('crashTrailLine');
+            if (trailLine) trailLine.setAttribute('points', crashTrailPoints.join(' '));
 
-        // Светящаяся точка-голова следа — всегда в текущем положении ракеты
-        const trailDot = document.getElementById('crashTrailDot');
-        if (trailDot) {
-            trailDot.setAttribute('cx', trailX);
-            trailDot.setAttribute('cy', trailY);
-            trailDot.style.opacity = '1';
+            // Светящаяся точка-голова следа — всегда в текущем положении ракеты
+            const trailDot = document.getElementById('crashTrailDot');
+            if (trailDot) {
+                trailDot.setAttribute('cx', trailX);
+                trailDot.setAttribute('cy', trailY);
+                trailDot.style.opacity = '1';
+            }
         }
     }
 
