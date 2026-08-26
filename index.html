@@ -92,7 +92,7 @@
                     <div class="game-name">Dream Cather</div>
                     <div class="game-description">Азартная классика</div>
                 </button>
-                <button class="game" onclick="showMessage('Игра «Краш» пока в разработке')">
+                <button class="game" onclick="openCrash()">
                     <div class="game-image crash"><div class="game-glow"></div><span class="game-emoji">🚀</span></div>
                     <div class="game-name">Краш</div>
                     <div class="game-description">Забери вовремя</div>
@@ -142,9 +142,9 @@
 
                         <!-- Капсула ручного выбора / изменения мин -->
                         <div class="mines-stepper-capsule" style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 2px 8px;">
-                            <button type="button" class="stepper-btn" id="minesStepDec" onclick="changeMinesBy(-1)" style="background: none; border: none; color: rgba(255, 255, 255, 0.25); font-size: 18px; font-weight: 900; cursor: pointer; padding: 0 6px; user-select: none;">-</button>
-                            <input type="number" id="customMinesInput" value="3" min="3" max="24" oninput="onCustomMinesInputChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 14px; font-weight: 900; text-align: center; width: 100%; outline: none; -moz-appearance: textfield;">
-                            <button type="button" class="stepper-btn" id="minesStepInc" onclick="changeMinesBy(1)" style="background: none; border: none; color: rgba(255, 255, 255, 0.25); font-size: 18px; font-weight: 900; cursor: pointer; padding: 0 6px; user-select: none;">+</button>
+                            <button type="button" class="stepper-btn" id="minesStepDec" onclick="changeMinesBy(-1)" style="background: none; border: none; color: rgba(255, 255, 255, 0.25); font-size: 18px; font-weight: 900; cursor: pointer; padding: 0 6px; min-width: 24px; flex-shrink: 0; user-select: none;">-</button>
+                            <input type="number" id="customMinesInput" value="3" min="3" max="24" oninput="onCustomMinesInputChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 22px; font-weight: 900; text-align: center; flex: 1; min-width: 0; outline: none; -moz-appearance: textfield;">
+                            <button type="button" class="stepper-btn" id="minesStepInc" onclick="changeMinesBy(1)" style="background: none; border: none; color: rgba(255, 255, 255, 0.25); font-size: 18px; font-weight: 900; cursor: pointer; padding: 0 6px; min-width: 24px; flex-shrink: 0; user-select: none;">+</button>
                         </div>
                     </div>
                 </div>
@@ -240,6 +240,49 @@
         <section class="wheel-rewards" style="margin-top: 20px;">
             <div class="section-title"><h2>Сектора</h2></div>
             <div class="reward-list" id="rewardList" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px;"></div>
+        </section>
+    </main>
+
+    <!-- ==================== КРАШ ==================== -->
+    <main id="crashPage" class="crash-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Краш</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card">
+            <h2>Ракета</h2>
+            <p class="wheel-subtitle">Заберите коэффициент, пока ракета не взорвалась!</p>
+
+            <div id="crashStage" style="position: relative; height: 220px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
+                <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; font-size: 34px; transition: transform 0.08s linear;">🚀</div>
+                <div style="position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); text-align:center; width: 100%;">
+                    <strong id="crashMultiplier" style="display:block; font-size: 34px; font-weight: 900; color:#fff;">1.00x</strong>
+                    <div id="crashStatus" style="font-size: 12px; color:#888; font-weight:700; margin-top:4px;">Загрузка...</div>
+                </div>
+            </div>
+
+            <div id="crashHistoryList" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom: 14px;"></div>
+
+            <div class="ctrl-box">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="crashBetInput" placeholder="0.10" min="0.1" step="any">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustCrashBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustCrashBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setCrashMaxBet()">MAX</button>
+                </div>
+            </div>
+
+            <button class="mines-main-btn" id="crashActionBtn" onclick="handleCrashAction()" style="margin-top: 14px; width: 100%;">
+                Сделать ставку
+            </button>
         </section>
     </main>
 
@@ -423,4 +466,3 @@
 <script src="script.js"></script>
 </body>
 </html>
-
