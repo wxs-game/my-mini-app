@@ -2230,5 +2230,7 @@ window.toggleProfileCustomizer = toggleProfileCustomizer;
 window.clickMinesTile = clickMinesTile;
 window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
+window.openPickaxe = openPickaxe;
+window.startPickaxeGame = startPickaxeGame;
 
 })();
