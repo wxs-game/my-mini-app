@@ -236,6 +236,16 @@
             <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 12px; width: 100%;">
                 БРОСИТЬ КИРКУ
             </button>
+
+            <button class="img-customizer-toggle-btn" onclick="toggleImageCustomizer()">
+                🖼 Свои картинки блоков и кирок
+            </button>
+            <div id="imageCustomizerBox" class="img-customizer-box hidden">
+                <h3>Блоки</h3>
+                <div id="imageCustomBlocksGrid" class="img-custom-grid"></div>
+                <h3>Кирки</h3>
+                <div id="imageCustomPickaxesGrid" class="img-custom-grid"></div>
+            </div>
         </div>
     </section>
 </main>
