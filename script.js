@@ -910,6 +910,8 @@ function endCrashRound() {
 
     if (crashRocketAnim) crashRocketAnim.pause();
     if (rocketEl) rocketEl.style.opacity = '0';
+    const trailDotAtEnd = document.getElementById('crashTrailDot');
+    if (trailDotAtEnd) trailDotAtEnd.style.opacity = '0';
     if (explosionEl) {
         explosionEl.style.transform = rocketEl ? rocketEl.style.transform : 'translate(0px, 0px)';
         explosionEl.style.display = 'block';
@@ -1095,7 +1097,7 @@ function renderCrashUI() {
         }
 
         if (rocketEl) {
-            rocketEl.style.transform = 'translate(0px, 0px) rotate(-45deg)';
+            rocketEl.style.transform = 'translate(0px, 0px) rotate(-30deg)';
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
 
@@ -1107,6 +1109,9 @@ function renderCrashUI() {
 
         const trailLineWaiting = document.getElementById('crashTrailLine');
         if (trailLineWaiting) trailLineWaiting.setAttribute('points', '');
+
+        const trailDotWaiting = document.getElementById('crashTrailDot');
+        if (trailDotWaiting) trailDotWaiting.style.opacity = '0';
 
         if (betInput) betInput.disabled = crashGame.betPlaced;
 
@@ -1132,18 +1137,41 @@ function renderCrashUI() {
     if (rocketEl) rocketEl.style.opacity = '1';
 
     if (rocketEl) {
-        // Траектория строго под 45° (ровный "правый угол" подъёма) — x и y растут одинаково
+        // Изогнутая траектория (как на референсе): сначала диагональный
+        // подъём, затем плавный изгиб почти в вертикаль. x — с замедлением
+        // (ease-out), y — с ускорением (ease-in), поэтому кривая закругляется вверх.
         const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
-        const x = progress * 150;
-        const y = -progress * 150;
-        rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(-45deg)`;
 
-        // След ракеты — рисуем линию траектории по мере полёта
-        const trailX = 16 + 27 + x;
-        const trailY = (220 - 16 - 27) + y;
+        const rocketSize = 170;
+        const stageElForSize = document.getElementById('crashStage');
+        const stageW = stageElForSize ? stageElForSize.clientWidth : 300;
+        const stageH = stageElForSize ? stageElForSize.clientHeight : 340;
+        const maxX = Math.max(40, stageW - rocketSize - 32);
+        const maxY = Math.max(40, stageH - rocketSize - 32);
+
+        const x = maxX * Math.pow(progress, 0.55);
+        const y = -maxY * Math.pow(progress, 1.8);
+
+        // Угол наклона ракеты нарастает по ходу движения — от лёгкого
+        // диагонального старта до почти вертикального полёта вверх.
+        const angle = -30 - progress * 58;
+
+        rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(${angle}deg)`;
+
+        // След ракеты — рисуем светящуюся линию траектории по мере полёта
+        const trailX = 16 + rocketSize / 2 + x;
+        const trailY = (stageH - 16 - rocketSize / 2) + y;
         crashTrailPoints.push(`${trailX},${trailY}`);
         const trailLine = document.getElementById('crashTrailLine');
         if (trailLine) trailLine.setAttribute('points', crashTrailPoints.join(' '));
+
+        // Светящаяся точка-голова следа — всегда в текущем положении ракеты
+        const trailDot = document.getElementById('crashTrailDot');
+        if (trailDot) {
+            trailDot.setAttribute('cx', trailX);
+            trailDot.setAttribute('cy', trailY);
+            trailDot.style.opacity = '1';
+        }
     }
 
     // Тряска экрана: чем больше множитель (x), тем сильнее трясёт камеру
