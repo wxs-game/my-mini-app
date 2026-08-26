@@ -87,11 +87,11 @@
         /* Состояние после краша: след и точка становятся красными */
         #crashTrailLine.crash-trail-crashed {
             stroke: #ff3b3b;
-            filter: drop-shadow(0 0 5px #ff3b3b) drop-shadow(0 0 16px #ff2b2b) drop-shadow(0 0 34px rgba(255,43,43,0.65)) !important;
+            filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 24px #ff2b2b) drop-shadow(0 0 50px rgba(255,43,43,0.75)) drop-shadow(0 0 90px rgba(255,43,43,0.45)) !important;
         }
         #crashTrailDot.crash-trail-crashed {
             fill: #ffdada;
-            filter: drop-shadow(0 0 6px #ff3b3b) drop-shadow(0 0 20px #ff2b2b) drop-shadow(0 0 40px rgba(255,43,43,0.85)) !important;
+            filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 28px #ff2b2b) drop-shadow(0 0 55px rgba(255,43,43,0.9)) drop-shadow(0 0 95px rgba(255,43,43,0.5)) !important;
         }
 
         /* Коэффициент во время полёта — сверху слева, с неоновым glow.
@@ -357,11 +357,11 @@
 
             <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
                 <svg id="crashTrail" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
-                    <polyline id="crashTrailLine" points="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 5px #3dff9a) drop-shadow(0 0 16px #2ecc71) drop-shadow(0 0 34px rgba(46,204,113,0.65));"/>
-                    <circle id="crashTrailDot" cx="0" cy="0" r="12" fill="#eafff2" style="opacity:0; filter: drop-shadow(0 0 6px #3dff9a) drop-shadow(0 0 20px #2ecc71) drop-shadow(0 0 40px rgba(46,204,113,0.85));"/>
+                    <path id="crashTrailLine" d="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 24px #2ecc71) drop-shadow(0 0 50px rgba(46,204,113,0.75)) drop-shadow(0 0 90px rgba(46,204,113,0.45));"/>
+                    <circle id="crashTrailDot" cx="0" cy="0" r="13" fill="#eafff2" style="opacity:0; filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 28px #2ecc71) drop-shadow(0 0 55px rgba(46,204,113,0.9)) drop-shadow(0 0 95px rgba(46,204,113,0.5));"/>
                 </svg>
-                <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:170px; height:170px; transition: transform 0.08s linear;"></div>
-                <div id="crashExplosion" style="position:absolute; left:16px; bottom:16px; width:170px; height:170px; font-size:90px; line-height:170px; text-align:center; display:none; transition: transform 0.08s linear;">💥</div>
+                <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; transition: transform 0.08s linear;"></div>
+                <div id="crashExplosion" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; font-size:100px; line-height:200px; text-align:center; display:none; transition: transform 0.08s linear;">💥</div>
                 <div id="crashCenterInfo" style="position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); text-align:center; width: 100%;">
                     <strong id="crashMultiplier" style="display:block; font-size: 34px; font-weight: 900; color:#fff;">1.00x</strong>
                     <div id="crashStatus" style="font-size: 12px; color:#888; font-weight:700; margin-top:4px;">Загрузка...</div>
