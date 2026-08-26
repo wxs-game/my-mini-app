@@ -64,13 +64,34 @@
             50%      { transform: scale(1.1); }
         }
 
-        /* Пульсирующая светящаяся точка на конце траектории ракеты */
+        /* Пульсирующая светящаяся точка на конце траектории ракеты.
+           Анимация включена ТОЛЬКО через класс .crash-dot-live (во время
+           реального полёта) — если держать её постоянно включённой на
+           #crashTrailDot, бесконечная CSS-анимация переопределяет
+           opacity, заданный из JS, и точка "просвечивает" в паузе между
+           раундами (в углу 0,0 или в месте прошлого краша), даже когда
+           JS явно пытается её спрятать. */
         @keyframes crashDotPulse {
             0%, 100% { r: 7; opacity: 1; }
             50%      { r: 12; opacity: 0.7; }
         }
         #crashTrailDot {
+            transition: opacity 0.9s ease;
+        }
+        #crashTrailDot.crash-dot-live {
             animation: crashDotPulse 1s ease-in-out infinite;
+        }
+        #crashTrailLine {
+            transition: opacity 0.9s ease, stroke 0.15s ease;
+        }
+        /* Состояние после краша: след и точка становятся красными */
+        #crashTrailLine.crash-trail-crashed {
+            stroke: #ff3b3b;
+            filter: drop-shadow(0 0 5px #ff3b3b) drop-shadow(0 0 16px #ff2b2b) drop-shadow(0 0 34px rgba(255,43,43,0.65)) !important;
+        }
+        #crashTrailDot.crash-trail-crashed {
+            fill: #ffdada;
+            filter: drop-shadow(0 0 6px #ff3b3b) drop-shadow(0 0 20px #ff2b2b) drop-shadow(0 0 40px rgba(255,43,43,0.85)) !important;
         }
 
         /* Коэффициент во время полёта — сверху слева, с неоновым glow.
