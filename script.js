@@ -725,8 +725,8 @@ const CRASH_WAIT_MS = 5000;
 
 // Скорость роста коэффициента: x2 за 10 секунд полёта (замедленный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
-// Время «раскачки» — сколько мс идёт медленный, плавно ускоряющийся разгон
-const CRASH_SLOW_START_MS = 6000;
+// Время «раскачки» — увеличено в 2.5 раза (с 6000 мс до 15000 мс / 15 сек)
+const CRASH_SLOW_START_MS = 15000;
 const CRASH_SLOW_START_TARGET = 1.5;
 
 let crashGame = {
@@ -936,7 +936,7 @@ function endCrashRound() {
     if (crashHistory.length > 15) crashHistory.pop();
     renderCrashHistory();
 
-    if (tg?.HapticFeedback) {
+    if (window.tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
 
@@ -1063,7 +1063,7 @@ async function cashOutCrash() {
     crashGame.cashedOut = true;
     crashGame.isProcessing = false;
 
-    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
 
     renderCrashUI();
@@ -1143,7 +1143,8 @@ function renderCrashUI() {
             const centerXWait = (stageW - 200) / 2 - 16;
             const centerYWait = 16 - (stageH - 200) / 2;
             
-            dom.rocketEl.style.transform = `translate3d(${centerXWait}px, ${centerYWait}px, 0px) rotate(0deg)`;
+            // Фикс стартовой позиции: ракета смотрит ровно 45° (вертикально) в паузе
+            dom.rocketEl.style.transform = `translate3d(${centerXWait}px, ${centerYWait}px, 0px) rotate(45deg)`;
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
 
@@ -1189,12 +1190,11 @@ function renderCrashUI() {
 
         const elapsed = Math.max(0, performance.now() - crashGame.startTime);
 
-let angle = 45;
+        // Плавный поворот от 45° (вертикально) к -45° (горизонтально) за 15 секунд
+        let angle = 45;
         if (elapsed > 1000) {
-            const progress = Math.min(1, (elapsed - 1000) / 6000);
+            const progress = Math.min(1, (elapsed - 1000) / 15000);
             const easedProgress = Math.pow(progress, 1.2);
-            
-            // Плавно вычитаем 90 градусов (от +45° к -45°)
             angle = 45 - (90 * easedProgress);
         }
 
