@@ -717,7 +717,7 @@ function endMinesGame(isWin) {
 }
 
 /* =========================
-   КРАШ (РАКЕТА)
+    КРАШ (РАКЕТА)
 ========================= */
 
 // Пауза между раундами (в это же время принимаются ставки на следующий раунд)
@@ -726,7 +726,6 @@ const CRASH_WAIT_MS = 5000;
 // Скорость роста коэффициента: x2 за 10 секунд полёта (замедленный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
 // Время «раскачки» — сколько мс идёт медленный, плавно ускоряющийся разгон
-// коэффициента от 1.00x до 1.50x (после этого включается обычный экспоненциальный рост).
 const CRASH_SLOW_START_MS = 6000;
 const CRASH_SLOW_START_TARGET = 1.5;
 
@@ -748,15 +747,36 @@ let crashLoopStarted = false;
 let crashHistory = [];      // последние коэффициенты, самый новый — первый
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
 let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
-let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты (вместо эмодзи)
+let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты
 
-// Загружает анимацию ракеты из твоего Telegram-стикера один раз.
-// Данные разбиты на несколько частей (rocket-data-part1.js ... part8.js,
-// подключаются в index.html ДО script.js) — так удобнее и надёжнее
-// заливать на GitHub, чем один большой файл целиком.
+// Кэш DOM-элементов для исключения лишних поисков при каждом кадре (60 FPS)
+let crashDomCache = null;
+
+function getCrashDom() {
+    if (!crashDomCache) {
+        crashDomCache = {
+            statusEl: document.getElementById('crashStatus'),
+            multEl: document.getElementById('crashMultiplier'),
+            rocketEl: document.getElementById('crashRocket'),
+            actionBtn: document.getElementById('crashActionBtn'),
+            betInput: document.getElementById('crashBetInput'),
+            stageEl: document.getElementById('crashStage'),
+            countdownEl: document.getElementById('crashCountdown'),
+            centerInfoEl: document.getElementById('crashCenterInfo'),
+            explosionEl: document.getElementById('crashExplosion'),
+            trailLine: document.getElementById('crashTrailLine'),
+            trailDot: document.getElementById('crashTrailDot'),
+            topLeftMult: document.getElementById('crashMultTopLeft'),
+            historyList: document.getElementById('crashHistoryList')
+        };
+    }
+    return crashDomCache;
+}
+
+// Загружает анимацию ракеты
 function initCrashRocketAnim() {
-    const container = document.getElementById('crashRocket');
-    if (!container || crashRocketAnim) return;
+    const dom = getCrashDom();
+    if (!dom.rocketEl || crashRocketAnim) return;
 
     let animationData = null;
     if (window.ROCKET_DATA_CHUNKS && window.ROCKET_DATA_CHUNKS.length) {
@@ -768,16 +788,15 @@ function initCrashRocketAnim() {
     }
 
     if (typeof lottie === 'undefined' || !animationData) {
-        // Запасной вариант, если библиотека/данные почему-то не подгрузились
-        container.textContent = '🚀';
-        container.style.fontSize = '34px';
-        container.style.lineHeight = '54px';
-        container.style.textAlign = 'center';
+        dom.rocketEl.textContent = '🚀';
+        dom.rocketEl.style.fontSize = '34px';
+        dom.rocketEl.style.lineHeight = '54px';
+        dom.rocketEl.style.textAlign = 'center';
         return;
     }
 
     crashRocketAnim = lottie.loadAnimation({
-        container,
+        container: dom.rocketEl,
         renderer: 'svg',
         loop: true,
         autoplay: true,
@@ -797,9 +816,6 @@ function initCrashPage() {
     initCrashRocketAnim();
 }
 
-// Движок раундов запускается один раз при старте приложения и работает
-// в фоне независимо от того, открыта ли страница Краш — как настоящий
-// непрерывный раунд, к которому можно "подключиться" в любой момент.
 function startCrashEngine() {
     if (crashLoopStarted) return;
     crashLoopStarted = true;
@@ -828,10 +844,6 @@ function beginWaitingPhase() {
     }, 100);
 }
 
-// Точка взрыва — аналогично Минам закладываем ~5% преимущество казино
-// (95% RTP). Стандартная для краш-игр формула: с вероятностью houseEdge
-// раунд лопается мгновенно на 1.00x, иначе коэффициент разыгрывается по
-// распределению 1 / (1 - r), что в среднем даёт нужный RTP.
 function generateCrashPoint() {
     const houseEdge = 0.05;
     const r = Math.random();
@@ -847,44 +859,42 @@ function beginFlyingPhase() {
     crashGame.startTime = performance.now();
 
     crashTrailPoints = [];
-    const trailLine = document.getElementById('crashTrailLine');
-    if (trailLine) {
-        trailLine.setAttribute('d', '');
-        trailLine.classList.remove('crash-trail-crashed');
-        trailLine.style.opacity = '1';
+    const dom = getCrashDom();
+    
+    if (dom.trailLine) {
+        dom.trailLine.setAttribute('d', '');
+        dom.trailLine.classList.remove('crash-trail-crashed');
+        dom.trailLine.style.opacity = '1';
     }
-    const trailDotStart = document.getElementById('crashTrailDot');
-    if (trailDotStart) {
-        trailDotStart.classList.remove('crash-trail-crashed');
-        trailDotStart.classList.remove('crash-dot-live');
-        trailDotStart.style.opacity = '0';
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-trail-crashed', 'crash-dot-live');
+        dom.trailDot.style.opacity = '0';
     }
 
-    const topLeftMult = document.getElementById('crashMultTopLeft');
-    if (topLeftMult) {
-        topLeftMult.textContent = '1.00x';
-        topLeftMult.classList.remove('crashed');
-        topLeftMult.style.display = 'block';
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = '1.00x';
+        dom.topLeftMult.classList.remove('crashed');
+        dom.topLeftMult.style.display = 'block';
     }
 
     renderCrashUI();
     tickCrash();
 }
 
-// Резкая тряска экрана с затуханием — используется при взрыве ракеты.
+// Резкая тряска экрана с затуханием на GPU
 function explosionShake(el, duration = 500, magnitude = 20) {
     if (!el) return;
     const start = performance.now();
     function frame(now) {
         const t = now - start;
         if (t >= duration) {
-            el.style.transform = 'translate(0px, 0px)';
+            el.style.transform = 'translate3d(0px, 0px, 0px)';
             return;
         }
         const decay = 1 - t / duration;
         const dx = (Math.random() - 0.5) * magnitude * decay;
         const dy = (Math.random() - 0.5) * magnitude * decay;
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        el.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
         requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
@@ -893,15 +903,10 @@ function explosionShake(el, duration = 500, magnitude = 20) {
 function tickCrash() {
     const elapsed = performance.now() - crashGame.startTime;
 
-    // -----------------------------------------------------------------
-    // РОСТ КОЭФФИЦИЕНТА: сначала медленная «раскачка» (плавное ускорение
-    // от 1.00x до 1.50x за CRASH_SLOW_START_MS), затем обычный
-    // экспоненциальный рост, стартующий с той же точки без рывка.
-    // -----------------------------------------------------------------
     let rawMult;
     if (elapsed < CRASH_SLOW_START_MS) {
         const p = elapsed / CRASH_SLOW_START_MS;
-        const eased = Math.pow(p, 3); // медленный старт, плавно ускоряется к концу фазы
+        const eased = Math.pow(p, 3);
         rawMult = 1 + (CRASH_SLOW_START_TARGET - 1) * eased;
     } else {
         const elapsedAfter = elapsed - CRASH_SLOW_START_MS;
@@ -935,73 +940,52 @@ function endCrashRound() {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
 
-    // Взрыв: анимация ракеты прячется, вместо неё на 3 секунды показывается
-    // 💥 ровно в той точке, где оборвался полёт ракеты — без текстовых
-    // подписей и без всплывающего сообщения от Telegram
-    const stageEl = document.getElementById('crashStage');
-    const rocketEl = document.getElementById('crashRocket');
-    const explosionEl = document.getElementById('crashExplosion');
-    const multEl = document.getElementById('crashMultiplier');
-    const topLeftMult = document.getElementById('crashMultTopLeft');
-    const actionBtn = document.getElementById('crashActionBtn');
+    const dom = getCrashDom();
 
     if (crashRocketAnim) crashRocketAnim.pause();
-    if (rocketEl) rocketEl.style.opacity = '0';
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
 
-    // След траектории и точка красятся в красный ровно на месте краша,
-    // остаются видны какое-то время, а затем плавно растворяются — вместо
-    // мгновенного стирания. Полностью убираем их (и точку, и линию) чуть
-    // раньше конца паузы, чтобы к следующему раунду сцена была чистой.
-    const trailLineAtEnd = document.getElementById('crashTrailLine');
-    const trailDotAtEnd = document.getElementById('crashTrailDot');
-    if (trailLineAtEnd) {
-        trailLineAtEnd.classList.add('crash-trail-crashed');
+    if (dom.trailLine) {
+        dom.trailLine.classList.add('crash-trail-crashed');
     }
-    if (trailDotAtEnd) {
-        trailDotAtEnd.classList.remove('crash-dot-live'); // гасим пульс, чтобы не мешал плавному исчезновению
-        trailDotAtEnd.classList.add('crash-trail-crashed');
-        trailDotAtEnd.style.opacity = '1';
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-dot-live');
+        dom.trailDot.classList.add('crash-trail-crashed');
+        dom.trailDot.style.opacity = '1';
     }
+    
     setTimeout(() => {
-        if (trailLineAtEnd) trailLineAtEnd.style.opacity = '0';
-        if (trailDotAtEnd) trailDotAtEnd.style.opacity = '0';
+        if (dom.trailLine) dom.trailLine.style.opacity = '0';
+        if (dom.trailDot) dom.trailDot.style.opacity = '0';
     }, 1200);
+
     setTimeout(() => {
-        if (trailLineAtEnd) trailLineAtEnd.setAttribute('d', '');
+        if (dom.trailLine) dom.trailLine.setAttribute('d', '');
         crashTrailPoints = [];
     }, 2200);
 
-    // TODO: когда будет готова .tgs-анимация взрыва — подключить её сюда
-    // тем же способом, что и ракету (см. initCrashRocketAnim): загрузить
-    // Lottie-анимацию в #crashExplosion через lottie.loadAnimation({...})
-    // и запускать её здесь через .goToAndPlay(0, true) вместо эмодзи 💥.
-    if (explosionEl) {
-        // Берём только смещение (translate) из последней позиции ракеты,
-        // без её угла поворота — взрыв должен остаться ровным, но точно
-        // на месте, где оборвался полёт.
-        let offsetTransform = 'translate(0px, 0px)';
-        if (rocketEl && rocketEl.style.transform) {
-            const m = rocketEl.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
-            if (m) offsetTransform = `translate(${m[1]}px, ${m[2]}px)`;
+    if (dom.explosionEl) {
+        let offsetTransform = 'translate3d(0px, 0px, 0px)';
+        if (dom.rocketEl && dom.rocketEl.style.transform) {
+            const m = dom.rocketEl.style.transform.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/);
+            if (m) offsetTransform = `translate3d(${m[1]}px, ${m[2]}px, 0px)`;
         }
-        explosionEl.style.transform = offsetTransform;
-        explosionEl.style.display = 'block';
+        dom.explosionEl.style.transform = offsetTransform;
+        dom.explosionEl.style.display = 'block';
     }
-    if (multEl) multEl.style.color = '#e74c3c';
-    if (topLeftMult) {
-        topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
-        topLeftMult.classList.add('crashed');
-        topLeftMult.style.display = 'block';
-    }
-    if (actionBtn) {
-        actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
-        actionBtn.disabled = true;
-    }
-    explosionShake(stageEl, 500, 20);
 
-    // Пауза между раундами — 5 секунд, в течение неё же принимаются
-    // ставки на следующий полёт (см. beginWaitingPhase). Взрыв держим
-    // на экране 3 секунды, прежде чем запускать новый раунд ожидания.
+    if (dom.multEl) dom.multEl.style.color = '#e74c3c';
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        dom.topLeftMult.classList.add('crashed');
+        dom.topLeftMult.style.display = 'block';
+    }
+    if (dom.actionBtn) {
+        dom.actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
+        dom.actionBtn.disabled = true;
+    }
+
+    explosionShake(dom.stageEl, 500, 20);
     setTimeout(beginWaitingPhase, 3000);
 }
 
@@ -1010,8 +994,8 @@ async function placeCrashBet() {
     if (crashGame.isProcessing) return;
     if (!lockEconomy()) return;
 
-    const input = document.getElementById('crashBetInput');
-    const bet = roundMoney(parseFloat(input?.value));
+    const dom = getCrashDom();
+    const bet = roundMoney(parseFloat(dom.betInput?.value));
 
     if (!bet || isNaN(bet) || bet < 0.10) {
         showMessage("Минимальная ставка — 0.10 $!");
@@ -1034,8 +1018,6 @@ async function placeCrashBet() {
 
     const debited = await saveUserData();
     if (!debited) {
-        // Списание не сохранилось — откатываем и НЕ засчитываем ставку,
-        // иначе это был бы бесплатный раунд.
         restoreBalanceState(snapshot);
         showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         crashGame.isProcessing = false;
@@ -1071,9 +1053,6 @@ async function cashOutCrash() {
     const credited = await saveUserDataWithRetry();
 
     if (!credited) {
-        // Не удалось сохранить выигрыш даже после повтора — откатываем
-        // локально, но ставка остаётся активной, чтобы можно было
-        // попробовать забрать ещё раз до конца полёта.
         restoreBalanceState(snapshot);
         showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
         crashGame.isProcessing = false;
@@ -1103,219 +1082,170 @@ function handleCrashAction() {
 
 function adjustCrashBet(factor) {
     if (crashGame.betPlaced) return;
-    const input = document.getElementById('crashBetInput');
-    if (!input) return;
+    const dom = getCrashDom();
+    if (!dom.betInput) return;
 
-    let current = parseFloat(input.value);
+    let current = parseFloat(dom.betInput.value);
     if (isNaN(current) || current < 0.10) {
         current = 0.10;
     } else {
         current = Math.max(0.10, current * factor);
     }
-    input.value = current.toFixed(2);
+    dom.betInput.value = current.toFixed(2);
 }
 
 function setCrashMaxBet() {
     if (crashGame.betPlaced) return;
-    const input = document.getElementById('crashBetInput');
-    if (input) input.value = currentBalance.toFixed(2);
+    const dom = getCrashDom();
+    if (dom.betInput) dom.betInput.value = currentBalance.toFixed(2);
 }
 
 function renderCrashHistory() {
-    const list = document.getElementById('crashHistoryList');
-    if (!list) return;
+    const dom = getCrashDom();
+    if (!dom.historyList) return;
 
-    list.innerHTML = crashHistory.map(point => {
+    dom.historyList.innerHTML = crashHistory.map(point => {
         const color = point < 1.5 ? '#e74c3c' : (point >= 2 ? '#2ecc71' : '#f1c40f');
         return `<span style="display:inline-block; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:4px 8px; font-size:11px; font-weight:800; color:${color};">${point.toFixed(2)}x</span>`;
     }).join('');
 }
 
 function renderCrashUI() {
-    const statusEl = document.getElementById('crashStatus');
-    const multEl = document.getElementById('crashMultiplier');
-    const rocketEl = document.getElementById('crashRocket');
-    const actionBtn = document.getElementById('crashActionBtn');
-    const betInput = document.getElementById('crashBetInput');
-
-    if (!statusEl || !multEl || !actionBtn) return;
+    const dom = getCrashDom();
+    if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
 
     if (crashGame.phase === 'waiting') {
         const secLeft = Math.max(0, Math.ceil((crashGame.phaseEndsAt - Date.now()) / 1000));
-        statusEl.textContent = lastCrashPoint !== null
+        dom.statusEl.textContent = lastCrashPoint !== null
             ? `Прошлый раунд: ${lastCrashPoint.toFixed(2)}x · Старт через ${secLeft}с`
             : `Старт через ${secLeft}с`;
 
-        multEl.textContent = '1.00x';
-        multEl.style.color = '#fff';
-
-        const countdownEl = document.getElementById('crashCountdown');
-        const centerInfoEl = document.getElementById('crashCenterInfo');
+        dom.multEl.textContent = '1.00x';
+        dom.multEl.style.color = '#fff';
 
         if (secLeft >= 1 && secLeft <= 5) {
-            // Большой переливающийся отсчёт вместо мелкого текста:
-            // 5 — зелёный, 4-3 — жёлтый, 2-1 — красный
-            if (countdownEl) {
-                countdownEl.textContent = String(secLeft);
-                countdownEl.classList.remove('cc-green', 'cc-yellow', 'cc-red');
-                if (secLeft === 5) countdownEl.classList.add('cc-green');
-                else if (secLeft >= 3) countdownEl.classList.add('cc-yellow');
-                else countdownEl.classList.add('cc-red');
-                countdownEl.style.display = 'flex';
+            if (dom.countdownEl) {
+                dom.countdownEl.textContent = String(secLeft);
+                dom.countdownEl.className = 'crash-countdown ' + (secLeft === 5 ? 'cc-green' : (secLeft >= 3 ? 'cc-yellow' : 'cc-red'));
+                dom.countdownEl.style.display = 'flex';
             }
-            if (centerInfoEl) centerInfoEl.style.opacity = '0';
-            if (rocketEl) rocketEl.style.opacity = '0';
+            if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
+            if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
         } else {
-            if (countdownEl) countdownEl.style.display = 'none';
-            if (centerInfoEl) centerInfoEl.style.opacity = '1';
-            if (rocketEl) rocketEl.style.opacity = '1';
+            if (dom.countdownEl) dom.countdownEl.style.display = 'none';
+            if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '1';
+            if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
         }
 
-        if (rocketEl) {
-            // Ракета в ожидании стоит в центре сцены в "лежачем" положении (0°)
-            const rocketSize = 200;
-            const stageElWaitPos = document.getElementById('crashStage');
-            const stageWWait = stageElWaitPos ? stageElWaitPos.clientWidth : 300;
-            const stageHWait = stageElWaitPos ? stageElWaitPos.clientHeight : 340;
-            const centerXWait = (stageWWait - rocketSize) / 2 - 16;
-            const centerYWait = 16 - (stageHWait - rocketSize) / 2;
-            rocketEl.style.transform = `translate(${centerXWait}px, ${centerYWait}px) rotate(0deg)`;
+        if (dom.rocketEl) {
+            const stageW = dom.stageEl ? dom.stageEl.clientWidth : 300;
+            const stageH = dom.stageEl ? dom.stageEl.clientHeight : 340;
+            const centerXWait = (stageW - 200) / 2 - 16;
+            const centerYWait = 16 - (stageH - 200) / 2;
+            
+            dom.rocketEl.style.transform = `translate3d(${centerXWait}px, ${centerYWait}px, 0px) rotate(0deg)`;
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
 
-        const explosionElWaiting = document.getElementById('crashExplosion');
-        if (explosionElWaiting) explosionElWaiting.style.display = 'none';
+        if (dom.explosionEl) dom.explosionEl.style.display = 'none';
+        if (dom.stageEl) dom.stageEl.style.transform = 'translate3d(0px, 0px, 0px)';
 
-        const stageElWaiting = document.getElementById('crashStage');
-        if (stageElWaiting) stageElWaiting.style.transform = 'translate(0px, 0px)';
-
-        const trailLineWaiting = document.getElementById('crashTrailLine');
-        if (trailLineWaiting) {
-            trailLineWaiting.setAttribute('d', '');
-            trailLineWaiting.classList.remove('crash-trail-crashed');
-            trailLineWaiting.style.opacity = '1';
+        if (dom.trailLine) {
+            dom.trailLine.setAttribute('d', '');
+            dom.trailLine.classList.remove('crash-trail-crashed');
+            dom.trailLine.style.opacity = '1';
         }
 
-        const trailDotWaiting = document.getElementById('crashTrailDot');
-        if (trailDotWaiting) {
-            trailDotWaiting.classList.remove('crash-dot-live');
-            trailDotWaiting.classList.remove('crash-trail-crashed');
-            trailDotWaiting.style.opacity = '0';
+        if (dom.trailDot) {
+            dom.trailDot.classList.remove('crash-dot-live', 'crash-trail-crashed');
+            dom.trailDot.style.opacity = '0';
         }
 
-        const topLeftMultWaiting = document.getElementById('crashMultTopLeft');
-        if (topLeftMultWaiting) topLeftMultWaiting.style.display = 'none';
+        if (dom.topLeftMult) dom.topLeftMult.style.display = 'none';
+        if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced;
 
-        if (betInput) betInput.disabled = crashGame.betPlaced;
-
-        if (crashGame.betPlaced) {
-            actionBtn.textContent = 'Ставка принята';
-            actionBtn.disabled = true;
-        } else {
-            actionBtn.textContent = 'Сделать ставку';
-            actionBtn.disabled = false;
-        }
+        dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : 'Сделать ставку';
+        dom.actionBtn.disabled = crashGame.betPlaced;
         return;
     }
 
     // phase === 'flying'
-    const topLeftMult = document.getElementById('crashMultTopLeft');
-    if (topLeftMult) {
-        topLeftMult.textContent = crashGame.currentMult.toFixed(2) + 'x';
-        topLeftMult.classList.remove('crashed');
-        topLeftMult.style.display = 'block';
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = crashGame.currentMult.toFixed(2) + 'x';
+        dom.topLeftMult.classList.remove('crashed');
+        dom.topLeftMult.style.display = 'block';
     }
 
-    const countdownElFlying = document.getElementById('crashCountdown');
-    if (countdownElFlying) countdownElFlying.style.display = 'none';
-    const centerInfoElFlying = document.getElementById('crashCenterInfo');
-    if (centerInfoElFlying) centerInfoElFlying.style.opacity = '0';
-    if (rocketEl) rocketEl.style.opacity = '1';
+    if (dom.countdownEl) dom.countdownEl.style.display = 'none';
+    if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
 
-    if (rocketEl) {
-        const rocketSize = 200;
-        const stageElForSize = document.getElementById('crashStage');
-        const stageW = stageElForSize ? stageElForSize.clientWidth : 300;
-        const stageH = stageElForSize ? stageElForSize.clientHeight : 340;
+    if (dom.rocketEl) {
+        const stageW = dom.stageEl ? dom.stageEl.clientWidth : 300;
+        const stageH = dom.stageEl ? dom.stageEl.clientHeight : 340;
 
-        const centerX = (stageW - rocketSize) / 2 - 16;
-        const centerY = 16 - (stageH - rocketSize) / 2;
+        const centerX = (stageW - 200) / 2 - 16;
+        const centerY = 16 - (stageH - 200) / 2;
 
-        const currentM = crashGame.currentMult;
+        const elapsed = Math.max(0, performance.now() - crashGame.startTime);
 
-        // -----------------------------------------------------------------
-        // УГЛЫ НАКЛОНА: До 1.2x ракета лежит совершенно плашмя (0°),
-        // затем постепенно разворачивается носом вверх до -58° на высоких коэффах
-        // -----------------------------------------------------------------
-        let angle;
-        if (currentM <= 1.2) {
-            angle = 0;
-        } else {
-            const pUp = Math.min(1, Math.log(currentM / 1.2) / Math.log(10));
-            const easedUp = Math.pow(pUp, 1.4);
-            angle = -(58 * easedUp);
+        let angle = 0;
+        if (elapsed > 1000) {
+            const progress = Math.min(1, (elapsed - 1000) / 6000);
+            const easedProgress = Math.pow(progress, 1.2);
+            angle = -55 * easedProgress;
         }
 
-        rocketEl.style.transform = `translate(${centerX}px, ${centerY}px) rotate(${angle}deg)`;
+        dom.rocketEl.style.transform = `translate3d(${centerX}px, ${centerY}px, 0px) rotate(${angle}deg)`;
 
-        // -----------------------------------------------------------------
-        // ТРАЕКТОРИЯ: Начинает рисоваться сразу от 1.00x без задержек
-        // -----------------------------------------------------------------
         const trailStartX = stageW * 0.05;
         const trailStartY = stageH * 0.95;
         const trailEndX = stageW * 0.95;
         const trailEndY = stageH * 0.05;
 
+        const currentM = crashGame.currentMult;
         const trailProgress = Math.min(1, Math.log(currentM) / Math.log(15));
 
         const headX = trailStartX + (trailEndX - trailStartX) * trailProgress;
         const headY = trailStartY + (trailEndY - trailStartY) * trailProgress;
 
-        const trailLine = document.getElementById('crashTrailLine');
-        if (trailLine) {
+        if (dom.trailLine) {
             const segDx = headX - trailStartX;
             const segDy = headY - trailStartY;
             const segLen = Math.hypot(segDx, segDy) || 1;
-            const nx = -segDy / segLen;
-            const ny = segDx / segLen;
             const bow = 0.25 * segLen;
-            const midX = (trailStartX + headX) / 2;
-            const midY = (trailStartY + headY) / 2;
-            const ctrlX = midX + nx * bow;
-            const ctrlY = midY + ny * bow;
-            trailLine.setAttribute('d', `M ${trailStartX},${trailStartY} Q ${ctrlX},${ctrlY} ${headX},${headY}`);
+            const ctrlX = (trailStartX + headX) / 2 + (-segDy / segLen) * bow;
+            const ctrlY = (trailStartY + headY) / 2 + (segDx / segLen) * bow;
+            dom.trailLine.setAttribute('d', `M ${trailStartX},${trailStartY} Q ${ctrlX},${ctrlY} ${headX},${headY}`);
         }
 
-        const trailDot = document.getElementById('crashTrailDot');
-        if (trailDot) {
-            trailDot.setAttribute('cx', headX);
-            trailDot.setAttribute('cy', headY);
-            trailDot.style.opacity = '1';
-            trailDot.classList.add('crash-dot-live');
+        if (dom.trailDot) {
+            dom.trailDot.setAttribute('cx', headX);
+            dom.trailDot.setAttribute('cy', headY);
+            dom.trailDot.style.opacity = '1';
+            dom.trailDot.classList.add('crash-dot-live');
         }
     }
 
-    // Тряска экрана во время полета
-    const stageEl = document.getElementById('crashStage');
-    if (stageEl) {
-        const shakeStrength = Math.min(9, (crashGame.currentMult - 1) * 1.4);
+    if (dom.stageEl) {
+        const shakeStrength = Math.min(8, (crashGame.currentMult - 1) * 1.2);
         const dx = (Math.random() - 0.5) * shakeStrength;
         const dy = (Math.random() - 0.5) * shakeStrength;
-        stageEl.style.transform = `translate(${dx}px, ${dy}px)`;
+        dom.stageEl.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
     }
 
-    if (betInput) betInput.disabled = true;
+    if (dom.betInput) dom.betInput.disabled = true;
 
     if (crashGame.betPlaced && !crashGame.cashedOut) {
         const potential = (crashGame.bet * crashGame.currentMult).toFixed(2);
-        actionBtn.textContent = `Забрать ${potential}$`;
-        actionBtn.disabled = false;
+        dom.actionBtn.textContent = `Забрать ${potential}$`;
+        dom.actionBtn.disabled = false;
     } else if (crashGame.cashedOut) {
-        actionBtn.textContent = 'Выигрыш забран ✓';
-        actionBtn.disabled = true;
+        dom.actionBtn.textContent = 'Выигрыш забран ✓';
+        dom.actionBtn.disabled = true;
     } else {
-        actionBtn.textContent = 'Ждите следующего раунда';
-        actionBtn.disabled = true;
+        dom.actionBtn.textContent = 'Ждите следующего раунда';
+        dom.actionBtn.disabled = true;
     }
 }
 
