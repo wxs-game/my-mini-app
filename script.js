@@ -1189,11 +1189,13 @@ function renderCrashUI() {
 
         const elapsed = Math.max(0, performance.now() - crashGame.startTime);
 
-        let angle = 75;
+let angle = -45;
         if (elapsed > 1000) {
             const progress = Math.min(1, (elapsed - 1000) / 6000);
             const easedProgress = Math.pow(progress, 1.2);
-            angle = -50 * easedProgress;
+            
+            // Плавно прибавляем 90 градусов (от -45° к +45°)
+            angle = -45 + (90 * easedProgress);
         }
 
         dom.rocketEl.style.transform = `translate3d(${centerX}px, ${centerY}px, 0px) rotate(${angle}deg)`;
