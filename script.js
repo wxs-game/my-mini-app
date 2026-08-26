@@ -1189,7 +1189,7 @@ function renderCrashUI() {
 
         const elapsed = Math.max(0, performance.now() - crashGame.startTime);
 
-        let angle = 0;
+        let angle = -45;
         if (elapsed > 1000) {
             const progress = Math.min(1, (elapsed - 1000) / 6000);
             const easedProgress = Math.pow(progress, 1.2);
