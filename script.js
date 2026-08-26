@@ -1279,7 +1279,7 @@ const BLOCK_SIZE = 44; // Должно совпадать с --block-size в sty
 const SPRITE_SIZE = 38;
 const GRAVITY = 0.55;       // Ускорение свободного падения кирки (px/кадр²)
 const MAX_FALL_SPEED = 19;  // Максимальная скорость падения
-const BOUNCE_SPEED = -6.2;  // Отскок при ударе о ещё не разрушенную руду
+const BOUNCE_SPEED = -3.4;  // Лёгкий отскок при ударе о ещё не разрушенную руду (не перебивает ощущение падения)
 const START_FALL_SPEED = 2.4;
 
 let mineGridMap = [];  // Массив блоков шахты (каждая ячейка — независимый объект с durability)
@@ -1497,10 +1497,12 @@ function runMiningPhysics(pickaxe, bet) {
     let accumulatedMultiplier = 0;
 
     let curCol = Math.floor(GRID_COLS / 2); // Стартовая колонка — центр
-    let posY = 0;        // Пиксельная позиция кирки по вертикали
+    let posY = 0;        // Пиксельная позиция кирки по вертикали (растёт только вниз)
     let vy = START_FALL_SPEED;
     let rotation = 0;
     let brokenRow = 0; // ниже этой строки всё уже пройдено кабиной
+    let cameraY = 0;    // Плавная, МОНОТОННАЯ камера — никогда не откатывается назад,
+                         // поэтому отскок от прочной руды не выглядит как "полёт вверх"
 
     const sprite = document.getElementById('activePickaxeSprite');
     const worldEl = document.getElementById('mineWorld');
@@ -1624,11 +1626,16 @@ function runMiningPhysics(pickaxe, bet) {
         sprite.style.transform =
             `translate(calc(-50% + ${colCenterOffset + xOffset}px), ${posY}px) rotate(${rotation}deg)`;
 
-        // Камера плавно следует за киркой по пикселям, а не по строкам
+        // Камера плавно следует за киркой по пикселям, но НИКОГДА не откатывается
+        // назад — иначе короткие отскоки от прочной руды выглядят как "падение вверх".
+        // Вместо мгновенной привязки — плавное сглаживание (лерп) в одну сторону.
         const viewportH = viewportEl ? viewportEl.clientHeight : 330;
         const followThreshold = viewportH * 0.35;
-        const camY = Math.max(0, posY - followThreshold);
-        worldEl.style.transform = `translate(-50%, -${camY}px)`;
+        const desiredCameraY = Math.max(0, posY - followThreshold);
+        if (desiredCameraY > cameraY) {
+            cameraY += (desiredCameraY - cameraY) * 0.15;
+        }
+        worldEl.style.transform = `translate(-50%, -${cameraY}px)`;
 
         updateHud();
 
