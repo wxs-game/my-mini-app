@@ -744,6 +744,7 @@ let crashTimerHandle = null;
 let crashLoopStarted = false;
 let crashHistory = [];      // последние коэффициенты, самый новый — первый
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
+let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
 
 function openCrash() {
     showPage("crashPage");
@@ -805,8 +806,31 @@ function beginFlyingPhase() {
     crashGame.currentMult = 1.00;
     crashGame.startTime = performance.now();
 
+    crashTrailPoints = [];
+    const trailLine = document.getElementById('crashTrailLine');
+    if (trailLine) trailLine.setAttribute('points', '');
+
     renderCrashUI();
     tickCrash();
+}
+
+// Резкая тряска экрана с затуханием — используется при взрыве ракеты.
+function explosionShake(el, duration = 500, magnitude = 20) {
+    if (!el) return;
+    const start = performance.now();
+    function frame(now) {
+        const t = now - start;
+        if (t >= duration) {
+            el.style.transform = 'translate(0px, 0px)';
+            return;
+        }
+        const decay = 1 - t / duration;
+        const dx = (Math.random() - 0.5) * magnitude * decay;
+        const dy = (Math.random() - 0.5) * magnitude * decay;
+        el.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
 }
 
 function tickCrash() {
@@ -842,9 +866,16 @@ function endCrashRound() {
         showMessage(`Ракета взорвалась на ${crashGame.crashPoint.toFixed(2)}x. Ставка ${crashGame.bet.toFixed(2)}$ сгорела.`);
     }
 
+    // Взрыв: ракета превращается в 💥 и экран сильно трясётся
+    const stageEl = document.getElementById('crashStage');
+    const rocketEl = document.getElementById('crashRocket');
+    if (rocketEl) rocketEl.textContent = '💥';
+    explosionShake(stageEl, 500, 20);
+
     // Пауза между раундами — 5 секунд, в течение неё же принимаются
-    // ставки на следующий полёт (см. beginWaitingPhase).
-    beginWaitingPhase();
+    // ставки на следующий полёт (см. beginWaitingPhase). Небольшая
+    // задержка перед стартом паузы даёт взрыву доиграть до конца.
+    setTimeout(beginWaitingPhase, 550);
 }
 
 async function placeCrashBet() {
@@ -996,6 +1027,12 @@ function renderCrashUI() {
             rocketEl.style.transform = 'translate(0px, 0px) rotate(-45deg)';
         }
 
+        const stageElWaiting = document.getElementById('crashStage');
+        if (stageElWaiting) stageElWaiting.style.transform = 'translate(0px, 0px)';
+
+        const trailLineWaiting = document.getElementById('crashTrailLine');
+        if (trailLineWaiting) trailLineWaiting.setAttribute('points', '');
+
         if (betInput) betInput.disabled = crashGame.betPlaced;
 
         if (crashGame.betPlaced) {
@@ -1014,11 +1051,27 @@ function renderCrashUI() {
     multEl.style.color = '#2ecc71';
 
     if (rocketEl) {
-        // Простая траектория: чем выше коэффициент, тем выше и правее ракета
+        // Траектория строго под 45° (ровный "правый угол" подъёма) — x и y растут одинаково
         const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
-        const x = progress * 140;
-        const y = -progress * 160;
+        const x = progress * 150;
+        const y = -progress * 150;
         rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(-45deg)`;
+
+        // След ракеты — рисуем линию траектории по мере полёта
+        const trailX = 16 + 17 + x;
+        const trailY = (220 - 16 - 17) + y;
+        crashTrailPoints.push(`${trailX},${trailY}`);
+        const trailLine = document.getElementById('crashTrailLine');
+        if (trailLine) trailLine.setAttribute('points', crashTrailPoints.join(' '));
+    }
+
+    // Тряска экрана: чем больше множитель (x), тем сильнее трясёт камеру
+    const stageEl = document.getElementById('crashStage');
+    if (stageEl) {
+        const shakeStrength = Math.min(9, (crashGame.currentMult - 1) * 1.4);
+        const dx = (Math.random() - 0.5) * shakeStrength;
+        const dy = (Math.random() - 0.5) * shakeStrength;
+        stageEl.style.transform = `translate(${dx}px, ${dy}px)`;
     }
 
     if (betInput) betInput.disabled = true;
