@@ -1072,8 +1072,29 @@ function renderCrashUI() {
         multEl.textContent = '1.00x';
         multEl.style.color = '#fff';
 
+        const countdownEl = document.getElementById('crashCountdown');
+        const centerInfoEl = document.getElementById('crashCenterInfo');
+
+        if (secLeft >= 1 && secLeft <= 5) {
+            // Большой переливающийся отсчёт вместо мелкого текста:
+            // 5 — зелёный, 4-3 — жёлтый, 2-1 — красный
+            if (countdownEl) {
+                countdownEl.textContent = String(secLeft);
+                countdownEl.classList.remove('cc-green', 'cc-yellow', 'cc-red');
+                if (secLeft === 5) countdownEl.classList.add('cc-green');
+                else if (secLeft >= 3) countdownEl.classList.add('cc-yellow');
+                else countdownEl.classList.add('cc-red');
+                countdownEl.style.display = 'flex';
+            }
+            if (centerInfoEl) centerInfoEl.style.opacity = '0';
+            if (rocketEl) rocketEl.style.opacity = '0';
+        } else {
+            if (countdownEl) countdownEl.style.display = 'none';
+            if (centerInfoEl) centerInfoEl.style.opacity = '1';
+            if (rocketEl) rocketEl.style.opacity = '1';
+        }
+
         if (rocketEl) {
-            rocketEl.style.opacity = '1';
             rocketEl.style.transform = 'translate(0px, 0px) rotate(-45deg)';
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
@@ -1103,6 +1124,12 @@ function renderCrashUI() {
     statusEl.textContent = 'Полёт! 🚀';
     multEl.textContent = crashGame.currentMult.toFixed(2) + 'x';
     multEl.style.color = '#2ecc71';
+
+    const countdownElFlying = document.getElementById('crashCountdown');
+    if (countdownElFlying) countdownElFlying.style.display = 'none';
+    const centerInfoElFlying = document.getElementById('crashCenterInfo');
+    if (centerInfoElFlying) centerInfoElFlying.style.opacity = '1';
+    if (rocketEl) rocketEl.style.opacity = '1';
 
     if (rocketEl) {
         // Траектория строго под 45° (ровный "правый угол" подъёма) — x и y растут одинаково
