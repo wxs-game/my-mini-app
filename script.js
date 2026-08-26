@@ -748,14 +748,23 @@ let crashTrailPoints = [];  // точки следа ракеты за теку�
 let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты (вместо эмодзи)
 
 // Загружает анимацию ракеты из твоего Telegram-стикера один раз.
-// Данные лежат в window.ROCKET_ANIMATION_DATA (файл rocket-animation-data.js,
-// подключается в index.html ДО script.js) — так не нужен сетевой запрос
-// за отдельным json, и анимация точно появится независимо от хостинга.
+// Данные разбиты на несколько частей (rocket-data-part1.js ... part8.js,
+// подключаются в index.html ДО script.js) — так удобнее и надёжнее
+// заливать на GitHub, чем один большой файл целиком.
 function initCrashRocketAnim() {
     const container = document.getElementById('crashRocket');
     if (!container || crashRocketAnim) return;
 
-    if (typeof lottie === 'undefined' || !window.ROCKET_ANIMATION_DATA) {
+    let animationData = null;
+    if (window.ROCKET_DATA_CHUNKS && window.ROCKET_DATA_CHUNKS.length) {
+        try {
+            animationData = JSON.parse(window.ROCKET_DATA_CHUNKS.join(''));
+        } catch (e) {
+            animationData = null;
+        }
+    }
+
+    if (typeof lottie === 'undefined' || !animationData) {
         // Запасной вариант, если библиотека/данные почему-то не подгрузились
         container.textContent = '🚀';
         container.style.fontSize = '34px';
@@ -769,7 +778,7 @@ function initCrashRocketAnim() {
         renderer: 'svg',
         loop: true,
         autoplay: true,
-        animationData: window.ROCKET_ANIMATION_DATA
+        animationData: animationData
     });
 }
 
