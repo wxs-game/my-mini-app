@@ -725,6 +725,10 @@ const CRASH_WAIT_MS = 5000;
 
 // Скорость роста коэффициента: x2 за 10 секунд полёта (замедленный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
+// Время «раскачки» — сколько мс идёт медленный, плавно ускоряющийся разгон
+// коэффициента от 1.00x до 1.50x (после этого включается обычный экспоненциальный рост).
+const CRASH_SLOW_START_MS = 6000;
+const CRASH_SLOW_START_TARGET = 1.5;
 
 let crashGame = {
     phase: 'waiting',   // 'waiting' — приём ставок / пауза, 'flying' — полёт
@@ -888,9 +892,25 @@ function explosionShake(el, duration = 500, magnitude = 20) {
 
 function tickCrash() {
     const elapsed = performance.now() - crashGame.startTime;
+
+    // -----------------------------------------------------------------
+    // РОСТ КОЭФФИЦИЕНТА: сначала медленная «раскачка» (плавное ускорение
+    // от 1.00x до 1.50x за CRASH_SLOW_START_MS), затем обычный
+    // экспоненциальный рост, стартующий с той же точки без рывка.
+    // -----------------------------------------------------------------
+    let rawMult;
+    if (elapsed < CRASH_SLOW_START_MS) {
+        const p = elapsed / CRASH_SLOW_START_MS;
+        const eased = Math.pow(p, 3); // медленный старт, плавно ускоряется к концу фазы
+        rawMult = 1 + (CRASH_SLOW_START_TARGET - 1) * eased;
+    } else {
+        const elapsedAfter = elapsed - CRASH_SLOW_START_MS;
+        rawMult = CRASH_SLOW_START_TARGET * Math.exp(CRASH_GROWTH_PER_MS * elapsedAfter);
+    }
+
     crashGame.currentMult = Math.min(
         crashGame.crashPoint,
-        Math.floor(Math.exp(CRASH_GROWTH_PER_MS * elapsed) * 100) / 100
+        Math.floor(rawMult * 100) / 100
     );
 
     renderCrashUI();
@@ -1224,17 +1244,16 @@ function renderCrashUI() {
         const currentM = crashGame.currentMult;
 
         // -----------------------------------------------------------------
-        // УГЛЫ НАКЛОНА: До 1.25x ракета практически лежит (до -5°),
-        // к высоким коэффициентам постепенно разворачивается носом вверх (-60°)
+        // УГЛЫ НАКЛОНА: До 1.2x ракета лежит совершенно плашмя (0°),
+        // затем постепенно разворачивается носом вверх до -58° на высоких коэффах
         // -----------------------------------------------------------------
         let angle;
-        if (currentM <= 1.25) {
-            const pStart = Math.max(0, (currentM - 1.0) / 0.25);
-            angle = 0 - (5 * pStart);
+        if (currentM <= 1.2) {
+            angle = 0;
         } else {
-            const pUp = Math.min(1, Math.log(currentM / 1.25) / Math.log(10));
+            const pUp = Math.min(1, Math.log(currentM / 1.2) / Math.log(10));
             const easedUp = Math.pow(pUp, 1.4);
-            angle = -5 - (55 * easedUp);
+            angle = -(58 * easedUp);
         }
 
         rocketEl.style.transform = `translate(${centerX}px, ${centerY}px) rotate(${angle}deg)`;
