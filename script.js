@@ -1261,10 +1261,13 @@ const PICKAXE_TYPES = [
 // Типы блоков. baseDur/depthStep — прочность руды: чем глубже, тем больше ударов
 // киркой нужно, чтобы её разрушить (и получить "+"). Трава и камень всегда
 // ломаются с одного удара и никогда не дают награду — только отнимают 1 HP.
+// ВАЖНО: у STONE/GRASS depthStep = Infinity — их прочность НИКОГДА не растёт
+// с глубиной (раньше depthStep был равен 1, из-за чего durability = 1+глубина,
+// и камень на глубине становился практически неразрушимым — кирка "залипала").
 const BLOCK_TYPES = {
-    AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00, baseDur: 0, depthStep: 1   },
-    GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00, baseDur: 1, depthStep: 1   },
-    STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00, baseDur: 1, depthStep: 1   },
+    AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00, baseDur: 0, depthStep: Infinity },
+    GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00, baseDur: 1, depthStep: Infinity },
+    STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00, baseDur: 1, depthStep: Infinity },
     COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02, baseDur: 1, depthStep: 40  },
     COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04, baseDur: 1, depthStep: 30  },
     IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07, baseDur: 2, depthStep: 26  },
@@ -1273,6 +1276,21 @@ const BLOCK_TYPES = {
     DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30, baseDur: 3, depthStep: 12  }
 };
 const ORE_IDS = ['coal', 'copper', 'iron', 'lapis', 'emerald', 'diamond'];
+
+// Пороги глубины и базовые шансы (%) появления руды — используются как "затравка"
+// для жилы (см. pickOreSeed). Сама жила потом разрастается вокруг затравки.
+const ORE_TIERS = [
+    { id: 'diamond', minRow: 46, chance: 2.5 },
+    { id: 'emerald', minRow: 36, chance: 3.5 },
+    { id: 'lapis',   minRow: 26, chance: 5   },
+    { id: 'iron',    minRow: 16, chance: 7   },
+    { id: 'copper',  minRow: 9,  chance: 8   },
+    { id: 'coal',    minRow: 4,  chance: 9   }
+];
+// Вероятность того, что жила продолжится в соседнюю ячейку (вертикально/горизонтально) —
+// это и создаёт "скопления" (кластеры) руды, а не одиночные редкие блоки.
+const VEIN_VERTICAL_CHANCE = 0.6;
+const VEIN_HORIZONTAL_CHANCE = 0.38;
 
 const GRID_COLS = 7;
 const BLOCK_SIZE = 44; // Должно совпадать с --block-size в style.css
@@ -1316,6 +1334,18 @@ function makeCell(type, rowIndex) {
     };
 }
 
+// Выбирает "затравку" новой жилы руды для текущей глубины (или null → камень).
+function pickOreSeed(rowIndex) {
+    const rand = Math.random() * 100;
+    let acc = 0;
+    for (const tier of ORE_TIERS) {
+        if (rowIndex < tier.minRow) continue;
+        acc += tier.chance;
+        if (rand < acc) return tier.id;
+    }
+    return null;
+}
+
 function generateRow(rowIndex) {
     const row = [];
     for (let c = 0; c < GRID_COLS; c++) {
@@ -1324,22 +1354,41 @@ function generateRow(rowIndex) {
             continue;
         }
 
-        // Шансы генерации руд в зависимости от глубины (rowIndex)
-        const rand = Math.random() * 100;
+        // Скопления руды: если сосед сверху/слева — руда, есть высокий шанс,
+        // что жила продолжится сюда тем же типом. Иначе — обычная случайная
+        // "затравка" новой жилы по глубине, либо камень.
+        const aboveCell = (mineGridMap[rowIndex - 1] || [])[c];
+        const leftCell = row[c - 1];
+        let oreId = null;
 
-        if (rowIndex > 45 && rand < 4)       row.push(makeCell(BLOCK_TYPES.DIAMOND, rowIndex));
-        else if (rowIndex > 35 && rand < 7)  row.push(makeCell(BLOCK_TYPES.EMERALD, rowIndex));
-        else if (rowIndex > 25 && rand < 10) row.push(makeCell(BLOCK_TYPES.LAPIS, rowIndex));
-        else if (rowIndex > 15 && rand < 15) row.push(makeCell(BLOCK_TYPES.IRON, rowIndex));
-        else if (rowIndex > 8  && rand < 20) row.push(makeCell(BLOCK_TYPES.COPPER, rowIndex));
-        else if (rowIndex > 3  && rand < 25) row.push(makeCell(BLOCK_TYPES.COAL, rowIndex));
-        else row.push(makeCell(BLOCK_TYPES.STONE, rowIndex));
+        if (aboveCell && aboveCell.isOre && Math.random() < VEIN_VERTICAL_CHANCE) {
+            oreId = aboveCell.id;
+        } else if (leftCell && leftCell.isOre && Math.random() < VEIN_HORIZONTAL_CHANCE) {
+            oreId = leftCell.id;
+        } else {
+            oreId = pickOreSeed(rowIndex);
+        }
+
+        if (oreId) {
+            row.push(makeCell(BLOCK_TYPES[oreId.toUpperCase()], rowIndex));
+        } else {
+            row.push(makeCell(BLOCK_TYPES.STONE, rowIndex));
+        }
     }
     return row;
 }
 
 function blockCellEl(row, col) {
     return document.querySelector(`.mine-block[data-row="${row}"][data-col="${col}"]`);
+}
+
+// Задаёт случайные CSS-переменные смещения текстуры, чтобы соседние блоки
+// одного типа не выглядели как один и тот же повторяющийся тайл (реалистичность).
+function applyBlockTexture(div) {
+    div.style.setProperty('--tx', Math.floor(Math.random() * 26) + 'px');
+    div.style.setProperty('--ty', Math.floor(Math.random() * 26) + 'px');
+    div.style.setProperty('--tr', (Math.random() * 8 - 4).toFixed(1) + 'deg');
+    div.style.setProperty('--tb', (0.9 + Math.random() * 0.2).toFixed(2));
 }
 
 function appendRowsDOM(fromIndex, rows) {
@@ -1353,6 +1402,7 @@ function appendRowsDOM(fromIndex, rows) {
             div.dataset.row = rIdx;
             div.dataset.col = cIdx;
             if (block.isOre) div.dataset.ore = "1";
+            applyBlockTexture(div);
             frag.appendChild(div);
         });
     });
@@ -1412,6 +1462,7 @@ function renderGridDOM() {
             div.dataset.row = rIdx;
             div.dataset.col = cIdx;
             if (block.isOre) div.dataset.ore = "1";
+            applyBlockTexture(div);
             gridEl.appendChild(div);
         });
     });
@@ -1541,6 +1592,29 @@ function runMiningPhysics(pickaxe, bet) {
         unlockEconomy();
     };
 
+    // Всплывающая надпись с приростом выигрыша над разрушенным блоком руды —
+    // визуально показывает, что каждый "иксовый" блок сразу засчитывается в вин.
+    const spawnWinPopup = (rowIdx, colIdx, multGain) => {
+        if (!multGain) return;
+        const popup = document.createElement('div');
+        popup.className = 'mine-win-popup';
+        popup.textContent = `+${roundMoney(bet * multGain).toFixed(2)}$`;
+        popup.style.left = `${colIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
+        popup.style.top = `${rowIdx * BLOCK_SIZE}px`;
+        worldEl.appendChild(popup);
+        setTimeout(() => popup.remove(), 700);
+    };
+
+    // Короткая пыль/осколки в момент удара — усиливает ощущение реального разрушения.
+    const spawnImpactDust = (rowIdx, colIdx, big) => {
+        const dust = document.createElement('div');
+        dust.className = big ? 'mine-impact-dust dust-big' : 'mine-impact-dust';
+        dust.style.left = `${colIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
+        dust.style.top = `${rowIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
+        worldEl.appendChild(dust);
+        setTimeout(() => dust.remove(), 420);
+    };
+
     const registerHit = (rowIdx, colIdx) => {
         ensureRowsUpTo(rowIdx + 1);
         const cell = mineGridMap[rowIdx][colIdx];
@@ -1553,7 +1627,7 @@ function runMiningPhysics(pickaxe, bet) {
         const el = blockCellEl(rowIdx, colIdx);
 
         if (cell.durability <= 0) {
-            // Блок разрушен — засчитываем "+", если это руда
+            // Блок разрушен с этого удара — засчитываем "+", если это руда
             accumulatedMultiplier += cell.multiplier;
             cell.id = 'air';
             cell.class = 'b-air';
@@ -1561,14 +1635,20 @@ function runMiningPhysics(pickaxe, bet) {
                 el.classList.add('block-break-anim');
                 setTimeout(() => { el.className = 'mine-block b-air'; }, 220);
             }
+            spawnImpactDust(rowIdx, colIdx, true);
+            spawnWinPopup(rowIdx, colIdx, cell.multiplier);
             return { solid: true, broken: true };
         } else {
-            // Ещё держится — трещины, отскок, награды пока нет
+            // Ещё держится — трещины, вспышка удара, отскок; награды пока нет
             if (el) {
                 const stage = Math.min(3, Math.ceil(((cell.maxDurability - cell.durability) / cell.maxDurability) * 3));
                 el.classList.remove('crack-1', 'crack-2', 'crack-3');
                 el.classList.add(`crack-${stage}`);
+                el.classList.remove('block-hit-flash');
+                void el.offsetWidth; // рестарт CSS-анимации при повторных ударах
+                el.classList.add('block-hit-flash');
             }
+            spawnImpactDust(rowIdx, colIdx, false);
             return { solid: true, broken: false };
         }
     };
@@ -1596,9 +1676,10 @@ function runMiningPhysics(pickaxe, bet) {
             const result = registerHit(rowToHit, curCol);
 
             if (result.solid && !result.broken) {
-                // Ударилась о прочную руду — отскакивает вверх, дальше не проходит
+                // Ударилась о прочную руду — отскакивает вверх пропорционально скорости
+                // удара (реальная физика отскока), дальше не проходит, потом падает снова.
                 posY = rowToHit * BLOCK_SIZE - 0.5;
-                vy = BOUNCE_SPEED;
+                vy = Math.max(-8, Math.min(BOUNCE_SPEED, -Math.abs(vy) * 0.42));
                 targetRow = brokenRow; // остаёмся на месте
                 break;
             }
