@@ -64,13 +64,6 @@
             50%      { transform: scale(1.1); }
         }
 
-        /* Пульсирующая светящаяся точка на конце траектории ракеты.
-           Анимация включена ТОЛЬКО через класс .crash-dot-live (во время
-           реального полёта) — если держать её постоянно включённой на
-           #crashTrailDot, бесконечная CSS-анимация переопределяет
-           opacity, заданный из JS, и точка "просвечивает" в паузе между
-           раундами (в углу 0,0 или в месте прошлого краша), даже когда
-           JS явно пытается её спрятать. */
         @keyframes crashDotPulse {
             0%, 100% { r: 7; opacity: 1; }
             50%      { r: 12; opacity: 0.7; }
@@ -84,7 +77,6 @@
         #crashTrailLine {
             transition: opacity 0.9s ease, stroke 0.15s ease;
         }
-        /* Состояние после краша: след и точка становятся красными */
         #crashTrailLine.crash-trail-crashed {
             stroke: #ff3b3b;
             filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 24px #ff2b2b) drop-shadow(0 0 50px rgba(255,43,43,0.75)) drop-shadow(0 0 90px rgba(255,43,43,0.45)) !important;
@@ -94,8 +86,6 @@
             filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 28px #ff2b2b) drop-shadow(0 0 55px rgba(255,43,43,0.9)) drop-shadow(0 0 95px rgba(255,43,43,0.5)) !important;
         }
 
-        /* Коэффициент во время полёта — сверху слева, с неоновым glow.
-           Обновляется каждый кадр, поэтому рост цифр выглядит плавным. */
         .crash-mult-topleft {
             position: absolute;
             top: 14px;
@@ -177,8 +167,8 @@
         <section class="games-section" id="gamesListSection">
             <div class="section-title"><h2>Игры</h2></div>
             <div class="games">
-                <button class="game" onclick="showMessage('Игра «Кирка» пока в разработке')">
-                    <div class="game-image"><div class="game-glow"></div><span class="game-emoji">⛏️</span></div>
+                <button class="game" onclick="openPickaxe()">
+                    <div class="game-image pickaxe"><div class="game-glow"></div><span class="game-emoji">⛏️</span></div>
                     <div class="game-name">Кирка</div>
                 </button>
                 <button class="game" onclick="openMines()">
@@ -194,6 +184,44 @@
                     <div class="game-name">Краш</div>
                 </button>
             </div>
+        </section>
+    </main>
+
+    <!-- ==================== КИРКА ==================== -->
+    <main id="pickaxePage" class="pickaxe-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Кирка</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card">
+            <!-- Барабан выпадения кирки -->
+            <div id="pickaxeRoulette" class="pickaxe-roulette">
+                <div id="pickaxeDisplay" class="pickaxe-display">⛏️</div>
+                <div id="pickaxeName" class="pickaxe-name">Деревянная кирка (80 HP)</div>
+            </div>
+
+            <!-- Шахта / Игровое поле -->
+            <div id="mineShaft" class="mine-shaft">
+                <div id="fallingPickaxe" class="falling-pickaxe hidden">⛏️</div>
+                <div id="mineGrid" class="mine-grid"></div>
+            </div>
+
+            <!-- Панель управления -->
+            <div class="ctrl-box" style="margin-top: 12px;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="pickaxeBetInput" placeholder="0.10" min="0.1" step="any">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+            </div>
+
+            <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 10px; width: 100%;">
+                БРОСИТЬ КИРКУ
+            </button>
         </section>
     </main>
 
@@ -266,7 +294,7 @@
         </div>
 
         <section class="wheel-card">
-            
+
             <div class="wheel-stage">
                 <div class="wheel-pointer">
                     <div class="pointer-tip"></div>
@@ -328,6 +356,7 @@
             <button class="spin-button-gold" id="spinButton" onclick="spinWheel()">
                 <span>↻ Сделать ставку</span>
             </button>
+        </section>
     </main>
 
     <!-- ==================== КРАШ ==================== -->
@@ -554,9 +583,7 @@
     </nav>
 </div>
 
-<!-- Данные анимации ракеты (из твоего Telegram-стикера), разбиты на
-     несколько маленьких файлов, чтобы не упереться в лимит размера файла
-     на хостинге. Порядок подключения важен! -->
+<!-- Скрипты анимации ракеты -->
 <script src="rocket-data-part1.js"></script>
 <script src="rocket-data-part2.js"></script>
 <script src="rocket-data-part3.js"></script>
