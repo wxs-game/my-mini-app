@@ -862,20 +862,27 @@ function endCrashRound() {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
 
-    if (crashGame.betPlaced && !crashGame.cashedOut) {
-        showMessage(`Ракета взорвалась на ${crashGame.crashPoint.toFixed(2)}x. Ставка ${crashGame.bet.toFixed(2)}$ сгорела.`);
-    }
-
-    // Взрыв: ракета превращается в 💥 и экран сильно трясётся
+    // Взрыв: ракета превращается в 💥, статус и коэффициент фиксируются
+    // на экране на 3 секунды — без всплывающего сообщения от Telegram
     const stageEl = document.getElementById('crashStage');
     const rocketEl = document.getElementById('crashRocket');
+    const statusEl = document.getElementById('crashStatus');
+    const multEl = document.getElementById('crashMultiplier');
+    const actionBtn = document.getElementById('crashActionBtn');
+
     if (rocketEl) rocketEl.textContent = '💥';
+    if (statusEl) statusEl.textContent = `Взорвалось на ${crashGame.crashPoint.toFixed(2)}x`;
+    if (multEl) multEl.style.color = '#e74c3c';
+    if (actionBtn) {
+        actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
+        actionBtn.disabled = true;
+    }
     explosionShake(stageEl, 500, 20);
 
     // Пауза между раундами — 5 секунд, в течение неё же принимаются
-    // ставки на следующий полёт (см. beginWaitingPhase). Небольшая
-    // задержка перед стартом паузы даёт взрыву доиграть до конца.
-    setTimeout(beginWaitingPhase, 550);
+    // ставки на следующий полёт (см. beginWaitingPhase). Взрыв держим
+    // на экране 3 секунды, прежде чем запускать новый раунд ожидания.
+    setTimeout(beginWaitingPhase, 3000);
 }
 
 async function placeCrashBet() {
