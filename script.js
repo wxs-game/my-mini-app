@@ -1258,23 +1258,33 @@ const PICKAXE_TYPES = [
     { name: "Алмазная",   hp: 240, weight: 1,  emoji: "💎" }
 ];
 
-// Типы блоков, коэффициенты и глубина появления
+// Типы блоков. baseDur/depthStep — прочность руды: чем глубже, тем больше ударов
+// киркой нужно, чтобы её разрушить (и получить "+"). Трава и камень всегда
+// ломаются с одного удара и никогда не дают награду — только отнимают 1 HP.
 const BLOCK_TYPES = {
-    AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00 },
-    GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00 },
-    STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00 },
-    COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02 },
-    COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04 },
-    IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07 },
-    LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15 },
-    EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18 },
-    DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30 }
+    AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00, baseDur: 0, depthStep: 1   },
+    GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00, baseDur: 1, depthStep: 1   },
+    STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00, baseDur: 1, depthStep: 1   },
+    COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02, baseDur: 1, depthStep: 40  },
+    COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04, baseDur: 1, depthStep: 30  },
+    IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07, baseDur: 2, depthStep: 26  },
+    LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15, baseDur: 2, depthStep: 20  },
+    EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18, baseDur: 3, depthStep: 16  },
+    DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30, baseDur: 3, depthStep: 12  }
 };
+const ORE_IDS = ['coal', 'copper', 'iron', 'lapis', 'emerald', 'diamond'];
 
 const GRID_COLS = 7;
-const BLOCK_SIZE = 44; // Размер квадратного блока в пикселях
-let mineGridMap = [];  // Массив блоков шахты
+const BLOCK_SIZE = 44; // Должно совпадать с --block-size в style.css
+const SPRITE_SIZE = 38;
+const GRAVITY = 0.55;       // Ускорение свободного падения кирки (px/кадр²)
+const MAX_FALL_SPEED = 19;  // Максимальная скорость падения
+const BOUNCE_SPEED = -6.2;  // Отскок при ударе о ещё не разрушенную руду
+const START_FALL_SPEED = 2.4;
+
+let mineGridMap = [];  // Массив блоков шахты (каждая ячейка — независимый объект с durability)
 let isPickaxeRunning = false;
+let pickaxePhysicsRAF = null;
 
 function adjustPickaxeBet(factor) {
     const input = document.getElementById('pickaxeBetInput');
@@ -1292,54 +1302,116 @@ function openPickaxe() {
     resetMineWorld();
 }
 
+// Создаёт независимую ячейку блока (со своей прочностью), а не общую ссылку —
+// это нужно, чтобы каждую руду можно было "долбить" по несколько раз отдельно.
+function makeCell(type, rowIndex) {
+    const durability = type.id === 'air' ? 0 : (type.baseDur + Math.floor(rowIndex / type.depthStep));
+    return {
+        id: type.id,
+        class: type.class,
+        multiplier: type.multiplier,
+        isOre: ORE_IDS.includes(type.id),
+        durability,
+        maxDurability: durability
+    };
+}
+
 function generateRow(rowIndex) {
     const row = [];
     for (let c = 0; c < GRID_COLS; c++) {
         if (rowIndex === 0) {
-            row.push(BLOCK_TYPES.GRASS);
+            row.push(makeCell(BLOCK_TYPES.GRASS, rowIndex));
             continue;
         }
 
         // Шансы генерации руд в зависимости от глубины (rowIndex)
         const rand = Math.random() * 100;
-        
-        if (rowIndex > 45 && rand < 4)       row.push(BLOCK_TYPES.DIAMOND);
-        else if (rowIndex > 35 && rand < 7)  row.push(BLOCK_TYPES.EMERALD);
-        else if (rowIndex > 25 && rand < 10) row.push(BLOCK_TYPES.LAPIS);
-        else if (rowIndex > 15 && rand < 15) row.push(BLOCK_TYPES.IRON);
-        else if (rowIndex > 8  && rand < 20) row.push(BLOCK_TYPES.COPPER);
-        else if (rowIndex > 3  && rand < 25) row.push(BLOCK_TYPES.COAL);
-        else row.push(BLOCK_TYPES.STONE);
+
+        if (rowIndex > 45 && rand < 4)       row.push(makeCell(BLOCK_TYPES.DIAMOND, rowIndex));
+        else if (rowIndex > 35 && rand < 7)  row.push(makeCell(BLOCK_TYPES.EMERALD, rowIndex));
+        else if (rowIndex > 25 && rand < 10) row.push(makeCell(BLOCK_TYPES.LAPIS, rowIndex));
+        else if (rowIndex > 15 && rand < 15) row.push(makeCell(BLOCK_TYPES.IRON, rowIndex));
+        else if (rowIndex > 8  && rand < 20) row.push(makeCell(BLOCK_TYPES.COPPER, rowIndex));
+        else if (rowIndex > 3  && rand < 25) row.push(makeCell(BLOCK_TYPES.COAL, rowIndex));
+        else row.push(makeCell(BLOCK_TYPES.STONE, rowIndex));
     }
     return row;
+}
+
+function blockCellEl(row, col) {
+    return document.querySelector(`.mine-block[data-row="${row}"][data-col="${col}"]`);
+}
+
+function appendRowsDOM(fromIndex, rows) {
+    const gridEl = document.getElementById('mineGrid');
+    const frag = document.createDocumentFragment();
+    rows.forEach((row, i) => {
+        const rIdx = fromIndex + i;
+        row.forEach((block, cIdx) => {
+            const div = document.createElement('div');
+            div.className = `mine-block ${block.class}`;
+            div.dataset.row = rIdx;
+            div.dataset.col = cIdx;
+            if (block.isOre) div.dataset.ore = "1";
+            frag.appendChild(div);
+        });
+    });
+    gridEl.appendChild(frag);
+}
+
+function ensureRowsUpTo(rowIndex) {
+    const need = rowIndex + 15 - mineGridMap.length;
+    if (need <= 0) return;
+    const newRows = [];
+    const startIdx = mineGridMap.length;
+    for (let i = 0; i < need; i++) {
+        const r = generateRow(mineGridMap.length);
+        mineGridMap.push(r);
+        newRows.push(r);
+    }
+    appendRowsDOM(startIdx, newRows);
 }
 
 function resetMineWorld() {
     const gridEl = document.getElementById('mineGrid');
     const worldEl = document.getElementById('mineWorld');
     const sprite = document.getElementById('activePickaxeSprite');
-    
+
+    if (pickaxePhysicsRAF) {
+        cancelAnimationFrame(pickaxePhysicsRAF);
+        pickaxePhysicsRAF = null;
+    }
+
     gridEl.innerHTML = '';
-    worldEl.style.transform = `translateY(0px)`;
+    worldEl.style.transform = `translate(-50%, 0px)`;
     sprite.classList.add('hidden');
-    
+    sprite.style.transform = 'translate(-50%, 0) rotate(0deg)';
+
     mineGridMap = [];
     for (let r = 0; r < 20; r++) {
         mineGridMap.push(generateRow(r));
     }
     renderGridDOM();
+
+    const hudHp = document.getElementById('hudHp');
+    const hudWin = document.getElementById('hudWin');
+    const hudDepth = document.getElementById('hudDepth');
+    if (hudHp) hudHp.textContent = '0';
+    if (hudWin) hudWin.textContent = '0.00 $';
+    if (hudDepth) hudDepth.textContent = '0';
 }
 
 function renderGridDOM() {
     const gridEl = document.getElementById('mineGrid');
     gridEl.innerHTML = '';
-    
+
     mineGridMap.forEach((row, rIdx) => {
         row.forEach((block, cIdx) => {
             const div = document.createElement('div');
             div.className = `mine-block ${block.class}`;
             div.dataset.row = rIdx;
             div.dataset.col = cIdx;
+            if (block.isOre) div.dataset.ore = "1";
             gridEl.appendChild(div);
         });
     });
@@ -1399,7 +1471,7 @@ async function startPickaxeGame() {
     const picked = getPickaxeByWeight();
     const display = document.getElementById('pickaxeDisplay');
     const nameLabel = document.getElementById('pickaxeName');
-    
+
     let spins = 0;
     const rouletteTimer = setInterval(() => {
         const randP = PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
@@ -1415,107 +1487,155 @@ async function startPickaxeGame() {
     }, 80);
 }
 
+// Бросок кирки вниз с гравитацией: она разгоняется, врезается в блоки,
+// отскакивает от ещё не разрушенной прочной руды и продолжает падать
+// после того как блок сломан. Трава/камень ломаются с 1 удара без награды,
+// руда — по её прочности (зависит от глубины), награда начисляется только
+// в момент полного разрушения блока.
 function runMiningPhysics(pickaxe, bet) {
     let hp = pickaxe.hp;
     let accumulatedMultiplier = 0;
-    
-    let curRow = 0;
-    let curCol = Math.floor(GRID_COLS / 2); // Старт по центру
+
+    let curCol = Math.floor(GRID_COLS / 2); // Стартовая колонка — центр
+    let posY = 0;        // Пиксельная позиция кирки по вертикали
+    let vy = START_FALL_SPEED;
+    let rotation = 0;
+    let brokenRow = 0; // ниже этой строки всё уже пройдено кабиной
 
     const sprite = document.getElementById('activePickaxeSprite');
     const worldEl = document.getElementById('mineWorld');
+    const viewportEl = document.getElementById('mineViewport');
     const hudHp = document.getElementById('hudHp');
     const hudWin = document.getElementById('hudWin');
+    const hudDepth = document.getElementById('hudDepth');
 
     sprite.textContent = pickaxe.emoji;
     sprite.classList.remove('hidden');
-
     hudHp.textContent = hp;
     hudWin.textContent = "0.00 $";
+    hudDepth.textContent = "0";
 
-    const updateSpritePos = () => {
-        sprite.style.left = `${curCol * BLOCK_SIZE + 6}px`;
-        sprite.style.top = `${curRow * BLOCK_SIZE + 6}px`;
+    // posX хранится как смещение от центра колонки (в px, для колонки curCol)
+    let xOffset = 0; // текущее смещение спрайта от центра его колонки (для эффекта покачивания)
 
-        // Смещение камеры вниз, если кирка спускается ниже 3 строки
-        if (curRow > 3) {
-            const offsetY = (curRow - 3) * BLOCK_SIZE;
-            worldEl.style.transform = `translateY(-${offsetY}px)`;
+    const finish = async () => {
+        cancelAnimationFrame(pickaxePhysicsRAF);
+        pickaxePhysicsRAF = null;
+        sprite.classList.add('hidden');
+
+        const totalWin = roundMoney(bet * accumulatedMultiplier);
+        if (totalWin > 0) {
+            currentBalance = roundMoney(currentBalance + totalWin);
+            currentTotalWin = roundMoney(currentTotalWin + totalWin);
+            currentWinsCount++;
+            setUIBalance(currentBalance);
+            await saveUserDataWithRetry();
+        }
+
+        showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
+
+        isPickaxeRunning = false;
+        document.getElementById('pickaxeActionBtn').disabled = false;
+        unlockEconomy();
+    };
+
+    const registerHit = (rowIdx, colIdx) => {
+        ensureRowsUpTo(rowIdx + 1);
+        const cell = mineGridMap[rowIdx][colIdx];
+        if (!cell || cell.id === 'air' || cell.durability <= 0) return { solid: false };
+
+        hp--;
+        cell.durability--;
+        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred(cell.durability <= 0 ? "medium" : "light");
+
+        const el = blockCellEl(rowIdx, colIdx);
+
+        if (cell.durability <= 0) {
+            // Блок разрушен — засчитываем "+", если это руда
+            accumulatedMultiplier += cell.multiplier;
+            cell.id = 'air';
+            cell.class = 'b-air';
+            if (el) {
+                el.classList.add('block-break-anim');
+                setTimeout(() => { el.className = 'mine-block b-air'; }, 220);
+            }
+            return { solid: true, broken: true };
+        } else {
+            // Ещё держится — трещины, отскок, награды пока нет
+            if (el) {
+                const stage = Math.min(3, Math.ceil(((cell.maxDurability - cell.durability) / cell.maxDurability) * 3));
+                el.classList.remove('crack-1', 'crack-2', 'crack-3');
+                el.classList.add(`crack-${stage}`);
+            }
+            return { solid: true, broken: false };
         }
     };
 
-    updateSpritePos();
-
-    const stepInterval = setInterval(async () => {
-        // Проверка окончания прочности
-        if (hp <= 0) {
-            clearInterval(stepInterval);
-            sprite.classList.add('hidden');
-            
-            const totalWin = roundMoney(bet * accumulatedMultiplier);
-            if (totalWin > 0) {
-                currentBalance = roundMoney(currentBalance + totalWin);
-                currentTotalWin = roundMoney(currentTotalWin + totalWin);
-                currentWinsCount++;
-                setUIBalance(currentBalance);
-                await saveUserDataWithRetry();
-            }
-
-            showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
-
-            isPickaxeRunning = false;
-            document.getElementById('pickaxeActionBtn').disabled = false;
-            unlockEconomy();
-            return;
-        }
-
-        // Подгружаем новые строки в массив при необходимости
-        if (curRow + 5 >= mineGridMap.length) {
-            for (let i = 0; i < 10; i++) {
-                const newRIdx = mineGridMap.length;
-                const newRow = generateRow(newRIdx);
-                mineGridMap.push(newRow);
-
-                const gridEl = document.getElementById('mineGrid');
-                newRow.forEach((b, cIdx) => {
-                    const div = document.createElement('div');
-                    div.className = `mine-block ${b.class}`;
-                    div.dataset.row = newRIdx;
-                    div.dataset.col = cIdx;
-                    gridEl.appendChild(div);
-                });
-            }
-        }
-
-        // Уничтожение блока под киркой
-        const targetBlock = mineGridMap[curRow][curCol];
-        if (targetBlock.id !== 'air') {
-            hp--;
-            accumulatedMultiplier += targetBlock.multiplier;
-            
-            // Находим DOM элемент и превращаем его в воздух (воздушный блок)
-            mineGridMap[curRow][curCol] = BLOCK_TYPES.AIR;
-            const blockEl = document.querySelector(`.mine-block[data-row="${curRow}"][data-col="${curCol}"]`);
-            if (blockEl) {
-                blockEl.className = 'mine-block b-air';
-                blockEl.classList.add('block-break-anim');
-            }
-
-            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-        }
-
-        // Обновляем UI
-        hudHp.textContent = hp;
+    const updateHud = () => {
+        hudHp.textContent = Math.max(0, hp);
         hudWin.textContent = `${(bet * accumulatedMultiplier).toFixed(2)} $ (${accumulatedMultiplier.toFixed(2)}x)`;
+        hudDepth.textContent = String(brokenRow);
+    };
 
-        // Определение следующего направления падения (вниз, влево-вниз или вправо-вниз)
-        curRow++;
-        const dir = Math.random();
-        if (dir < 0.3 && curCol > 0) curCol--;
-        else if (dir > 0.7 && curCol < GRID_COLS - 1) curCol++;
+    const tick = () => {
+        if (hp <= 0) { finish(); return; }
 
-        updateSpritePos();
-    }, 110);
+        // Гравитация — скорость падения растёт со временем (реальная физика)
+        vy = Math.min(vy + GRAVITY, MAX_FALL_SPEED);
+        posY += vy;
+        rotation += 10 + Math.min(18, Math.abs(vy) * 1.6);
+
+        let targetRow = Math.floor((posY + SPRITE_SIZE / 2) / BLOCK_SIZE);
+        ensureRowsUpTo(targetRow + 1);
+
+        // Проходим по строкам, в которые кирка успела провалиться за этот кадр
+        while (targetRow > brokenRow && hp > 0) {
+            const rowToHit = brokenRow;
+            const result = registerHit(rowToHit, curCol);
+
+            if (result.solid && !result.broken) {
+                // Ударилась о прочную руду — отскакивает вверх, дальше не проходит
+                posY = rowToHit * BLOCK_SIZE - 0.5;
+                vy = BOUNCE_SPEED;
+                targetRow = brokenRow; // остаёмся на месте
+                break;
+            }
+
+            // Блок разрушен (или был воздухом) — кирка проходит дальше
+            brokenRow = rowToHit + 1;
+
+            if (result.broken) {
+                // Небольшой случайный снос в сторону — как при реальном ударе
+                const dir = Math.random();
+                if (dir < 0.28 && curCol > 0) curCol--;
+                else if (dir > 0.72 && curCol < GRID_COLS - 1) curCol++;
+            }
+
+            if (hp <= 0) break;
+        }
+
+        if (hp <= 0) { finish(); return; }
+
+        // Лёгкое покачивание кирки при полёте (визуальная "реальная физика")
+        xOffset = Math.sin(rotation * Math.PI / 180) * 3;
+
+        // Позиция спрайта: центр колонки curCol + покачивание
+        const colCenterOffset = (curCol - Math.floor(GRID_COLS / 2)) * BLOCK_SIZE;
+        sprite.style.transform =
+            `translate(calc(-50% + ${colCenterOffset + xOffset}px), ${posY}px) rotate(${rotation}deg)`;
+
+        // Камера плавно следует за киркой по пикселям, а не по строкам
+        const viewportH = viewportEl ? viewportEl.clientHeight : 330;
+        const followThreshold = viewportH * 0.35;
+        const camY = Math.max(0, posY - followThreshold);
+        worldEl.style.transform = `translate(-50%, -${camY}px)`;
+
+        updateHud();
+
+        pickaxePhysicsRAF = requestAnimationFrame(tick);
+    };
+
+    pickaxePhysicsRAF = requestAnimationFrame(tick);
 }
 
 /* =========================
