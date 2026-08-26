@@ -723,10 +723,10 @@ function endMinesGame(isWin) {
 // Пауза между раундами (в это же время принимаются ставки на следующий раунд)
 const CRASH_WAIT_MS = 5000;
 
-// Скорость роста коэффициента: x2 за 10 секунд полёта (замедленный рост)
+// Скорость роста коэффициента: x2 за 10 секунд полёта (исходный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
-// Время «раскачки» — увеличено в 2.5 раза (с 6000 мс до 15000 мс / 15 сек)
-const CRASH_SLOW_START_MS = 15000;
+// Время «раскачки» — исходные 6000 мс (6 сек)
+const CRASH_SLOW_START_MS = 6000;
 const CRASH_SLOW_START_TARGET = 1.5;
 
 let crashGame = {
@@ -1143,7 +1143,6 @@ function renderCrashUI() {
             const centerXWait = (stageW - 200) / 2 - 16;
             const centerYWait = 16 - (stageH - 200) / 2;
             
-            // Фикс стартовой позиции: ракета смотрит ровно 45° (вертикально) в паузе
             dom.rocketEl.style.transform = `translate3d(${centerXWait}px, ${centerYWait}px, 0px) rotate(45deg)`;
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
@@ -1188,15 +1187,13 @@ function renderCrashUI() {
         const centerX = (stageW - 200) / 2 - 16;
         const centerY = 16 - (stageH - 200) / 2;
 
-        const elapsed = Math.max(0, performance.now() - crashGame.startTime);
+        const currentM = crashGame.currentMult;
 
-        // Плавный поворот от 45° (вертикально) к -45° (горизонтально) за 15 секунд
-        let angle = 45;
-        if (elapsed > 1000) {
-            const progress = Math.min(1, (elapsed - 1000) / 15000);
-            const easedProgress = Math.pow(progress, 1.2);
-            angle = 45 - (90 * easedProgress);
-        }
+        // Скорость полета ракеты: достигает верхнего угла (пика) ровно при 3.00x
+        const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
+
+        // Поворот ракеты адаптирован под траекторию до 3.00x
+        const angle = 45 - (90 * trailProgress);
 
         dom.rocketEl.style.transform = `translate3d(${centerX}px, ${centerY}px, 0px) rotate(${angle}deg)`;
 
@@ -1204,9 +1201,6 @@ function renderCrashUI() {
         const trailStartY = stageH * 0.95;
         const trailEndX = stageW * 0.95;
         const trailEndY = stageH * 0.05;
-
-        const currentM = crashGame.currentMult;
-        const trailProgress = Math.min(1, Math.log(currentM) / Math.log(15));
 
         const headX = trailStartX + (trailEndX - trailStartX) * trailProgress;
         const headY = trailStartY + (trailEndY - trailStartY) * trailProgress;
