@@ -210,30 +210,33 @@
             </div>
             <!-- Информационный оверлей поверх шахты -->
             <div class="mine-hud">
-                <div class="hud-item">HP: <span id="hudHp">0</span></div>
-                <div class="hud-item">Выигрыш: <span id="hudWin">0.00 $</span></div>
+                <div class="hud-item">❤️ <span id="hudHp">0</span></div>
+                <div class="hud-item">⛏️ <span id="hudDepth">0</span> м</div>
+                <div class="hud-item">💰 <span id="hudWin">0.00 $</span></div>
             </div>
         </div>
 
         <!-- Панель ставки -->
-        <div class="ctrl-box" style="margin-top: 12px;">
-            <div class="mines-bet-header">
-                <label>СУММА СТАВКИ</label>
-                <div class="card-input-wrap">
-                    <input type="number" id="pickaxeBetInput" placeholder="0.10" min="0.1" step="any">
-                    <span class="currency-symbol">$</span>
+        <div class="pickaxe-controls-panel" style="margin-top: 12px;">
+            <div class="ctrl-box" style="margin-bottom: 0;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="pickaxeBetInput" placeholder="0.10" min="0.1" step="any">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustPickaxeBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustPickaxeBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setPickaxeMaxBet()">MAX</button>
                 </div>
             </div>
-            <div class="ctrl-btns-row" style="margin-top: 10px;">
-                <button class="pct-btn" onclick="adjustPickaxeBet(0.5)">½</button>
-                <button class="pct-btn" onclick="adjustPickaxeBet(2)">x2</button>
-                <button class="pct-btn" onclick="setPickaxeMaxBet()">MAX</button>
-            </div>
-        </div>
 
-        <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 10px; width: 100%;">
-            БРОСИТЬ КИРКУ
-        </button>
+            <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 12px; width: 100%;">
+                БРОСИТЬ КИРКУ
+            </button>
+        </div>
     </section>
 </main>
 
