@@ -1246,51 +1246,113 @@ function renderCrashUI() {
 }
 
 /* =========================
-   ИГРА «КИРКА»
+   ИГРА «КИРКА» (Infinite Mining Grid)
 ========================= */
-const PICKAXES = [
-    { level: 1, name: "Деревянная", hp: 80,  weight: 50, color: "#8B5A2B", emoji: "🪵" },
-    { level: 2, name: "Каменная",   hp: 110, weight: 25, color: "#808080", emoji: "🪨" },
-    { level: 3, name: "Медная",     hp: 140, weight: 13, color: "#B87333", emoji: "🥉" },
-    { level: 4, name: "Железная",   hp: 170, weight: 7,  color: "#D3D3D3", emoji: "⚔️" },
-    { level: 5, name: "Золотая",    hp: 200, weight: 4,  color: "#FFD700", emoji: "👑" },
-    { level: 6, name: "Алмазная",   hp: 250, weight: 1,  color: "#00FFFF", emoji: "💎" }
+
+const PICKAXE_TYPES = [
+    { name: "Деревянная", hp: 40,  weight: 50, emoji: "🪵" },
+    { name: "Каменная",   hp: 70,  weight: 25, emoji: "🪨" },
+    { name: "Медная",     hp: 100, weight: 13, emoji: "🥉" },
+    { name: "Железная",   hp: 140, weight: 7,  emoji: "⚔️" },
+    { name: "Золотая",    hp: 180, weight: 4,  emoji: "👑" },
+    { name: "Алмазная",   hp: 240, weight: 1,  emoji: "💎" }
 ];
 
+// Типы блоков, коэффициенты и глубина появления
+const BLOCK_TYPES = {
+    AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00 },
+    GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00 },
+    STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00 },
+    COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02 },
+    COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04 },
+    IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07 },
+    LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15 },
+    EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18 },
+    DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30 }
+};
+
+const GRID_COLS = 7;
+const BLOCK_SIZE = 44; // Размер квадратного блока в пикселях
+let mineGridMap = [];  // Массив блоков шахты
 let isPickaxeRunning = false;
 
-function getRandomPickaxe() {
-    const totalWeight = PICKAXES.reduce((sum, p) => sum + p.weight, 0);
-    let rand = Math.random() * totalWeight;
-    for (const pickaxe of PICKAXES) {
-        if (rand < pickaxe.weight) return pickaxe;
-        rand -= pickaxe.weight;
-    }
-    return PICKAXES[0];
+function adjustPickaxeBet(factor) {
+    const input = document.getElementById('pickaxeBetInput');
+    let val = parseFloat(input.value) || 0.10;
+    input.value = (val * factor).toFixed(2);
+}
+
+function setPickaxeMaxBet() {
+    document.getElementById('pickaxeBetInput').value = currentBalance.toFixed(2);
 }
 
 function openPickaxe() {
     showPage("pickaxePage");
     updateNav("games");
-    renderMineGrid();
+    resetMineWorld();
 }
 
-function renderMineGrid() {
-    const grid = document.getElementById('mineGrid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    
-    // Генерируем шахту 8 колонок на 12 строк
-    for (let r = 0; r < 12; r++) {
-        for (let c = 0; c < 8; c++) {
-            const tile = document.createElement('div');
-            tile.className = 'mine-tile-block';
-            if (r === 0) tile.classList.add('tile-grass');
-            else if (r < 4) tile.classList.add('tile-stone');
-            else tile.classList.add('tile-ore');
-            grid.appendChild(tile);
+function generateRow(rowIndex) {
+    const row = [];
+    for (let c = 0; c < GRID_COLS; c++) {
+        if (rowIndex === 0) {
+            row.push(BLOCK_TYPES.GRASS);
+            continue;
         }
+
+        // Шансы генерации руд в зависимости от глубины (rowIndex)
+        const rand = Math.random() * 100;
+        
+        if (rowIndex > 45 && rand < 4)       row.push(BLOCK_TYPES.DIAMOND);
+        else if (rowIndex > 35 && rand < 7)  row.push(BLOCK_TYPES.EMERALD);
+        else if (rowIndex > 25 && rand < 10) row.push(BLOCK_TYPES.LAPIS);
+        else if (rowIndex > 15 && rand < 15) row.push(BLOCK_TYPES.IRON);
+        else if (rowIndex > 8  && rand < 20) row.push(BLOCK_TYPES.COPPER);
+        else if (rowIndex > 3  && rand < 25) row.push(BLOCK_TYPES.COAL);
+        else row.push(BLOCK_TYPES.STONE);
     }
+    return row;
+}
+
+function resetMineWorld() {
+    const gridEl = document.getElementById('mineGrid');
+    const worldEl = document.getElementById('mineWorld');
+    const sprite = document.getElementById('activePickaxeSprite');
+    
+    gridEl.innerHTML = '';
+    worldEl.style.transform = `translateY(0px)`;
+    sprite.classList.add('hidden');
+    
+    mineGridMap = [];
+    for (let r = 0; r < 20; r++) {
+        mineGridMap.push(generateRow(r));
+    }
+    renderGridDOM();
+}
+
+function renderGridDOM() {
+    const gridEl = document.getElementById('mineGrid');
+    gridEl.innerHTML = '';
+    
+    mineGridMap.forEach((row, rIdx) => {
+        row.forEach((block, cIdx) => {
+            const div = document.createElement('div');
+            div.className = `mine-block ${block.class}`;
+            div.dataset.row = rIdx;
+            div.dataset.col = cIdx;
+            gridEl.appendChild(div);
+        });
+    });
+}
+
+function getPickaxeByWeight() {
+    const totalWeight = PICKAXE_TYPES.reduce((s, p) => s + p.weight, 0);
+    let rand = Math.random() * totalWeight;
+    for (const p of PICKAXE_TYPES) {
+        if (rand < p.weight) return p;
+        rand -= p.weight;
+    }
+    return PICKAXE_TYPES[0];
 }
 
 async function startPickaxeGame() {
@@ -1312,8 +1374,7 @@ async function startPickaxeGame() {
     }
 
     isPickaxeRunning = true;
-    const btn = document.getElementById('pickaxeActionBtn');
-    btn.disabled = true;
+    document.getElementById('pickaxeActionBtn').disabled = true;
 
     // Списание баланса
     const snapshot = snapshotBalanceState();
@@ -1325,58 +1386,82 @@ async function startPickaxeGame() {
     const debited = await saveUserData();
     if (!debited) {
         restoreBalanceState(snapshot);
-        showMessage("Ошибка сети при списании ставки.");
+        showMessage("Ошибка сети при списании.");
         isPickaxeRunning = false;
-        btn.disabled = false;
+        document.getElementById('pickaxeActionBtn').disabled = false;
         unlockEconomy();
         return;
     }
 
-    // 1. Рулетка выбора кирки
-    const selectedPickaxe = getRandomPickaxe();
+    resetMineWorld();
+
+    // 1. Вращение рулетки
+    const picked = getPickaxeByWeight();
     const display = document.getElementById('pickaxeDisplay');
     const nameLabel = document.getElementById('pickaxeName');
     
-    let spinCount = 0;
-    const rouletteInterval = setInterval(() => {
-        const temp = PICKAXES[Math.floor(Math.random() * PICKAXES.length)];
-        display.textContent = temp.emoji;
-        nameLabel.textContent = `${temp.name} (${temp.hp} HP)`;
-        spinCount++;
-        if (spinCount > 15) {
-            clearInterval(rouletteInterval);
-            display.textContent = selectedPickaxe.emoji;
-            nameLabel.textContent = `${selectedPickaxe.name} (${selectedPickaxe.hp} HP)`;
-            animatePickaxeDrop(selectedPickaxe, bet);
+    let spins = 0;
+    const rouletteTimer = setInterval(() => {
+        const randP = PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
+        display.textContent = randP.emoji;
+        nameLabel.textContent = `${randP.name} (${randP.hp} HP)`;
+        spins++;
+        if (spins > 14) {
+            clearInterval(rouletteTimer);
+            display.textContent = picked.emoji;
+            nameLabel.textContent = `${picked.name} (${picked.hp} HP)`;
+            runMiningPhysics(picked, bet);
         }
-    }, 100);
+    }, 80);
 }
 
-function animatePickaxeDrop(pickaxe, bet) {
-    let currentHp = pickaxe.hp;
-    const fallingPickaxe = document.getElementById('fallingPickaxe');
-    fallingPickaxe.textContent = pickaxe.emoji;
-    fallingPickaxe.classList.remove('hidden');
+function runMiningPhysics(pickaxe, bet) {
+    let hp = pickaxe.hp;
+    let accumulatedMultiplier = 0;
+    
+    let curRow = 0;
+    let curCol = Math.floor(GRID_COLS / 2); // Старт по центру
 
-    let row = 0;
-    let col = Math.floor(Math.random() * 8);
+    const sprite = document.getElementById('activePickaxeSprite');
+    const worldEl = document.getElementById('mineWorld');
+    const hudHp = document.getElementById('hudHp');
+    const hudWin = document.getElementById('hudWin');
 
-    const dropInterval = setInterval(async () => {
-        if (currentHp <= 0 || row >= 12) {
-            clearInterval(dropInterval);
-            fallingPickaxe.classList.add('hidden');
+    sprite.textContent = pickaxe.emoji;
+    sprite.classList.remove('hidden');
+
+    hudHp.textContent = hp;
+    hudWin.textContent = "0.00 $";
+
+    const updateSpritePos = () => {
+        sprite.style.left = `${curCol * BLOCK_SIZE + 6}px`;
+        sprite.style.top = `${curRow * BLOCK_SIZE + 6}px`;
+
+        // Смещение камеры вниз, если кирка спускается ниже 3 строки
+        if (curRow > 3) {
+            const offsetY = (curRow - 3) * BLOCK_SIZE;
+            worldEl.style.transform = `translateY(-${offsetY}px)`;
+        }
+    };
+
+    updateSpritePos();
+
+    const stepInterval = setInterval(async () => {
+        // Проверка окончания прочности
+        if (hp <= 0) {
+            clearInterval(stepInterval);
+            sprite.classList.add('hidden');
             
-            // Расчет выигрыша на основе глубинного множителя и прочности
-            const depthMult = 1 + (row * 0.25);
-            const winAmount = roundMoney(bet * depthMult);
+            const totalWin = roundMoney(bet * accumulatedMultiplier);
+            if (totalWin > 0) {
+                currentBalance = roundMoney(currentBalance + totalWin);
+                currentTotalWin = roundMoney(currentTotalWin + totalWin);
+                currentWinsCount++;
+                setUIBalance(currentBalance);
+                await saveUserDataWithRetry();
+            }
 
-            currentBalance = roundMoney(currentBalance + winAmount);
-            currentTotalWin = roundMoney(currentTotalWin + winAmount);
-            currentWinsCount++;
-            setUIBalance(currentBalance);
-
-            await saveUserDataWithRetry();
-            showMessage(`Кирка сломалась! Выигрыш: +${winAmount.toFixed(2)}$ (${depthMult.toFixed(2)}x)`);
+            showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
 
             isPickaxeRunning = false;
             document.getElementById('pickaxeActionBtn').disabled = false;
@@ -1384,21 +1469,53 @@ function animatePickaxeDrop(pickaxe, bet) {
             return;
         }
 
-        // Логика шага: -1 HP за блок
-        currentHp--;
-        document.getElementById('pickaxeName').textContent = `${pickaxe.name} (${currentHp}/${pickaxe.hp} HP)`;
+        // Подгружаем новые строки в массив при необходимости
+        if (curRow + 5 >= mineGridMap.length) {
+            for (let i = 0; i < 10; i++) {
+                const newRIdx = mineGridMap.length;
+                const newRow = generateRow(newRIdx);
+                mineGridMap.push(newRow);
 
-        // Смещение вниз и случайно влево/вправо
-        row++;
-        col += Math.random() > 0.5 ? 1 : -1;
-        col = Math.max(0, Math.min(7, col));
+                const gridEl = document.getElementById('mineGrid');
+                newRow.forEach((b, cIdx) => {
+                    const div = document.createElement('div');
+                    div.className = `mine-block ${b.class}`;
+                    div.dataset.row = newRIdx;
+                    div.dataset.col = cIdx;
+                    gridEl.appendChild(div);
+                });
+            }
+        }
 
-        // Визуальное позиционирование
-        fallingPickaxe.style.top = `${row * 32}px`;
-        fallingPickaxe.style.left = `${col * 12.5}%`;
-        
-        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-    }, 40);
+        // Уничтожение блока под киркой
+        const targetBlock = mineGridMap[curRow][curCol];
+        if (targetBlock.id !== 'air') {
+            hp--;
+            accumulatedMultiplier += targetBlock.multiplier;
+            
+            // Находим DOM элемент и превращаем его в воздух (воздушный блок)
+            mineGridMap[curRow][curCol] = BLOCK_TYPES.AIR;
+            const blockEl = document.querySelector(`.mine-block[data-row="${curRow}"][data-col="${curCol}"]`);
+            if (blockEl) {
+                blockEl.className = 'mine-block b-air';
+                blockEl.classList.add('block-break-anim');
+            }
+
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+        }
+
+        // Обновляем UI
+        hudHp.textContent = hp;
+        hudWin.textContent = `${(bet * accumulatedMultiplier).toFixed(2)} $ (${accumulatedMultiplier.toFixed(2)}x)`;
+
+        // Определение следующего направления падения (вниз, влево-вниз или вправо-вниз)
+        curRow++;
+        const dir = Math.random();
+        if (dir < 0.3 && curCol > 0) curCol--;
+        else if (dir > 0.7 && curCol < GRID_COLS - 1) curCol++;
+
+        updateSpritePos();
+    }, 110);
 }
 
 /* =========================
@@ -2232,5 +2349,8 @@ window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
 window.openPickaxe = openPickaxe;
 window.startPickaxeGame = startPickaxeGame;
+window.adjustPickaxeBet = adjustPickaxeBet;
+window.setPickaxeMaxBet = setPickaxeMaxBet;
+
 
 })();
