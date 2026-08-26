@@ -845,9 +845,17 @@ function beginFlyingPhase() {
 
     crashTrailPoints = [];
     const trailLine = document.getElementById('crashTrailLine');
-    if (trailLine) trailLine.setAttribute('points', '');
+    if (trailLine) {
+        trailLine.setAttribute('points', '');
+        trailLine.classList.remove('crash-trail-crashed');
+        trailLine.style.opacity = '1';
+    }
     const trailDotStart = document.getElementById('crashTrailDot');
-    if (trailDotStart) trailDotStart.style.opacity = '0';
+    if (trailDotStart) {
+        trailDotStart.classList.remove('crash-trail-crashed');
+        trailDotStart.classList.remove('crash-dot-live');
+        trailDotStart.style.opacity = '0';
+    }
 
     const topLeftMult = document.getElementById('crashMultTopLeft');
     if (topLeftMult) {
@@ -921,12 +929,28 @@ function endCrashRound() {
     if (crashRocketAnim) crashRocketAnim.pause();
     if (rocketEl) rocketEl.style.opacity = '0';
 
-    // Стираем след траектории и светящуюся точку сразу по завершении раунда
+    // След траектории и точка красятся в красный ровно на месте краша,
+    // остаются видны какое-то время, а затем плавно растворяются — вместо
+    // мгновенного стирания. Полностью убираем их (и точку, и линию) чуть
+    // раньше конца паузы, чтобы к следующему раунду сцена была чистой.
     const trailLineAtEnd = document.getElementById('crashTrailLine');
-    if (trailLineAtEnd) trailLineAtEnd.setAttribute('points', '');
     const trailDotAtEnd = document.getElementById('crashTrailDot');
-    if (trailDotAtEnd) trailDotAtEnd.style.opacity = '0';
-    crashTrailPoints = [];
+    if (trailLineAtEnd) {
+        trailLineAtEnd.classList.add('crash-trail-crashed');
+    }
+    if (trailDotAtEnd) {
+        trailDotAtEnd.classList.remove('crash-dot-live'); // гасим пульс, чтобы не мешал плавному исчезновению
+        trailDotAtEnd.classList.add('crash-trail-crashed');
+        trailDotAtEnd.style.opacity = '1';
+    }
+    setTimeout(() => {
+        if (trailLineAtEnd) trailLineAtEnd.style.opacity = '0';
+        if (trailDotAtEnd) trailDotAtEnd.style.opacity = '0';
+    }, 1200);
+    setTimeout(() => {
+        if (trailLineAtEnd) trailLineAtEnd.setAttribute('points', '');
+        crashTrailPoints = [];
+    }, 2200);
 
     // TODO: когда будет готова .tgs-анимация взрыва — подключить её сюда
     // тем же способом, что и ракету (см. initCrashRocketAnim): загрузить
@@ -1140,10 +1164,21 @@ function renderCrashUI() {
         if (stageElWaiting) stageElWaiting.style.transform = 'translate(0px, 0px)';
 
         const trailLineWaiting = document.getElementById('crashTrailLine');
-        if (trailLineWaiting) trailLineWaiting.setAttribute('points', '');
+        if (trailLineWaiting) {
+            trailLineWaiting.setAttribute('points', '');
+            trailLineWaiting.classList.remove('crash-trail-crashed');
+            trailLineWaiting.style.opacity = '1';
+        }
 
         const trailDotWaiting = document.getElementById('crashTrailDot');
-        if (trailDotWaiting) trailDotWaiting.style.opacity = '0';
+        if (trailDotWaiting) {
+            // Гасим и анимацию пульса, и класс "краш" — иначе бесконечная
+            // CSS-анимация точки продолжит переопределять opacity, и точка
+            // останется видна в углу (0,0) или на месте прошлого краша.
+            trailDotWaiting.classList.remove('crash-dot-live');
+            trailDotWaiting.classList.remove('crash-trail-crashed');
+            trailDotWaiting.style.opacity = '0';
+        }
 
         const topLeftMultWaiting = document.getElementById('crashMultTopLeft');
         if (topLeftMultWaiting) topLeftMultWaiting.style.display = 'none';
@@ -1232,6 +1267,7 @@ function renderCrashUI() {
                 trailDot.setAttribute('cx', trailX);
                 trailDot.setAttribute('cy', trailY);
                 trailDot.style.opacity = '1';
+                trailDot.classList.add('crash-dot-live');
             }
         }
     }
