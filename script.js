@@ -717,6 +717,326 @@ function endMinesGame(isWin) {
 }
 
 /* =========================
+   КРАШ (РАКЕТА)
+========================= */
+
+// Пауза между раундами (в это же время принимаются ставки на следующий раунд)
+const CRASH_WAIT_MS = 5000;
+
+// Скорость роста коэффициента: примерно x2 за 5 секунд полёта,
+// дальше — экспоненциально быстрее (типично для краш-игр).
+const CRASH_GROWTH_PER_MS = Math.log(2) / 5000;
+
+let crashGame = {
+    phase: 'waiting',   // 'waiting' — приём ставок / пауза, 'flying' — полёт
+    crashPoint: 0,
+    currentMult: 1.00,
+    bet: 0,
+    betPlaced: false,
+    cashedOut: false,
+    startTime: 0,
+    phaseEndsAt: 0,
+    isProcessing: false
+};
+
+let crashAnimHandle = null;
+let crashTimerHandle = null;
+let crashLoopStarted = false;
+let crashHistory = [];      // последние коэффициенты, самый новый — первый
+let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
+
+function openCrash() {
+    showPage("crashPage");
+    updateNav("games");
+    initCrashPage();
+}
+
+function initCrashPage() {
+    renderCrashHistory();
+    renderCrashUI();
+}
+
+// Движок раундов запускается один раз при старте приложения и работает
+// в фоне независимо от того, открыта ли страница Краш — как настоящий
+// непрерывный раунд, к которому можно "подключиться" в любой момент.
+function startCrashEngine() {
+    if (crashLoopStarted) return;
+    crashLoopStarted = true;
+    beginWaitingPhase();
+}
+
+function beginWaitingPhase() {
+    crashGame.phase = 'waiting';
+    crashGame.currentMult = 1.00;
+    crashGame.betPlaced = false;
+    crashGame.cashedOut = false;
+    crashGame.bet = 0;
+    crashGame.phaseEndsAt = Date.now() + CRASH_WAIT_MS;
+
+    renderCrashUI();
+
+    clearInterval(crashTimerHandle);
+    crashTimerHandle = setInterval(() => {
+        const msLeft = crashGame.phaseEndsAt - Date.now();
+        if (msLeft <= 0) {
+            clearInterval(crashTimerHandle);
+            beginFlyingPhase();
+        } else {
+            renderCrashUI();
+        }
+    }, 100);
+}
+
+// Точка взрыва — аналогично Минам закладываем ~5% преимущество казино
+// (95% RTP). Стандартная для краш-игр формула: с вероятностью houseEdge
+// раунд лопается мгновенно на 1.00x, иначе коэффициент разыгрывается по
+// распределению 1 / (1 - r), что в среднем даёт нужный RTP.
+function generateCrashPoint() {
+    const houseEdge = 0.05;
+    const r = Math.random();
+    if (r < houseEdge) return 1.00;
+    const point = (1 - houseEdge) / (1 - r);
+    return Math.max(1.00, Math.floor(point * 100) / 100);
+}
+
+function beginFlyingPhase() {
+    crashGame.phase = 'flying';
+    crashGame.crashPoint = generateCrashPoint();
+    crashGame.currentMult = 1.00;
+    crashGame.startTime = performance.now();
+
+    renderCrashUI();
+    tickCrash();
+}
+
+function tickCrash() {
+    const elapsed = performance.now() - crashGame.startTime;
+    crashGame.currentMult = Math.min(
+        crashGame.crashPoint,
+        Math.floor(Math.exp(CRASH_GROWTH_PER_MS * elapsed) * 100) / 100
+    );
+
+    renderCrashUI();
+
+    if (crashGame.currentMult >= crashGame.crashPoint) {
+        endCrashRound();
+        return;
+    }
+
+    crashAnimHandle = requestAnimationFrame(tickCrash);
+}
+
+function endCrashRound() {
+    cancelAnimationFrame(crashAnimHandle);
+
+    lastCrashPoint = crashGame.crashPoint;
+    crashHistory.unshift(crashGame.crashPoint);
+    if (crashHistory.length > 15) crashHistory.pop();
+    renderCrashHistory();
+
+    if (tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
+    }
+
+    if (crashGame.betPlaced && !crashGame.cashedOut) {
+        showMessage(`Ракета взорвалась на ${crashGame.crashPoint.toFixed(2)}x. Ставка ${crashGame.bet.toFixed(2)}$ сгорела.`);
+    }
+
+    // Пауза между раундами — 5 секунд, в течение неё же принимаются
+    // ставки на следующий полёт (см. beginWaitingPhase).
+    beginWaitingPhase();
+}
+
+async function placeCrashBet() {
+    if (crashGame.phase !== 'waiting' || crashGame.betPlaced) return;
+    if (crashGame.isProcessing) return;
+    if (!lockEconomy()) return;
+
+    const input = document.getElementById('crashBetInput');
+    const bet = roundMoney(parseFloat(input?.value));
+
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    crashGame.isProcessing = true;
+    const snapshot = snapshotBalanceState();
+
+    currentBalance = roundMoney(currentBalance - bet);
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(currentBalance);
+
+    const debited = await saveUserData();
+    if (!debited) {
+        // Списание не сохранилось — откатываем и НЕ засчитываем ставку,
+        // иначе это был бы бесплатный раунд.
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+
+    crashGame.bet = bet;
+    crashGame.betPlaced = true;
+    crashGame.cashedOut = false;
+    crashGame.isProcessing = false;
+    unlockEconomy();
+    renderCrashUI();
+}
+
+async function cashOutCrash() {
+    if (crashGame.phase !== 'flying' || !crashGame.betPlaced || crashGame.cashedOut) return;
+    if (crashGame.isProcessing) return;
+    if (!lockEconomy()) return;
+
+    crashGame.isProcessing = true;
+    const snapshot = snapshotBalanceState();
+
+    const mult = crashGame.currentMult;
+    const winAmount = roundMoney(crashGame.bet * mult);
+
+    currentBalance = roundMoney(currentBalance + winAmount);
+    currentTotalWin = roundMoney(currentTotalWin + winAmount);
+    currentWinsCount++;
+    if (mult > currentMaxWin) currentMaxWin = mult;
+
+    setUIBalance(currentBalance);
+    const credited = await saveUserDataWithRetry();
+
+    if (!credited) {
+        // Не удалось сохранить выигрыш даже после повтора — откатываем
+        // локально, но ставка остаётся активной, чтобы можно было
+        // попробовать забрать ещё раз до конца полёта.
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+
+    crashGame.cashedOut = true;
+    crashGame.isProcessing = false;
+
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+
+    renderCrashUI();
+    unlockEconomy();
+}
+
+function handleCrashAction() {
+    if (crashGame.isProcessing) return;
+
+    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) {
+        placeCrashBet();
+    } else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
+        cashOutCrash();
+    }
+}
+
+function adjustCrashBet(factor) {
+    if (crashGame.betPlaced) return;
+    const input = document.getElementById('crashBetInput');
+    if (!input) return;
+
+    let current = parseFloat(input.value);
+    if (isNaN(current) || current < 0.10) {
+        current = 0.10;
+    } else {
+        current = Math.max(0.10, current * factor);
+    }
+    input.value = current.toFixed(2);
+}
+
+function setCrashMaxBet() {
+    if (crashGame.betPlaced) return;
+    const input = document.getElementById('crashBetInput');
+    if (input) input.value = currentBalance.toFixed(2);
+}
+
+function renderCrashHistory() {
+    const list = document.getElementById('crashHistoryList');
+    if (!list) return;
+
+    list.innerHTML = crashHistory.map(point => {
+        const color = point < 1.5 ? '#e74c3c' : (point >= 2 ? '#2ecc71' : '#f1c40f');
+        return `<span style="display:inline-block; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:4px 8px; font-size:11px; font-weight:800; color:${color};">${point.toFixed(2)}x</span>`;
+    }).join('');
+}
+
+function renderCrashUI() {
+    const statusEl = document.getElementById('crashStatus');
+    const multEl = document.getElementById('crashMultiplier');
+    const rocketEl = document.getElementById('crashRocket');
+    const actionBtn = document.getElementById('crashActionBtn');
+    const betInput = document.getElementById('crashBetInput');
+
+    if (!statusEl || !multEl || !actionBtn) return;
+
+    if (crashGame.phase === 'waiting') {
+        const secLeft = Math.max(0, Math.ceil((crashGame.phaseEndsAt - Date.now()) / 1000));
+        statusEl.textContent = lastCrashPoint !== null
+            ? `Прошлый раунд: ${lastCrashPoint.toFixed(2)}x · Старт через ${secLeft}с`
+            : `Старт через ${secLeft}с`;
+
+        multEl.textContent = '1.00x';
+        multEl.style.color = '#fff';
+
+        if (rocketEl) {
+            rocketEl.textContent = '🚀';
+            rocketEl.style.transform = 'translate(0px, 0px) rotate(-45deg)';
+        }
+
+        if (betInput) betInput.disabled = crashGame.betPlaced;
+
+        if (crashGame.betPlaced) {
+            actionBtn.textContent = 'Ставка принята';
+            actionBtn.disabled = true;
+        } else {
+            actionBtn.textContent = 'Сделать ставку';
+            actionBtn.disabled = false;
+        }
+        return;
+    }
+
+    // phase === 'flying'
+    statusEl.textContent = 'Полёт! 🚀';
+    multEl.textContent = crashGame.currentMult.toFixed(2) + 'x';
+    multEl.style.color = '#2ecc71';
+
+    if (rocketEl) {
+        // Простая траектория: чем выше коэффициент, тем выше и правее ракета
+        const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
+        const x = progress * 140;
+        const y = -progress * 160;
+        rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(-45deg)`;
+    }
+
+    if (betInput) betInput.disabled = true;
+
+    if (crashGame.betPlaced && !crashGame.cashedOut) {
+        const potential = (crashGame.bet * crashGame.currentMult).toFixed(2);
+        actionBtn.textContent = `Забрать ${potential}$`;
+        actionBtn.disabled = false;
+    } else if (crashGame.cashedOut) {
+        actionBtn.textContent = 'Выигрыш забран ✓';
+        actionBtn.disabled = true;
+    } else {
+        actionBtn.textContent = 'Ждите следующего раунда';
+        actionBtn.disabled = true;
+    }
+}
+
+/* =========================
    БАЛАНС И UI
 ========================= */
 
@@ -757,7 +1077,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage"];
+    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -1490,6 +1810,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateLevelUI();
     goHome();
     applyDesign();
+    startCrashEngine();
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
 
@@ -1513,16 +1834,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 window.adjustMinesBet = adjustMinesBet;
 window.applyMinToActive = applyMinToActive;
 window.applyPercentToActive = applyPercentToActive;
+window.adjustCrashBet = adjustCrashBet;
 window.autoPickMinesTile = autoPickMinesTile;
 window.changeMinesBy = changeMinesBy;
 window.claimBonus = claimBonus;
 window.demoBalanceAction = demoBalanceAction;
 window.goHome = goHome;
+window.handleCrashAction = handleCrashAction;
 window.handleMinesAction = handleMinesAction;
 window.onActiveColorInput = onActiveColorInput;
 window.onCustomMinesInputChange = onCustomMinesInputChange;
 window.openBalance = openBalance;
 window.openBonus = openBonus;
+window.openCrash = openCrash;
 window.openGamesMenu = openGamesMenu;
 window.openMines = openMines;
 window.openProfile = openProfile;
@@ -1532,6 +1856,7 @@ window.saveProfileCustomization = saveProfileCustomization;
 window.selectMethod = selectMethod;
 window.selectMinesCount = selectMinesCount;
 window.setBalanceMode = setBalanceMode;
+window.setCrashMaxBet = setCrashMaxBet;
 window.setMinesMaxBet = setMinesMaxBet;
 window.showMessage = showMessage;
 window.spinWheel = spinWheel;
