@@ -1153,7 +1153,15 @@ function renderCrashUI() {
         }
 
         if (rocketEl) {
-            rocketEl.style.transform = 'translate(0px, 0px) rotate(-30deg)';
+            // Ракета в ожидании стоит в центре сцены (тот же центр,
+            // что и во время полёта) под своим "родным" углом -30°.
+            const rocketSize = 170;
+            const stageElWaitPos = document.getElementById('crashStage');
+            const stageWWait = stageElWaitPos ? stageElWaitPos.clientWidth : 300;
+            const stageHWait = stageElWaitPos ? stageElWaitPos.clientHeight : 340;
+            const centerXWait = (stageWWait - rocketSize) / 2 - 16;
+            const centerYWait = 16 - (stageHWait - rocketSize) / 2;
+            rocketEl.style.transform = `translate(${centerXWait}px, ${centerYWait}px) rotate(-30deg)`;
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
 
@@ -1216,56 +1224,61 @@ function renderCrashUI() {
         const stageElForSize = document.getElementById('crashStage');
         const stageW = stageElForSize ? stageElForSize.clientWidth : 300;
         const stageH = stageElForSize ? stageElForSize.clientHeight : 340;
-        const maxX = Math.max(40, stageW - rocketSize - 32);
-        const maxY = Math.max(40, stageH - rocketSize - 32);
+
+        // Ракета больше никуда не летит по сцене — она весь раунд стоит
+        // в центре (то же смещение, что и в фазе ожидания) и только
+        // поворачивается на месте.
+        const centerX = (stageW - rocketSize) / 2 - 16;
+        const centerY = 16 - (stageH - rocketSize) / 2;
 
         // Общий прогресс полёта по логарифмической шкале множителя.
         const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
 
         // Ракета в исходном спрайте нарисована под углом -30° (её "родное"
         // положение — то же самое, что видно в фазе ожидания). Полёт
-        // начинается горизонтально (0°): ракета почти не двигается с
-        // места и разворачивается на месте до этого родного угла, и
-        // только потом устремляется по изогнутой траектории вверх-вправо
-        // (x — замедление/ease-out, y — ускорение/ease-in, отчего кривая
-        // закругляется и уходит почти в вертикаль, как на референсе).
+        // начинается горизонтально (0°): ракета доворачивается на месте
+        // до этого родного угла, а затем продолжает клониться дальше —
+        // почти до вертикали — с ростом коэффициента.
         const PIVOT_PHASE = 0.12;   // доля прогресса на разворот на месте
         const ANGLE_START = 0;      // старт — горизонтально
         const ANGLE_ORIGINAL = -30; // "родной" угол ракеты
         const ANGLE_END = -85;      // угол в конце полёта, почти вертикально
 
-        let x, y, angle;
+        let angle;
 
         if (progress <= PIVOT_PHASE) {
             const p = progress / PIVOT_PHASE;
             const eased = 1 - Math.pow(1 - p, 2); // ease-out
             angle = ANGLE_START + (ANGLE_ORIGINAL - ANGLE_START) * eased;
-            // Лёгкое скольжение вперёд во время разворота на месте
-            x = maxX * 0.03 * eased;
-            y = 0;
         } else {
             const p = (progress - PIVOT_PHASE) / (1 - PIVOT_PHASE);
-            x = maxX * (0.03 + 0.97 * Math.pow(p, 0.55));
-            y = -maxY * Math.pow(p, 1.8);
             angle = ANGLE_ORIGINAL + (ANGLE_END - ANGLE_ORIGINAL) * p;
         }
 
-        rocketEl.style.transform = `translate(${x}px, ${y}px) rotate(${angle}deg)`;
+        rocketEl.style.transform = `translate(${centerX}px, ${centerY}px) rotate(${angle}deg)`;
 
-        // След ракеты рисуем только после разворота на месте — линия
-        // должна совпадать с реальным визуальным перемещением ракеты.
+        // Толстая диагональная траектория: фиксированные начало (почти
+        // у нижнего левого угла сцены) и конец (почти у верхнего правого),
+        // не связанные с реальным положением ракеты — та теперь стоит на
+        // месте. Линия "дорисовывается" от начала к концу по мере роста
+        // коэффициента.
         if (progress > PIVOT_PHASE) {
-            const trailX = 16 + rocketSize / 2 + x;
-            const trailY = (stageH - 16 - rocketSize / 2) + y;
-            crashTrailPoints.push(`${trailX},${trailY}`);
-            const trailLine = document.getElementById('crashTrailLine');
-            if (trailLine) trailLine.setAttribute('points', crashTrailPoints.join(' '));
+            const trailStartX = stageW * 0.05;
+            const trailStartY = stageH * 0.95;
+            const trailEndX = stageW * 0.95;
+            const trailEndY = stageH * 0.05;
+            const lineP = (progress - PIVOT_PHASE) / (1 - PIVOT_PHASE);
+            const headX = trailStartX + (trailEndX - trailStartX) * lineP;
+            const headY = trailStartY + (trailEndY - trailStartY) * lineP;
 
-            // Светящаяся точка-голова следа — всегда в текущем положении ракеты
+            const trailLine = document.getElementById('crashTrailLine');
+            if (trailLine) trailLine.setAttribute('points', `${trailStartX},${trailStartY} ${headX},${headY}`);
+
+            // Светящаяся точка-голова следа — на переднем крае линии
             const trailDot = document.getElementById('crashTrailDot');
             if (trailDot) {
-                trailDot.setAttribute('cx', trailX);
-                trailDot.setAttribute('cy', trailY);
+                trailDot.setAttribute('cx', headX);
+                trailDot.setAttribute('cy', headY);
                 trailDot.style.opacity = '1';
                 trailDot.classList.add('crash-dot-live');
             }
