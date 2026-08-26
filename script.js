@@ -723,9 +723,8 @@ function endMinesGame(isWin) {
 // Пауза между раундами (в это же время принимаются ставки на следующий раунд)
 const CRASH_WAIT_MS = 5000;
 
-// Скорость роста коэффициента: примерно x2 за 5 секунд полёта,
-// дальше — экспоненциально быстрее (типично для краш-игр).
-const CRASH_GROWTH_PER_MS = Math.log(2) / 5000;
+// Скорость роста коэффициента: x2 за 10 секунд полёта (замедленный рост)
+const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
 
 let crashGame = {
     phase: 'waiting',   // 'waiting' — приём ставок / пауза, 'flying' — полёт
@@ -1153,9 +1152,7 @@ function renderCrashUI() {
         }
 
         if (rocketEl) {
-            // Ракета в ожидании стоит в центре сцены (тот же центр,
-            // что и во время полёта) в "лежачем" положении (0°) —
-            // том же угле, с которого начинается старт полёта.
+            // Ракета в ожидании стоит в центре сцены в "лежачем" положении (0°)
             const rocketSize = 200;
             const stageElWaitPos = document.getElementById('crashStage');
             const stageWWait = stageElWaitPos ? stageElWaitPos.clientWidth : 300;
@@ -1181,9 +1178,6 @@ function renderCrashUI() {
 
         const trailDotWaiting = document.getElementById('crashTrailDot');
         if (trailDotWaiting) {
-            // Гасим и анимацию пульса, и класс "краш" — иначе бесконечная
-            // CSS-анимация точки продолжит переопределять opacity, и точка
-            // останется видна в углу (0,0) или на месте прошлого краша.
             trailDotWaiting.classList.remove('crash-dot-live');
             trailDotWaiting.classList.remove('crash-trail-crashed');
             trailDotWaiting.style.opacity = '0';
@@ -1205,8 +1199,6 @@ function renderCrashUI() {
     }
 
     // phase === 'flying'
-    // Никакого текста статуса во время полёта — коэффициент теперь
-    // показывается отдельным светящимся числом сверху слева.
     const topLeftMult = document.getElementById('crashMultTopLeft');
     if (topLeftMult) {
         topLeftMult.textContent = crashGame.currentMult.toFixed(2) + 'x';
@@ -1226,86 +1218,65 @@ function renderCrashUI() {
         const stageW = stageElForSize ? stageElForSize.clientWidth : 300;
         const stageH = stageElForSize ? stageElForSize.clientHeight : 340;
 
-        // Ракета больше никуда не летит по сцене — она весь раунд стоит
-        // в центре (то же смещение, что и в фазе ожидания) и только
-        // поворачивается на месте.
         const centerX = (stageW - rocketSize) / 2 - 16;
         const centerY = 16 - (stageH - rocketSize) / 2;
 
-        // Общий прогресс полёта по логарифмической шкале множителя.
-        const progress = Math.min(1, Math.log(crashGame.currentMult) / Math.log(20));
+        const currentM = crashGame.currentMult;
 
-        // Ракета в исходном спрайте нарисована под углом -30° (её "родное"
-        // положение — то же самое, что видно в фазе ожидания). Полёт
-        // начинается горизонтально (0°): ракета доворачивается на месте
-        // до этого родного угла, а затем продолжает клониться дальше —
-        // почти до вертикали — с ростом коэффициента.
-        const PIVOT_PHASE = 0.12;   // доля прогресса на разворот на месте
-        const ANGLE_START = 0;      // старт — горизонтально, "лежачее" положение
-        const ANGLE_ORIGINAL = -30; // "родной" угол ракеты
-        const ANGLE_END = -80;      // угол в конце полёта — чуть менее вертикально, чтобы не переваливалась
-
+        // -----------------------------------------------------------------
+        // УГЛЫ НАКЛОНА: До 1.25x ракета практически лежит (до -5°),
+        // к высоким коэффициентам постепенно разворачивается носом вверх (-60°)
+        // -----------------------------------------------------------------
         let angle;
-
-        if (progress <= PIVOT_PHASE) {
-            const p = progress / PIVOT_PHASE;
-            const eased = 1 - Math.pow(1 - p, 2); // ease-out
-            angle = ANGLE_START + (ANGLE_ORIGINAL - ANGLE_START) * eased;
+        if (currentM <= 1.25) {
+            const pStart = Math.max(0, (currentM - 1.0) / 0.25);
+            angle = 0 - (5 * pStart);
         } else {
-            const p = (progress - PIVOT_PHASE) / (1 - PIVOT_PHASE);
-            angle = ANGLE_ORIGINAL + (ANGLE_END - ANGLE_ORIGINAL) * p;
+            const pUp = Math.min(1, Math.log(currentM / 1.25) / Math.log(10));
+            const easedUp = Math.pow(pUp, 1.4);
+            angle = -5 - (55 * easedUp);
         }
 
         rocketEl.style.transform = `translate(${centerX}px, ${centerY}px) rotate(${angle}deg)`;
 
-        // Толстая диагональная траектория: фиксированные начало (почти
-        // у нижнего левого угла сцены) и конец (почти у верхнего правого),
-        // не связанные с реальным положением ракеты — та теперь стоит на
-        // месте. Линия "дорисовывается" от начала к концу по мере роста
-        // коэффициента.
-        if (progress > PIVOT_PHASE) {
-            const trailStartX = stageW * 0.05;
-            const trailStartY = stageH * 0.95;
-            const trailEndX = stageW * 0.95;
-            const trailEndY = stageH * 0.05;
-            const lineP = (progress - PIVOT_PHASE) / (1 - PIVOT_PHASE);
-            const headX = trailStartX + (trailEndX - trailStartX) * lineP;
-            const headY = trailStartY + (trailEndY - trailStartY) * lineP;
+        // -----------------------------------------------------------------
+        // ТРАЕКТОРИЯ: Начинает рисоваться сразу от 1.00x без задержек
+        // -----------------------------------------------------------------
+        const trailStartX = stageW * 0.05;
+        const trailStartY = stageH * 0.95;
+        const trailEndX = stageW * 0.95;
+        const trailEndY = stageH * 0.05;
 
-            // Кривая (не прямая) траектория: контрольная точка сдвинута
-            // вниз-вправо от середины хорды, из-за чего линия прогибается
-            // дугой, как классический график взлёта, а не идёт по прямой.
-            const trailLine = document.getElementById('crashTrailLine');
-            if (trailLine) {
-                // Контрольная точка смещена перпендикулярно хорде start→head,
-                // в сторону нижнего правого угла сцены — из-за этого линия
-                // прогибается дугой (полого в начале, круче к концу),
-                // как классический график роста коэффициента, а не идёт прямо.
-                const segDx = headX - trailStartX;
-                const segDy = headY - trailStartY;
-                const segLen = Math.hypot(segDx, segDy) || 1;
-                const nx = -segDy / segLen;
-                const ny = segDx / segLen;
-                const bow = 0.32 * segLen; // сила прогиба дуги
-                const midX = (trailStartX + headX) / 2;
-                const midY = (trailStartY + headY) / 2;
-                const ctrlX = midX + nx * bow;
-                const ctrlY = midY + ny * bow;
-                trailLine.setAttribute('d', `M ${trailStartX},${trailStartY} Q ${ctrlX},${ctrlY} ${headX},${headY}`);
-            }
+        const trailProgress = Math.min(1, Math.log(currentM) / Math.log(15));
 
-            // Светящаяся точка-голова следа — на переднем крае линии
-            const trailDot = document.getElementById('crashTrailDot');
-            if (trailDot) {
-                trailDot.setAttribute('cx', headX);
-                trailDot.setAttribute('cy', headY);
-                trailDot.style.opacity = '1';
-                trailDot.classList.add('crash-dot-live');
-            }
+        const headX = trailStartX + (trailEndX - trailStartX) * trailProgress;
+        const headY = trailStartY + (trailEndY - trailStartY) * trailProgress;
+
+        const trailLine = document.getElementById('crashTrailLine');
+        if (trailLine) {
+            const segDx = headX - trailStartX;
+            const segDy = headY - trailStartY;
+            const segLen = Math.hypot(segDx, segDy) || 1;
+            const nx = -segDy / segLen;
+            const ny = segDx / segLen;
+            const bow = 0.25 * segLen;
+            const midX = (trailStartX + headX) / 2;
+            const midY = (trailStartY + headY) / 2;
+            const ctrlX = midX + nx * bow;
+            const ctrlY = midY + ny * bow;
+            trailLine.setAttribute('d', `M ${trailStartX},${trailStartY} Q ${ctrlX},${ctrlY} ${headX},${headY}`);
+        }
+
+        const trailDot = document.getElementById('crashTrailDot');
+        if (trailDot) {
+            trailDot.setAttribute('cx', headX);
+            trailDot.setAttribute('cy', headY);
+            trailDot.style.opacity = '1';
+            trailDot.classList.add('crash-dot-live');
         }
     }
 
-    // Тряска экрана: чем больше множитель (x), тем сильнее трясёт камеру
+    // Тряска экрана во время полета
     const stageEl = document.getElementById('crashStage');
     if (stageEl) {
         const shakeStrength = Math.min(9, (crashGame.currentMult - 1) * 1.4);
