@@ -1662,5 +1662,7 @@ window.toggleProfileCustomizer = toggleProfileCustomizer;
 window.clickMinesTile = clickMinesTile;
 window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
+window.changeMinesBy = changeMinesBy;
+window.onCustomMinesInputChange = onCustomMinesInputChange;
 
 })();
