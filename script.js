@@ -1383,9 +1383,13 @@ function preloadTypeImages() {
         const img = new Image();
         img.onload = () => {
             pickaxeImageCache[p.id] = url;
-            // Если картинка кирки подгрузилась уже после отрисовки барабана
-            // ожидания — перерисуем его, чтобы сразу показать новую картинку.
-            if (!isPickaxeRunning) renderIdleReel();
+            // Раньше здесь вызывался renderIdleReel(), который полностью
+            // пересоздавал барабан и перезапускал CSS-анимацию заново — это
+            // и было причиной рывков/лагов в превью-прокрутке (каждая из 6
+            // картинок кирок догружается в свой момент). Теперь картинка
+            // подставляется точечно, в уже существующие элементы, без
+            // сброса позиции и перезапуска анимации.
+            refreshAllRenderedPickaxeImages();
         };
         img.onerror = () => { pickaxeImageCache[p.id] = null; };
         img.src = url;
@@ -1419,6 +1423,16 @@ function applyCustomPickaxeVisual(el, pickaxeObj) {
         el.classList.remove('custom-img');
         el.textContent = pickaxeObj.emoji;
     }
+}
+
+// Точечно обновляет картинку уже отрисованных ячеек барабана (и в режиме
+// ожидания, и во время прокрутки) — без пересоздания DOM и без сброса
+// transform/анимации, чтобы подгрузка картинок не дёргала прокрутку.
+function refreshAllRenderedPickaxeImages() {
+    document.querySelectorAll('.pickaxe-reel-item[data-pickaxe-id]').forEach(el => {
+        const p = PICKAXE_TYPES.find(pt => pt.id === el.dataset.pickaxeId);
+        if (p) applyCustomPickaxeVisual(el, p);
+    });
 }
 
 // Перекрашивает уже отрисованные в DOM блоки шахты после того, как картинка
@@ -1746,7 +1760,7 @@ function renderIdleReel() {
     track.style.setProperty('--idle-loop-shift', `-${setWidth}px`);
     track.style.animation = `pickaxeIdleScroll ${(PICKAXE_TYPES.length * 1.3).toFixed(1)}s linear infinite`;
 
-    if (nameLabel) nameLabel.textContent = 'Нажмите «БРОСИТЬ КИРКУ»';
+    if (nameLabel) nameLabel.textContent = '';
 }
 
 // Режим открытия: настоящая "кейс"-прокрутка с торможением на выпавшей кирке.
@@ -1775,7 +1789,7 @@ function spinPickaxeReel(finalPickaxe) {
         track.style.transform = 'translateX(0px)';
         void track.offsetWidth;
 
-        if (nameLabel) nameLabel.textContent = 'Крутим...';
+        if (nameLabel) nameLabel.textContent = '';
 
         // Трек стоит на left:50%, поэтому чтобы центр выигрышной ячейки
         // совпал с центром вьюпорта (и с указателем-селектором), нужно
