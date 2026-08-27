@@ -1192,7 +1192,7 @@ main {
 }
 /* Медленная зацикленная прокрутка в режиме ожидания — как превью кейса до открытия */
 @keyframes pickaxeIdleScroll {
-    from { transform: translateX(0); }
+    from { transform: translateX(var(--idle-loop-start, -160px)); }
     to   { transform: translateX(var(--idle-loop-shift, -384px)); }
 }
 
@@ -2341,4 +2341,4 @@ main {
 
 .stepper-btn:active {
   transform: scale(0.9);
-}
+       }
