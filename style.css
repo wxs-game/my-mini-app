@@ -1313,6 +1313,15 @@ main {
     background-size: 13px 13px, 13px 13px, 13px 13px;
     background-position: calc(var(--tx) + 3px) calc(var(--ty) + 4px), calc(var(--tx) + 22px) calc(var(--ty) + 14px), calc(var(--tx) + 10px) calc(var(--ty) + 26px);
 }
+.b-gold::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #fff6b0 0%, #ffd23f 55%, #c99a15 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #fff6b0 0%, #ffd23f 55%, #c99a15 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #fff6b0 0%, #ffd23f 55%, #c99a15 60%, transparent 61%);
+    background-size: 13px 13px, 13px 13px, 13px 13px;
+    background-position: calc(var(--tx) + 4px) calc(var(--ty) + 5px), calc(var(--tx) + 23px) calc(var(--ty) + 15px), calc(var(--tx) + 11px) calc(var(--ty) + 27px);
+}
+.b-gold { box-shadow: inset 0 -6px 0 rgba(0,0,0,0.32), inset 0 2px 0 rgba(255,255,255,0.08), 0 0 6px rgba(255,210,63,0.25); }
 .b-lapis::after {
     background-image:
         radial-gradient(circle at 35% 35%, #9fc4ff 0%, #2e5fd6 55%, #1d3f99 60%, transparent 61%),
@@ -1441,97 +1450,6 @@ main {
     background-repeat: no-repeat;
 }
 
-/* ==========================================
-   ПАНЕЛЬ ЗАГРУЗКИ СВОИХ КАРТИНОК (блоки и кирки)
-========================================== */
-.img-customizer-toggle-btn {
-    margin-top: 10px;
-    width: 100%;
-    padding: 8px;
-    color: #ffc800;
-    border: 1px solid rgba(255,200,0,0.3);
-    border-radius: 12px;
-    cursor: pointer;
-    font-weight: 700;
-    background: transparent;
-}
-.img-customizer-box {
-    margin-top: 12px;
-    background: rgba(0,0,0,0.7);
-    padding: 14px;
-    border-radius: 16px;
-    text-align: left;
-    border: 1px solid #282828;
-}
-.img-customizer-box h3 {
-    font-size: 13px;
-    color: #999;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin: 0 0 10px;
-}
-.img-customizer-box h3:not(:first-child) {
-    margin-top: 16px;
-}
-.img-custom-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-    gap: 10px;
-}
-.img-custom-slot {
-    background: #111;
-    border: 1px solid #262626;
-    border-radius: 12px;
-    padding: 8px 6px;
-    text-align: center;
-}
-.img-custom-preview {
-    width: 44px;
-    height: 44px;
-    margin: 0 auto 6px;
-    border-radius: 8px;
-    background: #1c1c1c;
-    background-size: cover;
-    background-position: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    color: #555;
-}
-.img-custom-label {
-    font-size: 10px;
-    color: #ccc;
-    margin-bottom: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.img-custom-upload-btn {
-    display: block;
-    font-size: 10px;
-    font-weight: 700;
-    color: #ffc800;
-    border: 1px solid rgba(255,200,0,0.3);
-    border-radius: 8px;
-    padding: 4px 0;
-    cursor: pointer;
-}
-.img-custom-upload-btn input[type="file"] {
-    display: none;
-}
-.img-custom-reset-btn {
-    display: block;
-    width: 100%;
-    margin-top: 4px;
-    font-size: 10px;
-    color: #999;
-    background: transparent;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 4px 0;
-    cursor: pointer;
-}
 
 /* HUD поверх шахты */
 .mine-hud {
