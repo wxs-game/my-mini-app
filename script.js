@@ -757,6 +757,13 @@ let lastCrashPoint = null;  // коэффициент прошлого раун�
 let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
 let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты
 let crashExplosionAnim = null; // экземпляр Lottie-анимации взрыва
+let crashExplosionTotalFrames = 0; // общее число кадров анимации взрыва (берётся из её JSON)
+
+// Доля анимации взрыва, которая реально проигрывается при краше — по ТЗ
+// нужна только самая первая часть (меньше половины), дальше идёт "хвост"
+// анимации, который не нужен. Меняйте это число, чтобы точнее подогнать
+// момент остановки под нужный кадр.
+const EXPLOSION_PLAY_FRACTION = 0.35;
 
 // Кэш DOM-элементов для исключения лишних поисков при каждом кадре (60 FPS)
 let crashDomCache = null;
@@ -842,6 +849,7 @@ function initCrashExplosionAnim() {
         autoplay: false,
         animationData: animationData
     });
+    crashExplosionTotalFrames = animationData.op || 0;
 }
 
 function openCrash() {
@@ -1013,7 +1021,14 @@ function endCrashRound() {
         }
         dom.explosionEl.style.transform = offsetTransform;
         dom.explosionEl.style.display = 'block';
-        if (crashExplosionAnim) crashExplosionAnim.goToAndPlay(0, true);
+        if (crashExplosionAnim) {
+            if (crashExplosionTotalFrames > 0) {
+                const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
+                crashExplosionAnim.playSegments([0, endFrame], true);
+            } else {
+                crashExplosionAnim.goToAndPlay(0, true);
+            }
+        }
     }
 
     if (dom.multEl) dom.multEl.style.color = '#e74c3c';
