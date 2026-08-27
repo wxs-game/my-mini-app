@@ -127,12 +127,18 @@ function updateProfileUI(data) {
 }
 
 async function loadUserData() {
+    console.log('[wxs] loadUserData: старт');
+    console.log('[wxs] tg объект:', tg);
+    console.log('[wxs] tg.initDataUnsafe:', tg?.initDataUnsafe);
+
     const tgUser = tg?.initDataUnsafe?.user;
 
     if (!tgUser) {
-        console.warn('Запуск вне Telegram — используются локальные данные');
+        console.error('[wxs] ❌ tgUser ПУСТОЙ — Telegram не передал initDataUnsafe.user. Профиль/баланс НЕ будут загружены. Проверьте: (1) открыто ли через кнопку Web App у бота, (2) настроен ли домен через /setdomain в BotFather, (3) версия Telegram клиента.');
         return;
     }
+
+    console.log('[wxs] ✅ tgUser получен:', tgUser);
 
     const profileData = {
         telegram_id: tgUser.id,
@@ -141,11 +147,15 @@ async function loadUserData() {
         photo_url: tgUser.photo_url || ''
     };
 
+    console.log('[wxs] Запрос к Supabase: SELECT wxs_game WHERE telegram_id=' + tgUser.id);
+
     let { data, error } = await supabase
         .from('wxs_game')
         .select('*')
         .eq('telegram_id', tgUser.id)
         .maybeSingle();
+
+    console.log('[wxs] Ответ Supabase (select): data=', data, 'error=', error);
 
     if (error && error.code === 'PGRST116') {
         console.error('В таблице wxs_game найдено несколько строк для telegram_id=' + tgUser.id + '. Нужно удалить дубликаты в Supabase и добавить UNIQUE-ограничение на telegram_id.');
@@ -207,7 +217,9 @@ async function loadUserData() {
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
 
+    console.log('[wxs] ✅ Данные пользователя применены, вызываю updateProfileUI', data);
     updateProfileUI(data);
+    console.log('[wxs] loadUserData: завершено успешно');
 }
 
 /* =========================
