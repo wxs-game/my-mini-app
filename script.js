@@ -220,6 +220,14 @@ function roundMoney(value) {
     return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+// Округление ВНИЗ (в пользу заведения, не игрока) — используется там, где
+// нужно отсечь дробные центы в финальной выплате, а не округлить их к игроку.
+function roundMoneyDown(value) {
+    const n = Number(value);
+    if (!isFinite(n)) return 0;
+    return Math.floor((n + Number.EPSILON) * 100) / 100;
+}
+
 let isEconomyLocked = false;
 
 function lockEconomy() {
@@ -1417,21 +1425,34 @@ function refreshAllRenderedBlockImages() {
     });
 }
 
-// Пороги глубины и базовые шансы (%) появления руды — используются как "затравка"
-// для жилы (см. pickOreSeed). Сама жила потом разрастается вокруг затравки.
+// Пороги глубины и веса появления руды. Работает в 2 шага:
+//  1) baseSeedChance(rowIndex) — ОБЩИЙ шанс (%), что новая ячейка вообще
+//     станет затравкой руды (а не камнем). Он растёт с глубиной, но
+//     жёстко ограничен потолком — поэтому руды всегда заметно МЕНЬШЕ
+//     камня, даже в самой глубокой части шахты.
+//  2) если ячейка стала рудой — тип выбирается по весам (baseWeight) среди
+//     ярусов, уже открытых на этой глубине (rowIndex >= minRow). growth/maxMult
+//     увеличивают вес более дорогих ярусов по мере углубления ЗА порог их
+//     открытия — поэтому дорогая руда действительно чаще встречается ниже,
+//     а не просто "включается" на пороге и остаётся редкой навсегда.
 const ORE_TIERS = [
-    { id: 'diamond', minRow: 46, chance: 2.5 },
-    { id: 'emerald', minRow: 36, chance: 3.5 },
-    { id: 'lapis',   minRow: 26, chance: 5   },
-    { id: 'gold',    minRow: 20, chance: 6   },
-    { id: 'iron',    minRow: 16, chance: 7   },
-    { id: 'copper',  minRow: 9,  chance: 8   },
-    { id: 'coal',    minRow: 4,  chance: 9   }
+    { id: 'diamond', minRow: 46, baseWeight: 1.0, growth: 0.05,  maxMult: 4.0 },
+    { id: 'emerald', minRow: 36, baseWeight: 1.6, growth: 0.045, maxMult: 3.4 },
+    { id: 'lapis',   minRow: 26, baseWeight: 2.4, growth: 0.035, maxMult: 2.8 },
+    { id: 'gold',    minRow: 20, baseWeight: 3.2, growth: 0.03,  maxMult: 2.4 },
+    { id: 'iron',    minRow: 16, baseWeight: 4.4, growth: 0.02,  maxMult: 2.0 },
+    { id: 'copper',  minRow: 9,  baseWeight: 6.5, growth: 0.012, maxMult: 1.6 },
+    { id: 'coal',    minRow: 4,  baseWeight: 8.5, growth: 0.006, maxMult: 1.3 }
 ];
 // Вероятность того, что жила продолжится в соседнюю ячейку (вертикально/горизонтально) —
-// это и создаёт "скопления" (кластеры) руды, а не одиночные редкие блоки.
-const VEIN_VERTICAL_CHANCE = 0.6;
-const VEIN_HORIZONTAL_CHANCE = 0.38;
+// это и создаёт "скопления" (кластеры) руды. Размер каждой жилы дополнительно
+// жёстко ограничен ОБЩИМ бюджетом (см. generateRow) — 3-6 блоков максимум СУММАРНО
+// на всю жилу (включая любые её ответвления), а не на каждое направление отдельно,
+// поэтому рудники никогда не превращаются в огромные сплошные залежи.
+const VEIN_VERTICAL_CHANCE = 0.55;
+const VEIN_HORIZONTAL_CHANCE = 0.3;
+const VEIN_MIN_SIZE = 3;
+const VEIN_MAX_SIZE = 6;
 
 const GRID_COLS = 7;
 const BLOCK_SIZE = 44; // Должно совпадать с --block-size в style.css
@@ -1468,7 +1489,10 @@ function openPickaxe() {
 
 // Создаёт независимую ячейку блока (со своей прочностью), а не общую ссылку —
 // это нужно, чтобы каждую руду можно было "долбить" по несколько раз отдельно.
-function makeCell(type, rowIndex) {
+// veinBudget — общий (расшаренный по ссылке) счётчик "сколько ещё блоков может
+// занять эта жила" — единый на все её ответвления (вертикальные и горизонтальные),
+// поэтому итоговый размер жилы гарантированно не превышает 3-6 блоков суммарно.
+function makeCell(type, rowIndex, veinBudget) {
     const durability = type.id === 'air' ? 0 : (type.baseDur + Math.floor(rowIndex / type.depthStep));
     return {
         id: type.id,
@@ -1476,49 +1500,91 @@ function makeCell(type, rowIndex) {
         multiplier: type.multiplier,
         isOre: ORE_IDS.includes(type.id),
         durability,
-        maxDurability: durability
+        maxDurability: durability,
+        veinBudget: veinBudget || null
     };
 }
 
+// Общий шанс (%), что ячейка вообще станет затравкой руды на данной глубине.
+// Растёт с глубиной, но жёстко ограничен потолком (14%) — камня всегда
+// заметно больше руды, даже в самой глубокой части шахты.
+function baseSeedChance(rowIndex) {
+    return Math.min(14, 5 + rowIndex * 0.06);
+}
+
 // Выбирает "затравку" новой жилы руды для текущей глубины (или null → камень).
+// Шаг 1: решаем, будет ли эта ячейка рудой вообще (см. baseSeedChance).
+// Шаг 2: если да — выбираем ЧЕЙ тип по весам среди уже открытых на этой
+// глубине ярусов; вес дорогих ярусов растёт по мере углубления ЗА порог их
+// открытия (growth/maxMult), поэтому дорогая руда реально чаще встречается
+// ниже, а не просто "включается" на пороге.
 function pickOreSeed(rowIndex) {
-    const rand = Math.random() * 100;
-    let acc = 0;
-    for (const tier of ORE_TIERS) {
-        if (rowIndex < tier.minRow) continue;
-        acc += tier.chance;
-        if (rand < acc) return tier.id;
+    if (Math.random() * 100 >= baseSeedChance(rowIndex)) return null;
+
+    const available = ORE_TIERS.filter(t => rowIndex >= t.minRow);
+    if (!available.length) return null;
+
+    let totalWeight = 0;
+    const weighted = available.map(t => {
+        const depthPast = rowIndex - t.minRow;
+        const w = t.baseWeight * Math.min(t.maxMult, 1 + depthPast * t.growth);
+        totalWeight += w;
+        return { id: t.id, w };
+    });
+
+    let r = Math.random() * totalWeight;
+    for (const item of weighted) {
+        r -= item.w;
+        if (r <= 0) return item.id;
     }
-    return null;
+    return weighted[weighted.length - 1].id;
 }
 
 function generateRow(rowIndex) {
     const row = [];
     for (let c = 0; c < GRID_COLS; c++) {
         if (rowIndex === 0) {
-            row.push(makeCell(BLOCK_TYPES.GRASS, rowIndex));
+            row.push(makeCell(BLOCK_TYPES.GRASS, rowIndex, null));
             continue;
         }
 
-        // Скопления руды: если сосед сверху/слева — руда, есть высокий шанс,
-        // что жила продолжится сюда тем же типом. Иначе — обычная случайная
-        // "затравка" новой жилы по глубине, либо камень.
+        // Скопления руды: если сосед сверху/слева — руда, у которой ЕЩЁ ОСТАЛСЯ
+        // общий бюджет жилы (veinBudget.remaining > 0), есть шанс, что жила
+        // продолжится сюда тем же типом. Как только бюджет исчерпан — жила
+        // гарантированно обрывается ВО ВСЕХ направлениях (бюджет один на всю
+        // жилу, а не отдельно на каждую ветку), поэтому итоговый размер
+        // скопления не превышает 3-6 блоков. Если продолжения нет — обычная
+        // случайная "затравка" новой жилы по глубине, либо камень.
         const aboveCell = (mineGridMap[rowIndex - 1] || [])[c];
         const leftCell = row[c - 1];
         let oreId = null;
+        let veinBudget = null;
 
-        if (aboveCell && aboveCell.isOre && Math.random() < VEIN_VERTICAL_CHANCE) {
+        const aboveCanContinue = aboveCell && aboveCell.isOre && aboveCell.veinBudget && aboveCell.veinBudget.remaining > 0;
+        const leftCanContinue = leftCell && leftCell.isOre && leftCell.veinBudget && leftCell.veinBudget.remaining > 0;
+
+        if (aboveCanContinue && Math.random() < VEIN_VERTICAL_CHANCE) {
             oreId = aboveCell.id;
-        } else if (leftCell && leftCell.isOre && Math.random() < VEIN_HORIZONTAL_CHANCE) {
+            veinBudget = aboveCell.veinBudget;
+            veinBudget.remaining--;
+        } else if (leftCanContinue && Math.random() < VEIN_HORIZONTAL_CHANCE) {
             oreId = leftCell.id;
+            veinBudget = leftCell.veinBudget;
+            veinBudget.remaining--;
         } else {
             oreId = pickOreSeed(rowIndex);
+            if (oreId) {
+                // Новая жила: сразу выдаём ей общий случайный "бюджет" размера
+                // 3-6 блоков суммарно (эта ячейка + остаток на продолжение).
+                const veinSize = VEIN_MIN_SIZE + Math.floor(Math.random() * (VEIN_MAX_SIZE - VEIN_MIN_SIZE + 1));
+                veinBudget = { remaining: veinSize - 1 };
+            }
         }
 
         if (oreId) {
-            row.push(makeCell(BLOCK_TYPES[oreId.toUpperCase()], rowIndex));
+            row.push(makeCell(BLOCK_TYPES[oreId.toUpperCase()], rowIndex, veinBudget));
         } else {
-            row.push(makeCell(BLOCK_TYPES.STONE, rowIndex));
+            row.push(makeCell(BLOCK_TYPES.STONE, rowIndex, null));
         }
     }
     return row;
@@ -1727,7 +1793,10 @@ function runMiningPhysics(pickaxe, bet) {
         pickaxePhysicsRAF = null;
         sprite.classList.add('hidden');
 
-        const totalWin = roundMoney(bet * accumulatedMultiplier);
+        // Итоговая выплата округляется ВНИЗ (не в пользу игрока) — если накопленный
+        // множитель даёт, например, 1.2347x от ставки, дробные центы свыше двух
+        // знаков отбрасываются, а не округляются вверх.
+        const totalWin = roundMoneyDown(bet * accumulatedMultiplier);
         if (totalWin > 0) {
             currentBalance = roundMoney(currentBalance + totalWin);
             currentTotalWin = roundMoney(currentTotalWin + totalWin);
