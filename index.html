@@ -11,9 +11,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 
     <link rel="stylesheet" href="style.css">
@@ -33,31 +30,23 @@
             font-weight: 900;
             font-size: 130px;
             line-height: 1;
-            background-size: 250% 250%;
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
             pointer-events: none;
             user-select: none;
             z-index: 6;
-            animation: crashCountdownShimmer 1.1s ease-in-out infinite, crashCountdownPulse 0.9s ease-in-out infinite;
+            will-change: transform;
+            animation: crashCountdownPulse 0.9s ease-in-out infinite;
         }
         .crash-countdown.cc-green {
-            background-image: linear-gradient(120deg, #0aff6e, #baffd8, #0aff6e, #05a648, #0aff6e);
-            filter: drop-shadow(0 0 14px #0aff6e) drop-shadow(0 0 42px #0aff6e) drop-shadow(0 0 70px rgba(10,255,110,0.5));
+            color: #0aff6e;
+            filter: drop-shadow(0 0 20px rgba(10,255,110,0.8));
         }
         .crash-countdown.cc-yellow {
-            background-image: linear-gradient(120deg, #fff200, #fffabf, #fff200, #c9a600, #fff200);
-            filter: drop-shadow(0 0 14px #fff200) drop-shadow(0 0 42px #fff200) drop-shadow(0 0 70px rgba(255,242,0,0.5));
+            color: #fff200;
+            filter: drop-shadow(0 0 20px rgba(255,242,0,0.8));
         }
         .crash-countdown.cc-red {
-            background-image: linear-gradient(120deg, #ff2b2b, #ffb3b3, #ff2b2b, #a10000, #ff2b2b);
-            filter: drop-shadow(0 0 14px #ff2b2b) drop-shadow(0 0 42px #ff2b2b) drop-shadow(0 0 70px rgba(255,43,43,0.5));
-        }
-        @keyframes crashCountdownShimmer {
-            0%   { background-position: 0% 50%; }
-            50%  { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            color: #ff2b2b;
+            filter: drop-shadow(0 0 20px rgba(255,43,43,0.8));
         }
         @keyframes crashCountdownPulse {
             0%, 100% { transform: scale(1); }
@@ -96,7 +85,7 @@
             line-height: 1;
             letter-spacing: 0.5px;
             color: #3dff9a;
-            text-shadow: 0 0 8px rgba(61,255,154,0.9), 0 0 22px rgba(61,255,154,0.7), 0 0 46px rgba(46,204,113,0.45);
+            text-shadow: 0 0 12px rgba(61,255,154,0.8);
             z-index: 7;
             display: none;
             pointer-events: none;
@@ -104,7 +93,7 @@
         }
         .crash-mult-topleft.crashed {
             color: #ff4d4d;
-            text-shadow: 0 0 8px rgba(255,77,77,0.9), 0 0 22px rgba(255,77,77,0.7), 0 0 46px rgba(255,43,43,0.45);
+            text-shadow: 0 0 12px rgba(255,77,77,0.8);
         }
     </style>
 </head>
@@ -391,12 +380,12 @@
 
         <section class="wheel-card">
 
-            <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
+            <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden; contain: layout paint style; will-change: transform;">
                 <svg id="crashTrail" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
                     <path id="crashTrailLine" d="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 24px #2ecc71) drop-shadow(0 0 50px rgba(46,204,113,0.75)) drop-shadow(0 0 90px rgba(46,204,113,0.45));"/>
                     <circle id="crashTrailDot" cx="0" cy="0" r="13" fill="#eafff2" style="opacity:0; filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 28px #2ecc71) drop-shadow(0 0 55px rgba(46,204,113,0.9)) drop-shadow(0 0 95px rgba(46,204,113,0.5));"/>
                 </svg>
-                <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; transition: transform 0.08s linear;"></div>
+                <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; transition: transform 0.08s linear; will-change: transform;"></div>
                 <div id="crashExplosion" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; text-align:center; display:none; transition: transform 0.08s linear, opacity 0.3s ease;"></div>
                 <div id="crashCenterInfo" style="position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); text-align:center; width: 100%;">
                     <strong id="crashMultiplier" style="display:block; font-size: 34px; font-weight: 900; color:#fff;">1.00x</strong>
