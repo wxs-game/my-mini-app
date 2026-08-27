@@ -845,6 +845,28 @@ function getCrashDom() {
     return crashDomCache;
 }
 
+// Кэш геометрии сцены краша. Раньше stageEl.clientWidth/clientHeight читались
+// на КАЖДОМ кадре rAF (60 раз в секунду) внутри renderCrashUI — это forced
+// synchronous layout (браузер обязан пересчитать раскладку прямо в момент
+// чтения), да ещё вперемешку с записью style.transform на других элементах —
+// классический layout thrashing, один из главных источников лагов на телефонах.
+// Теперь размеры сцены меряются один раз (при открытии страницы / ресайзе) и
+// переиспользуются в каждом кадре без обращения к layout-движку.
+let crashStageSize = { w: 300, h: 340 };
+
+function measureCrashStage() {
+    const dom = getCrashDom();
+    if (dom.stageEl) {
+        crashStageSize = {
+            w: dom.stageEl.clientWidth || 300,
+            h: dom.stageEl.clientHeight || 340
+        };
+    }
+}
+
+window.addEventListener('resize', measureCrashStage, { passive: true });
+window.addEventListener('orientationchange', measureCrashStage, { passive: true });
+
 // Загружает анимацию ракеты
 function initCrashRocketAnim() {
     const dom = getCrashDom();
@@ -867,11 +889,16 @@ function initCrashRocketAnim() {
         return;
     }
 
+    // renderer: 'canvas' вместо 'svg' — SVG-рендерер Lottie на каждый кадр
+    // создаёт/обновляет реальные DOM-узлы (path/group), что на слабых
+    // телефонах гораздо дороже, чем растеризация в canvas. Визуально разницы
+    // нет, а FPS заметно выше.
     crashRocketAnim = lottie.loadAnimation({
         container: dom.rocketEl,
-        renderer: 'svg',
+        renderer: 'canvas',
         loop: true,
         autoplay: true,
+        rendererSettings: { clearCanvas: true, preserveAspectRatio: 'xMidYMid meet' },
         animationData: animationData
     });
 }
@@ -900,9 +927,10 @@ function initCrashExplosionAnim() {
 
     crashExplosionAnim = lottie.loadAnimation({
         container: dom.explosionEl,
-        renderer: 'svg',
+        renderer: 'canvas',
         loop: false,
         autoplay: false,
+        rendererSettings: { clearCanvas: true, preserveAspectRatio: 'xMidYMid meet' },
         animationData: animationData
     });
     crashExplosionTotalFrames = animationData.op || 0;
@@ -931,6 +959,7 @@ function openCrash() {
 }
 
 function initCrashPage() {
+    measureCrashStage();
     renderCrashHistory();
     renderCrashUI();
     initCrashRocketAnim();
@@ -1259,8 +1288,8 @@ function renderCrashUI() {
         }
 
         if (dom.rocketEl) {
-            const stageW = dom.stageEl ? dom.stageEl.clientWidth : 300;
-            const stageH = dom.stageEl ? dom.stageEl.clientHeight : 340;
+            const stageW = crashStageSize.w;
+            const stageH = crashStageSize.h;
             const centerXWait = (stageW - 200) / 2 - 16;
             const centerYWait = 16 - (stageH - 200) / 2;
             
@@ -1303,8 +1332,8 @@ function renderCrashUI() {
     if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
 
     if (dom.rocketEl) {
-        const stageW = dom.stageEl ? dom.stageEl.clientWidth : 300;
-        const stageH = dom.stageEl ? dom.stageEl.clientHeight : 340;
+        const stageW = crashStageSize.w;
+        const stageH = crashStageSize.h;
 
         const centerX = (stageW - 200) / 2 - 16;
         const centerY = 16 - (stageH - 200) / 2;
