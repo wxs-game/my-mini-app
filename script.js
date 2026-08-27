@@ -228,6 +228,68 @@ function roundMoneyDown(value) {
     return Math.floor((n + Number.EPSILON) * 100) / 100;
 }
 
+/* =========================
+   ЕДИНАЯ ЛОГИКА ПОЛЯ СТАВКИ (Мины / Краш / Кирка)
+   Кнопки ½ / x2 / MAX и защита поля от некорректных чисел
+   работают одинаково во всех трёх играх.
+========================= */
+
+const MIN_BET = 0.10;
+
+// Применяет множитель (½ или x2) к текущему значению поля ставки.
+// Пустое/некорректное значение → минимальная ставка.
+// Итог всегда зажат в диапазон [MIN_BET; currentBalance] — выше баланса
+// сумма никогда не выставляется, даже кнопкой x2.
+function applyBetFactor(input, factor) {
+    if (!input) return;
+    let current = parseFloat(input.value);
+
+    if (isNaN(current) || current < MIN_BET) {
+        current = MIN_BET;
+    } else {
+        current = roundMoney(current * factor);
+        if (current < MIN_BET) current = MIN_BET;
+    }
+
+    if (current > currentBalance) {
+        current = roundMoney(Math.max(0, currentBalance));
+    }
+
+    input.value = current.toFixed(2);
+}
+
+// Кнопка MAX — ставит в поле весь доступный баланс.
+function applyBetMax(input) {
+    if (!input) return;
+    input.value = roundMoney(Math.max(0, currentBalance)).toFixed(2);
+}
+
+// При потере фокуса поля ставки (после ручного ввода с клавиатуры)
+// значение проверяется и зажимается тем же диапазоном [MIN_BET; currentBalance],
+// чтобы вручную нельзя было вписать сумму выше баланса или отрицательное число.
+function clampBetInputOnBlur(e) {
+    const input = e.target;
+    if (!input || input.value.trim() === '') return;
+
+    let v = parseFloat(input.value);
+    if (isNaN(v) || v <= 0) {
+        input.value = '';
+        return;
+    }
+
+    v = roundMoney(v);
+    if (v > currentBalance) v = roundMoney(Math.max(0, currentBalance));
+    input.value = v.toFixed(2);
+}
+
+// Блокирует символы, которые ломают number-поле на некоторых мобильных
+// клавиатурах (научная запись "e", повторные "+"/"-").
+function blockInvalidBetKeys(e) {
+    if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-') {
+        e.preventDefault();
+    }
+}
+
 let isEconomyLocked = false;
 
 function lockEconomy() {
@@ -470,22 +532,12 @@ function selectMinesCount(count, btn) {
 
 function adjustMinesBet(factor) {
     if (minesGame.active) return;
-    const input = document.getElementById('minesBetInput');
-    if (!input) return;
-
-    let current = parseFloat(input.value);
-    if (isNaN(current) || current < 0.10) {
-        current = 0.10;
-    } else {
-        current = Math.max(0.10, current * factor);
-    }
-    input.value = current.toFixed(2);
+    applyBetFactor(document.getElementById('minesBetInput'), factor);
 }
 
 function setMinesMaxBet() {
     if (minesGame.active) return;
-    const input = document.getElementById('minesBetInput');
-    if (input) input.value = currentBalance.toFixed(2);
+    applyBetMax(document.getElementById('minesBetInput'));
 }
 
 function getMinesMultiplier(gemsFound, minesCount) {
@@ -1161,22 +1213,12 @@ function handleCrashAction() {
 
 function adjustCrashBet(factor) {
     if (crashGame.betPlaced) return;
-    const dom = getCrashDom();
-    if (!dom.betInput) return;
-
-    let current = parseFloat(dom.betInput.value);
-    if (isNaN(current) || current < 0.10) {
-        current = 0.10;
-    } else {
-        current = Math.max(0.10, current * factor);
-    }
-    dom.betInput.value = current.toFixed(2);
+    applyBetFactor(getCrashDom().betInput, factor);
 }
 
 function setCrashMaxBet() {
     if (crashGame.betPlaced) return;
-    const dom = getCrashDom();
-    if (dom.betInput) dom.betInput.value = currentBalance.toFixed(2);
+    applyBetMax(getCrashDom().betInput);
 }
 
 function renderCrashHistory() {
@@ -1563,13 +1605,11 @@ let isPickaxeRunning = false;
 let pickaxePhysicsRAF = null;
 
 function adjustPickaxeBet(factor) {
-    const input = document.getElementById('pickaxeBetInput');
-    let val = parseFloat(input.value) || 0.10;
-    input.value = (val * factor).toFixed(2);
+    applyBetFactor(document.getElementById('pickaxeBetInput'), factor);
 }
 
 function setPickaxeMaxBet() {
-    document.getElementById('pickaxeBetInput').value = currentBalance.toFixed(2);
+    applyBetMax(document.getElementById('pickaxeBetInput'));
 }
 
 function openPickaxe() {
@@ -3013,6 +3053,8 @@ window.openPickaxe = openPickaxe;
 window.startPickaxeGame = startPickaxeGame;
 window.adjustPickaxeBet = adjustPickaxeBet;
 window.setPickaxeMaxBet = setPickaxeMaxBet;
+window.clampBetInputOnBlur = clampBetInputOnBlur;
+window.blockInvalidBetKeys = blockInvalidBetKeys;
 
 
 
