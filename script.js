@@ -1504,7 +1504,14 @@ function openPickaxe() {
     showPage("pickaxePage");
     updateNav("games");
     resetMineWorld();
-    renderIdleReel();
+    // Барабан уже подготовлен и крутится с момента загрузки приложения
+    // (см. renderIdleReel() в DOMContentLoaded) — пересоздаём его здесь
+    // только если он почему-то ещё пуст, чтобы не дёргать/не сбрасывать
+    // уже идущую прокрутку при каждом повторном заходе на страницу.
+    const track = document.getElementById('pickaxeReelTrack');
+    if (!track || !track.children.length) {
+        renderIdleReel();
+    }
 }
 
 // Создаёт независимую ячейку блока (со своей прочностью), а не общую ссылку —
@@ -1736,13 +1743,13 @@ function makeReelItemEl(p) {
 
 // Режим ожидания: зацикленная медленная прокрутка (превью кейса до открытия).
 function renderIdleReel() {
+    const viewport = document.getElementById('pickaxeReelViewport');
     const track = document.getElementById('pickaxeReelTrack');
     const nameLabel = document.getElementById('pickaxeName');
     if (!track) return;
 
     track.style.transition = 'none';
     track.style.animation = 'none';
-    track.style.transform = 'translateX(0px)';
     track.innerHTML = '';
 
     // Несколько копий полного набора кирок подряд — чтобы прокрутка на ширину
@@ -1754,10 +1761,20 @@ function renderIdleReel() {
     }
     track.appendChild(frag);
 
+    // Трек позиционируется через left:50%, поэтому при transform:translateX(0)
+    // первая кирка начинается ровно от ЦЕНТРА вьюпорта — вся левая половина
+    // оставалась пустой (это и было причиной "разрывов"/пропавших кирок в
+    // начале). Стартуем сразу со сдвигом на половину ширины вьюпорта, чтобы
+    // лента с первого кадра была заполнена целиком, без пустот.
+    const viewportWidth = (viewport && viewport.clientWidth) || 320;
+    const startOffset = Math.ceil(viewportWidth / 2);
+    track.style.transform = `translateX(-${startOffset}px)`;
+
     void track.offsetWidth; // форсируем reflow, чтобы анимация стартовала чисто
 
     const setWidth = PICKAXE_TYPES.length * REEL_ITEM_WIDTH;
-    track.style.setProperty('--idle-loop-shift', `-${setWidth}px`);
+    track.style.setProperty('--idle-loop-start', `-${startOffset}px`);
+    track.style.setProperty('--idle-loop-shift', `-${startOffset + setWidth}px`);
     track.style.animation = `pickaxeIdleScroll ${(PICKAXE_TYPES.length * 1.3).toFixed(1)}s linear infinite`;
 
     if (nameLabel) nameLabel.textContent = '';
@@ -2774,6 +2791,7 @@ async function demoBalanceAction() {
         return;
     }
 
+
     transactions.unshift({
         type: 'withdraw',
         method: selectedMethod,
@@ -2798,49 +2816,6 @@ function showMessage(text) {
         return;
     }
     alert(text);
-}
-
-/* =========================
-   ПРОФИЛЬ И КАСТОМИЗАЦИЯ ФОНА
-========================= */
-
-function applyDesign() {
-    const cover = document.getElementById('profileCover');
-    if (cover) {
-        cover.style.background = `linear-gradient(180deg, ${profileDesign.start} 0%, ${profileDesign.end} 100%)`;
-    }
-}
-
-function renderCustomizerControls() {
-    const colorGrid = document.getElementById('colorPickerGrid');
-    if (colorGrid) {
-        colorGrid.innerHTML = COLOR_PALETTE.map(item => `
-            <div class="color-option ${item.id === profileDesign.colorId ? 'active' : ''}" 
-                 style="background: linear-gradient(135deg, ${item.start}, ${item.end});"
-                 onclick="selectGradient('${item.id}', '${item.start}', '${item.end}')">
-            </div>
-        `).join('');
-    }
-}
-
-function selectGradient(id, start, end) {
-    profileDesign.colorId = id;
-    profileDesign.start = start;
-    profileDesign.end = end;
-    renderCustomizerControls();
-    applyDesign();
-}
-
-function toggleProfileCustomizer() {
-    const box = document.getElementById('customizerBox');
-    if (box) box.classList.toggle('hidden');
-}
-
-function saveProfileCustomization() {
-    localStorage.setItem('wxs_profile', JSON.stringify(profileDesign));
-    applyDesign();
-    toggleProfileCustomizer();
-    showMessage("Настройки сохранены!");
 }
 
 /* =========================
