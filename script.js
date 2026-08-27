@@ -127,18 +127,12 @@ function updateProfileUI(data) {
 }
 
 async function loadUserData() {
-    console.log('[wxs] loadUserData: старт');
-    console.log('[wxs] tg объект:', tg);
-    console.log('[wxs] tg.initDataUnsafe:', tg?.initDataUnsafe);
-
     const tgUser = tg?.initDataUnsafe?.user;
 
     if (!tgUser) {
-        console.error('[wxs] ❌ tgUser ПУСТОЙ — Telegram не передал initDataUnsafe.user. Профиль/баланс НЕ будут загружены. Проверьте: (1) открыто ли через кнопку Web App у бота, (2) настроен ли домен через /setdomain в BotFather, (3) версия Telegram клиента.');
+        console.warn('Запуск вне Telegram — используются локальные данные');
         return;
     }
-
-    console.log('[wxs] ✅ tgUser получен:', tgUser);
 
     const profileData = {
         telegram_id: tgUser.id,
@@ -147,15 +141,11 @@ async function loadUserData() {
         photo_url: tgUser.photo_url || ''
     };
 
-    console.log('[wxs] Запрос к Supabase: SELECT wxs_game WHERE telegram_id=' + tgUser.id);
-
     let { data, error } = await supabase
         .from('wxs_game')
         .select('*')
         .eq('telegram_id', tgUser.id)
         .maybeSingle();
-
-    console.log('[wxs] Ответ Supabase (select): data=', data, 'error=', error);
 
     if (error && error.code === 'PGRST116') {
         console.error('В таблице wxs_game найдено несколько строк для telegram_id=' + tgUser.id + '. Нужно удалить дубликаты в Supabase и добавить UNIQUE-ограничение на telegram_id.');
@@ -217,9 +207,7 @@ async function loadUserData() {
     currentDeposits = Number(data.deposits) || 0;
     currentWithdrawals = Number(data.withdrawals) || 0;
 
-    console.log('[wxs] ✅ Данные пользователя применены, вызываю updateProfileUI', data);
     updateProfileUI(data);
-    console.log('[wxs] loadUserData: завершено успешно');
 }
 
 /* =========================
@@ -2857,5 +2845,65 @@ document.addEventListener("DOMContentLoaded", async () => {
     goHome();
     applyDesign();
     startCrashEngine();
+
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, { passive: false });
+
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+            e.preventDefault();
+        }
+    }, { passive: false });
 });
+
+// Экспорт функций в глобальную область для onclick-обработчиков в HTML
+window.adjustMinesBet = adjustMinesBet;
+window.applyMinToActive = applyMinToActive;
+window.applyPercentToActive = applyPercentToActive;
+window.adjustCrashBet = adjustCrashBet;
+window.autoPickMinesTile = autoPickMinesTile;
+window.changeMinesBy = changeMinesBy;
+window.claimBonus = claimBonus;
+window.demoBalanceAction = demoBalanceAction;
+window.goHome = goHome;
+window.handleCrashAction = handleCrashAction;
+window.handleMinesAction = handleMinesAction;
+window.onActiveColorInput = onActiveColorInput;
+window.onCustomMinesInputChange = onCustomMinesInputChange;
+window.openBalance = openBalance;
+window.openBonus = openBonus;
+window.openCrash = openCrash;
+window.openGamesMenu = openGamesMenu;
+window.openMines = openMines;
+window.openProfile = openProfile;
+window.openWheel = openWheel;
+window.resetActiveBet = resetActiveBet;
+window.saveProfileCustomization = saveProfileCustomization;
+window.selectMethod = selectMethod;
+window.selectMinesCount = selectMinesCount;
+window.setBalanceMode = setBalanceMode;
+window.setCrashMaxBet = setCrashMaxBet;
+window.setMinesMaxBet = setMinesMaxBet;
+window.showMessage = showMessage;
+window.spinWheel = spinWheel;
+window.toggleMethods = toggleMethods;
+window.toggleProfileCustomizer = toggleProfileCustomizer;
+window.clickMinesTile = clickMinesTile;
+window.selectColorTab = selectColorTab;
+window.selectGradient = selectGradient;
+window.openPickaxe = openPickaxe;
+window.startPickaxeGame = startPickaxeGame;
+window.adjustPickaxeBet = adjustPickaxeBet;
+window.setPickaxeMaxBet = setPickaxeMaxBet;
+
+
+
 })();
