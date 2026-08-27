@@ -387,7 +387,7 @@ async function saveUserDataWithRetry(attempts = 2) {
 let balanceMode = "deposit";
 let selectedMethod = "CryptoBot";
 let selectedMethodSub = "Криптовалюта";
-let selectedMethodIcon = "cryptobot.png";
+let selectedMethodIcon = "images/cryptobot.png";
 
 const COLOR_PALETTE = [
     { id: 'slate', start: '#2c3e50', end: '#1a252f' },
@@ -674,14 +674,14 @@ function clickMinesTile(index) {
 
     if (minesGame.field[index] === 'bomb') {
         tile.className = 'mine-tile revealed-bomb';
-        tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
+        tile.innerHTML = `<img src="images/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
         endMinesGame(false);
     } else {
         minesGame.gemsFound++;
         tile.className = 'mine-tile revealed-gem';
 
-        tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+        tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
 
         if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
@@ -761,9 +761,9 @@ function endMinesGame(isWin) {
         if (!minesGame.revealed[i]) {
             tile.classList.add('end-show');
             if (minesGame.field[i] === 'bomb') {
-                tile.innerHTML = `<img src="bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = `<img src="images/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             } else {
-                tile.innerHTML = `<img src="gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             }
         }
     }
