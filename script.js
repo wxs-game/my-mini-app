@@ -758,12 +758,16 @@ let crashTrailPoints = [];  // точки следа ракеты за теку�
 let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты
 let crashExplosionAnim = null; // экземпляр Lottie-анимации взрыва
 let crashExplosionTotalFrames = 0; // общее число кадров анимации взрыва (берётся из её JSON)
+let crashExplosionHideTimeout = null; // таймер плавного скрытия взрыва после проигрывания нужной части
 
 // Доля анимации взрыва, которая реально проигрывается при краше — по ТЗ
 // нужна только самая первая часть (меньше половины), дальше идёт "хвост"
 // анимации, который не нужен. Меняйте это число, чтобы точнее подогнать
 // момент остановки под нужный кадр.
-const EXPLOSION_PLAY_FRACTION = 0.35;
+const EXPLOSION_PLAY_FRACTION = 0.42;
+// Длительность плавного исчезновения взрыва после того, как проигранная
+// часть анимации закончилась (должна совпадать с transition opacity в HTML).
+const EXPLOSION_FADE_MS = 300;
 
 // Кэш DOM-элементов для исключения лишних поисков при каждом кадре (60 FPS)
 let crashDomCache = null;
@@ -850,6 +854,22 @@ function initCrashExplosionAnim() {
         animationData: animationData
     });
     crashExplosionTotalFrames = animationData.op || 0;
+
+    // Как только проигранный отрезок (0 → EXPLOSION_PLAY_FRACTION) доигрывает
+    // до конца, сразу плавно прячем взрыв — а не держим его "заморожен­ным"
+    // на последнем кадре до самого начала следующего раунда.
+    crashExplosionAnim.addEventListener('complete', hideExplosionSmoothly);
+}
+
+function hideExplosionSmoothly() {
+    const dom = getCrashDom();
+    if (!dom.explosionEl) return;
+
+    clearTimeout(crashExplosionHideTimeout);
+    dom.explosionEl.style.opacity = '0';
+    crashExplosionHideTimeout = setTimeout(() => {
+        if (dom.explosionEl) dom.explosionEl.style.display = 'none';
+    }, EXPLOSION_FADE_MS);
 }
 
 function openCrash() {
@@ -1020,6 +1040,8 @@ function endCrashRound() {
             if (m) offsetTransform = `translate3d(${m[1]}px, ${m[2]}px, 0px)`;
         }
         dom.explosionEl.style.transform = offsetTransform;
+        clearTimeout(crashExplosionHideTimeout);
+        dom.explosionEl.style.opacity = '1';
         dom.explosionEl.style.display = 'block';
         if (crashExplosionAnim) {
             if (crashExplosionTotalFrames > 0) {
