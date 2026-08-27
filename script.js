@@ -36,12 +36,12 @@ let currentWithdrawals = 0.00;
 // ==========================================
 const LEVELS = [
     { level: 1, points: 0,     title: "Новичок" },
-    { level: 2, points: 1500,  title: "Гой" },
-    { level: 3, points: 3750,  title: "Про" },
-    { level: 4, points: 7500,  title: "Додеп" },
-    { level: 5, points: 11250, title: "Лудик" },
-    { level: 6, points: 15000, title: "Король пепе" },
-    { level: 7, points: 15001, title: "Легенда" }
+    { level: 2, points: 2500,  title: "Гой" },
+    { level: 3, points: 7500,  title: "Бурмалда" },
+    { level: 4, points: 15000,  title: "Додеп" },
+    { level: 5, points: 22500, title: "Лудик" },
+    { level: 6, points: 30000, title: "Пепе" },
+    { level: 7, points: 30001, title: "Легенда" }
 ];
 
 function calculatePoints() {
