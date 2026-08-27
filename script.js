@@ -1381,7 +1381,12 @@ function preloadTypeImages() {
     PICKAXE_TYPES.forEach(p => {
         const url = pickaxeImageUrl(p.id);
         const img = new Image();
-        img.onload = () => { pickaxeImageCache[p.id] = url; };
+        img.onload = () => {
+            pickaxeImageCache[p.id] = url;
+            // Если картинка кирки подгрузилась уже после отрисовки барабана
+            // ожидания — перерисуем его, чтобы сразу показать новую картинку.
+            if (!isPickaxeRunning) renderIdleReel();
+        };
         img.onerror = () => { pickaxeImageCache[p.id] = null; };
         img.src = url;
     });
@@ -1485,6 +1490,7 @@ function openPickaxe() {
     showPage("pickaxePage");
     updateNav("games");
     resetMineWorld();
+    renderIdleReel();
 }
 
 // Создаёт независимую ячейку блока (со своей прочностью), а не общую ссылку —
@@ -1695,6 +1701,106 @@ function getPickaxeByWeight() {
     return PICKAXE_TYPES[0];
 }
 
+/* =========================
+   БАРАБАН ВЫБОРА КИРКИ ("кейс")
+   - renderIdleReel(): режим ожидания — лента медленно и БЕСКОНЕЧНО крутится
+     по кругу (превью, ещё не открыто).
+   - spinPickaxeReel(): режим открытия — длинная лента с случайными кирками
+     быстро прокручивается и плавно тормозит ровно на выпавшей кирке под
+     указателем, как открытие кейса.
+   Ширина ячейки (REEL_ITEM_WIDTH) должна совпадать с .pickaxe-reel-item в CSS.
+========================= */
+const REEL_ITEM_WIDTH = 64;
+
+function makeReelItemEl(p) {
+    const div = document.createElement('div');
+    div.className = 'pickaxe-reel-item';
+    div.dataset.pickaxeId = p.id;
+    applyCustomPickaxeVisual(div, p);
+    return div;
+}
+
+// Режим ожидания: зацикленная медленная прокрутка (превью кейса до открытия).
+function renderIdleReel() {
+    const track = document.getElementById('pickaxeReelTrack');
+    const nameLabel = document.getElementById('pickaxeName');
+    if (!track) return;
+
+    track.style.transition = 'none';
+    track.style.animation = 'none';
+    track.style.transform = 'translateX(0px)';
+    track.innerHTML = '';
+
+    // Несколько копий полного набора кирок подряд — чтобы прокрутка на ширину
+    // одного набора выглядела как бесшовная бесконечная петля.
+    const REPEATS = 4;
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < REPEATS; i++) {
+        PICKAXE_TYPES.forEach(p => frag.appendChild(makeReelItemEl(p)));
+    }
+    track.appendChild(frag);
+
+    void track.offsetWidth; // форсируем reflow, чтобы анимация стартовала чисто
+
+    const setWidth = PICKAXE_TYPES.length * REEL_ITEM_WIDTH;
+    track.style.setProperty('--idle-loop-shift', `-${setWidth}px`);
+    track.style.animation = `pickaxeIdleScroll ${(PICKAXE_TYPES.length * 1.3).toFixed(1)}s linear infinite`;
+
+    if (nameLabel) nameLabel.textContent = 'Нажмите «БРОСИТЬ КИРКУ»';
+}
+
+// Режим открытия: настоящая "кейс"-прокрутка с торможением на выпавшей кирке.
+// Возвращает Promise, который резолвится, когда лента полностью остановилась.
+function spinPickaxeReel(finalPickaxe) {
+    return new Promise(resolve => {
+        const track = document.getElementById('pickaxeReelTrack');
+        const nameLabel = document.getElementById('pickaxeName');
+        if (!track) { resolve(); return; }
+
+        track.style.animation = 'none';
+        track.style.transition = 'none';
+
+        // Длинная лента: много случайных кирок "пролетают" мимо, финальная
+        // (выигранная) кирка стоит на заранее выбранной позиции недалеко от
+        // конца ленты — именно на ней лента и остановится под указателем.
+        const TOTAL_ITEMS = 46;
+        const TARGET_INDEX = TOTAL_ITEMS - 6;
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < TOTAL_ITEMS; i++) {
+            const p = (i === TARGET_INDEX) ? finalPickaxe : PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
+            frag.appendChild(makeReelItemEl(p));
+        }
+        track.innerHTML = '';
+        track.appendChild(frag);
+        track.style.transform = 'translateX(0px)';
+        void track.offsetWidth;
+
+        if (nameLabel) nameLabel.textContent = 'Крутим...';
+
+        // Небольшой случайный сдвиг внутри ячейки — чтобы лента не всегда
+        // тормозила идеально по центру (более живой, "казино"-эффект).
+        const jitter = (Math.random() - 0.5) * (REEL_ITEM_WIDTH * 0.4);
+        const targetOffset = -(TARGET_INDEX * REEL_ITEM_WIDTH) + jitter;
+
+        // rAF x2, чтобы браузер гарантированно применил transition ПОСЛЕ
+        // сброса transform выше (иначе транзишен может "съесться" в один кадр).
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                track.style.transition = 'transform 3.2s cubic-bezier(0.12, 0.85, 0.15, 1)';
+                track.style.transform = `translateX(${targetOffset}px)`;
+            });
+        });
+
+        const onEnd = (e) => {
+            if (e.target !== track || e.propertyName !== 'transform') return;
+            track.removeEventListener('transitionend', onEnd);
+            if (nameLabel) nameLabel.textContent = `${getPickaxeDisplayName(finalPickaxe)} (${finalPickaxe.hp} HP)`;
+            resolve();
+        };
+        track.addEventListener('transitionend', onEnd);
+    });
+}
+
 async function startPickaxeGame() {
     if (isPickaxeRunning) return;
     if (!lockEconomy()) return;
@@ -1735,24 +1841,11 @@ async function startPickaxeGame() {
 
     resetMineWorld();
 
-    // 1. Вращение рулетки
+    // 1. Вращение рулетки — как открытие кейса: лента быстро прокручивается
+    // и тормозит ровно на выпавшей (уже определённой заранее) кирке.
     const picked = getPickaxeByWeight();
-    const display = document.getElementById('pickaxeDisplay');
-    const nameLabel = document.getElementById('pickaxeName');
-
-    let spins = 0;
-    const rouletteTimer = setInterval(() => {
-        const randP = PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
-        applyCustomPickaxeVisual(display, randP);
-        nameLabel.textContent = `${getPickaxeDisplayName(randP)} (${randP.hp} HP)`;
-        spins++;
-        if (spins > 14) {
-            clearInterval(rouletteTimer);
-            applyCustomPickaxeVisual(display, picked);
-            nameLabel.textContent = `${getPickaxeDisplayName(picked)} (${picked.hp} HP)`;
-            runMiningPhysics(picked, bet);
-        }
-    }, 80);
+    await spinPickaxeReel(picked);
+    runMiningPhysics(picked, bet);
 }
 
 // Бросок кирки вниз с гравитацией: она разгоняется, врезается в блоки,
@@ -1811,6 +1904,7 @@ function runMiningPhysics(pickaxe, bet) {
         isPickaxeRunning = false;
         document.getElementById('pickaxeActionBtn').disabled = false;
         unlockEconomy();
+        renderIdleReel(); // барабан снова медленно крутится в режиме ожидания
     };
 
     // Всплывающая надпись с приростом выигрыша над разрушенным блоком руды —
@@ -2750,66 +2844,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateLevelUI();
     goHome();
     applyDesign();
-    startCrashEngine();
-
-    document.addEventListener('gesturestart', (e) => e.preventDefault());
-
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', (e) => {
-        const now = Date.now();
-        if (now - lastTouchEnd <= 300) {
-            e.preventDefault();
-        }
-        lastTouchEnd = now;
-    }, { passive: false });
-
-    document.addEventListener('touchmove', (e) => {
-        if (e.touches.length > 1) {
-            e.preventDefault();
-        }
-    }, { passive: false });
-});
-
-// Экспорт функций в глобальную область для onclick-обработчиков в HTML
-window.adjustMinesBet = adjustMinesBet;
-window.applyMinToActive = applyMinToActive;
-window.applyPercentToActive = applyPercentToActive;
-window.adjustCrashBet = adjustCrashBet;
-window.autoPickMinesTile = autoPickMinesTile;
-window.changeMinesBy = changeMinesBy;
-window.claimBonus = claimBonus;
-window.demoBalanceAction = demoBalanceAction;
-window.goHome = goHome;
-window.handleCrashAction = handleCrashAction;
-window.handleMinesAction = handleMinesAction;
-window.onActiveColorInput = onActiveColorInput;
-window.onCustomMinesInputChange = onCustomMinesInputChange;
-window.openBalance = openBalance;
-window.openBonus = openBonus;
-window.openCrash = openCrash;
-window.openGamesMenu = openGamesMenu;
-window.openMines = openMines;
-window.openProfile = openProfile;
-window.openWheel = openWheel;
-window.resetActiveBet = resetActiveBet;
-window.saveProfileCustomization = saveProfileCustomization;
-window.selectMethod = selectMethod;
-window.selectMinesCount = selectMinesCount;
-window.setBalanceMode = setBalanceMode;
-window.setCrashMaxBet = setCrashMaxBet;
-window.setMinesMaxBet = setMinesMaxBet;
-window.showMessage = showMessage;
-window.spinWheel = spinWheel;
-window.toggleMethods = toggleMethods;
-window.toggleProfileCustomizer = toggleProfileCustomizer;
-window.clickMinesTile = clickMinesTile;
-window.selectColorTab = selectColorTab;
-window.selectGradient = selectGradient;
-window.openPickaxe = openPickaxe;
-window.startPickaxeGame = startPickaxeGame;
-window.adjustPickaxeBet = adjustPickaxeBet;
-window.setPickaxeMaxBet = setPickaxeMaxBet;
-
-
-
-})();
+    startCrashEng
