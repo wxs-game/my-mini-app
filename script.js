@@ -756,6 +756,7 @@ let crashHistory = [];      // последние коэффициенты, са
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
 let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
 let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты
+let crashExplosionAnim = null; // экземпляр Lottie-анимации взрыва
 
 // Кэш DOM-элементов для исключения лишних поисков при каждом кадре (60 FPS)
 let crashDomCache = null;
@@ -812,6 +813,37 @@ function initCrashRocketAnim() {
     });
 }
 
+// Загружает анимацию взрыва (проигрывается один раз в момент краша, без цикла)
+function initCrashExplosionAnim() {
+    const dom = getCrashDom();
+    if (!dom.explosionEl || crashExplosionAnim) return;
+
+    let animationData = null;
+    if (window.EXPLOSION_DATA_CHUNKS && window.EXPLOSION_DATA_CHUNKS.length) {
+        try {
+            animationData = JSON.parse(window.EXPLOSION_DATA_CHUNKS.join(''));
+        } catch (e) {
+            animationData = null;
+        }
+    }
+
+    if (typeof lottie === 'undefined' || !animationData) {
+        dom.explosionEl.textContent = '💥';
+        dom.explosionEl.style.fontSize = '100px';
+        dom.explosionEl.style.lineHeight = '200px';
+        dom.explosionEl.style.textAlign = 'center';
+        return;
+    }
+
+    crashExplosionAnim = lottie.loadAnimation({
+        container: dom.explosionEl,
+        renderer: 'svg',
+        loop: false,
+        autoplay: false,
+        animationData: animationData
+    });
+}
+
 function openCrash() {
     showPage("crashPage");
     updateNav("games");
@@ -822,6 +854,7 @@ function initCrashPage() {
     renderCrashHistory();
     renderCrashUI();
     initCrashRocketAnim();
+    initCrashExplosionAnim();
 }
 
 function startCrashEngine() {
@@ -980,6 +1013,7 @@ function endCrashRound() {
         }
         dom.explosionEl.style.transform = offsetTransform;
         dom.explosionEl.style.display = 'block';
+        if (crashExplosionAnim) crashExplosionAnim.goToAndPlay(0, true);
     }
 
     if (dom.multEl) dom.multEl.style.color = '#e74c3c';
@@ -1156,6 +1190,7 @@ function renderCrashUI() {
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
 
         if (dom.explosionEl) dom.explosionEl.style.display = 'none';
+        if (crashExplosionAnim) crashExplosionAnim.goToAndStop(0, true);
         if (dom.stageEl) dom.stageEl.style.transform = 'translate3d(0px, 0px, 0px)';
 
         if (dom.trailLine) {
