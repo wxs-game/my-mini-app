@@ -444,7 +444,8 @@ main {
     width: 100%;
     aspect-ratio: 1 / 1; /* Квадратное превью под загруженные картинки */
     border-radius: 24px;
-    object-fit: contain; /* Показываем картинку полностью, без обрезки */
+    object-fit: cover; /* Заполняем карточку целиком, одинаковый отступ у всех превью */
+    object-position: center;
     background: #121212;
 }
 
