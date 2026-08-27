@@ -1271,58 +1271,119 @@ const BLOCK_TYPES = {
     COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02, baseDur: 1, depthStep: 40  },
     COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04, baseDur: 1, depthStep: 30  },
     IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07, baseDur: 2, depthStep: 26  },
+    GOLD:    { id: 'gold',    class: 'b-gold',    multiplier: 0.11, baseDur: 2, depthStep: 22  },
     LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15, baseDur: 2, depthStep: 20  },
     EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18, baseDur: 3, depthStep: 16  },
     DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30, baseDur: 3, depthStep: 12  }
 };
-const ORE_IDS = ['coal', 'copper', 'iron', 'lapis', 'emerald', 'diamond'];
+const ORE_IDS = ['coal', 'copper', 'iron', 'gold', 'lapis', 'emerald', 'diamond'];
 
 /* =========================
-   СВОИ КАРТИНКИ ДЛЯ БЛОКОВ И КИРОК
-   Позволяет загрузить изображение (файл) для каждого типа блока и каждой
-   кирки вместо нарисованной CSS-текстуры / эмодзи. Хранится локально
-   в браузере (localStorage), поэтому картинки сохраняются между запусками
-   на этом устройстве.
+   КАРТИНКИ БЛОКОВ И КИРОК ИЗ ВНЕШНИХ ФАЙЛОВ (например, с GitHub)
+   ---------------------------------------------------------------
+   Никакой загрузки внутри приложения — картинки просто лежат у вас в
+   репозитории (или на любом хостинге) и подключаются по прямой ссылке.
+   Имя файла ДОЛЖНО совпадать с id блока/кирки — так игра понимает,
+   какая картинка к какому предмету относится.
+
+   Как подключить:
+   1. Залейте на GitHub PNG-файлы со следующими именами (имена блоков и
+      кирок специально сделаны разными — например, ore_stone.png и
+      pickaxe_stone.png, — чтобы они никогда не путались и не перезаписывали
+      друг друга, даже если вы храните всё в одной папке):
+
+        images/blocks/ore_grass.png     — трава
+        images/blocks/ore_stone.png     — камень
+        images/blocks/ore_coal.png      — уголь
+        images/blocks/ore_copper.png    — медь
+        images/blocks/ore_iron.png      — железо
+        images/blocks/ore_gold.png      — золото
+        images/blocks/ore_lapis.png     — лазурит
+        images/blocks/ore_emerald.png   — изумруд
+        images/blocks/ore_diamond.png   — алмаз
+
+        images/pickaxes/pickaxe_wood.png    — деревянная кирка
+        images/pickaxes/pickaxe_stone.png   — каменная кирка
+        images/pickaxes/pickaxe_copper.png  — медная кирка
+        images/pickaxes/pickaxe_iron.png    — железная кирка
+        images/pickaxes/pickaxe_gold.png    — золотая кирка
+        images/pickaxes/pickaxe_diamond.png — алмазная кирка
+
+   2. Ниже, в IMAGES_BASE_URL, укажите путь к папке images:
+        - если index.html и папка images лежат в одном репозитории и сайт
+          открывается прямо оттуда (например, GitHub Pages) — оставьте 'images'
+        - если хотите тянуть картинки напрямую из репозитория на GitHub без
+          GitHub Pages — впишите сюда прямую ссылку через raw.githubusercontent.com,
+          например:
+          'https://raw.githubusercontent.com/ИМЯ_ПОЛЬЗОВАТЕЛЯ/НАЗВАНИЕ_РЕПО/main/images'
+
+   Если для какого-то блока/кирки файл не найден (404) — игра автоматически
+   вернётся к стандартной нарисованной текстуре/эмодзи для этого предмета,
+   ничего не сломается.
 ========================= */
-const CUSTOM_IMAGES_KEY = 'wxs_custom_images_v1';
-// Список id, для которых разрешена своя картинка (воздух — не нужен)
+const IMAGES_BASE_URL = 'images';
+
+// Список id, для которых поддерживается своя картинка (воздух — не нужен)
 const CUSTOMIZABLE_BLOCK_IDS = Object.values(BLOCK_TYPES)
     .map(t => t.id)
     .filter(id => id !== 'air');
-const CUSTOMIZABLE_PICKAXE_IDS = PICKAXE_TYPES.map(p => p.id);
 
-let customImages = { blocks: {}, pickaxes: {} };
-
-function loadCustomImages() {
-    try {
-        const raw = localStorage.getItem(CUSTOM_IMAGES_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            customImages = {
-                blocks: parsed.blocks || {},
-                pickaxes: parsed.pickaxes || {}
-            };
-        }
-    } catch (e) {
-        console.warn('Не удалось загрузить свои картинки:', e);
-        customImages = { blocks: {}, pickaxes: {} };
-    }
+function blockImageUrl(blockId) {
+    return `${IMAGES_BASE_URL}/blocks/ore_${blockId}.png`;
+}
+function pickaxeImageUrl(pickaxeId) {
+    return `${IMAGES_BASE_URL}/pickaxes/pickaxe_${pickaxeId}.png`;
 }
 
-function saveCustomImages() {
-    try {
-        localStorage.setItem(CUSTOM_IMAGES_KEY, JSON.stringify(customImages));
-    } catch (e) {
-        console.warn('Не удалось сохранить свои картинки (возможно, превышен лимит хранилища):', e);
-        showMessage("Не удалось сохранить картинку — она слишком большая или закончилось место в хранилище браузера.");
-    }
+// Кэш результата загрузки: id -> рабочий url (если картинка нашлась) или null
+// (если файла нет/ошибка) или undefined (ещё не проверяли).
+const blockImageCache = {};
+const pickaxeImageCache = {};
+
+// Стандартные (заводские) названия — используются в подписях в игре
+// (например, во всплывающей надписи выигрыша над разрушенным блоком).
+const BLOCK_DEFAULT_NAMES = {
+    grass: 'Трава', stone: 'Камень', coal: 'Уголь', copper: 'Медь',
+    iron: 'Железо', gold: 'Золото', lapis: 'Лазурит', emerald: 'Изумруд', diamond: 'Алмаз'
+};
+
+function getBlockDisplayName(blockId) {
+    return BLOCK_DEFAULT_NAMES[blockId] || blockId;
 }
 
-// Применяет (или сбрасывает) кастомную картинку блока на конкретном DOM-элементе.
-// Важно: не трогаем сам класс блока (crack/hit-flash и т.д.) — просто
-// накладываем картинку поверх фона через отдельный CSS-класс.
+function getPickaxeDisplayName(pickaxeObj) {
+    return pickaxeObj.name;
+}
+
+// Проверяет по одному разу на id, существует ли картинка по вычисленному
+// URL — грузит её через объект Image() (без единого запроса на каждый блок
+// в сетке: результат кэшируется, а браузер и сам закэширует сам файл).
+function preloadTypeImages() {
+    CUSTOMIZABLE_BLOCK_IDS.forEach(id => {
+        const url = blockImageUrl(id);
+        const img = new Image();
+        img.onload = () => {
+            blockImageCache[id] = url;
+            refreshAllRenderedBlockImages();
+        };
+        img.onerror = () => { blockImageCache[id] = null; };
+        img.src = url;
+    });
+
+    PICKAXE_TYPES.forEach(p => {
+        const url = pickaxeImageUrl(p.id);
+        const img = new Image();
+        img.onload = () => { pickaxeImageCache[p.id] = url; };
+        img.onerror = () => { pickaxeImageCache[p.id] = null; };
+        img.src = url;
+    });
+}
+
+// Применяет (или сбрасывает — если файла нет) картинку блока на конкретном
+// DOM-элементе. Не трогает сам класс блока (crack/hit-flash и т.д.) — просто
+// накладывает картинку поверх фона через отдельный CSS-класс.
 function applyCustomBlockImage(div, blockId) {
-    const url = customImages.blocks[blockId];
+    const url = blockImageCache[blockId];
     if (url) {
         div.style.backgroundImage = `url("${url}")`;
         div.classList.add('custom-img');
@@ -1332,10 +1393,10 @@ function applyCustomBlockImage(div, blockId) {
     }
 }
 
-// Применяет (или сбрасывает) кастомную картинку кирки на элементе-спрайте
+// Применяет (или сбрасывает) картинку кирки на элементе-спрайте
 // (эмодзи-текст скрывается, вместо него — фон-изображение).
 function applyCustomPickaxeVisual(el, pickaxeObj) {
-    const url = customImages.pickaxes[pickaxeObj.id];
+    const url = pickaxeImageCache[pickaxeObj.id];
     if (url) {
         el.textContent = '';
         el.style.backgroundImage = `url("${url}")`;
@@ -1347,122 +1408,13 @@ function applyCustomPickaxeVisual(el, pickaxeObj) {
     }
 }
 
-// Читает выбранный пользователем файл и возвращает его как data URL (base64).
-function readImageFileAsDataURL(file) {
-    return new Promise((resolve, reject) => {
-        if (!file) { reject(new Error('Файл не выбран')); return; }
-        if (!file.type.startsWith('image/')) { reject(new Error('Нужен файл изображения')); return; }
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(reader.error || new Error('Ошибка чтения файла'));
-        reader.readAsDataURL(file);
-    });
-}
-
-// Вызывается из <input type="file"> в панели кастомизации для блока.
-async function onBlockImageSelected(blockId, inputEl) {
-    const file = inputEl.files && inputEl.files[0];
-    if (!file) return;
-    try {
-        const dataUrl = await readImageFileAsDataURL(file);
-        customImages.blocks[blockId] = dataUrl;
-        saveCustomImages();
-        refreshAllRenderedBlockImages();
-        renderImageCustomizerPanel();
-    } catch (e) {
-        showMessage("Не удалось загрузить картинку: " + e.message);
-    } finally {
-        inputEl.value = '';
-    }
-}
-
-// Вызывается из <input type="file"> в панели кастомизации для кирки.
-async function onPickaxeImageSelected(pickaxeId, inputEl) {
-    const file = inputEl.files && inputEl.files[0];
-    if (!file) return;
-    try {
-        const dataUrl = await readImageFileAsDataURL(file);
-        customImages.pickaxes[pickaxeId] = dataUrl;
-        saveCustomImages();
-        renderImageCustomizerPanel();
-    } catch (e) {
-        showMessage("Не удалось загрузить картинку: " + e.message);
-    } finally {
-        inputEl.value = '';
-    }
-}
-
-function resetBlockImage(blockId) {
-    delete customImages.blocks[blockId];
-    saveCustomImages();
-    refreshAllRenderedBlockImages();
-    renderImageCustomizerPanel();
-}
-
-function resetPickaxeImage(pickaxeId) {
-    delete customImages.pickaxes[pickaxeId];
-    saveCustomImages();
-    renderImageCustomizerPanel();
-}
-
-// Перекрашивает уже отрисованные в DOM блоки шахты после смены/сброса картинки,
-// чтобы результат было видно сразу, не дожидаясь новой генерации сетки.
+// Перекрашивает уже отрисованные в DOM блоки шахты после того, как картинка
+// для их типа успешно подгрузилась (preloadTypeImages может завершиться уже
+// после того, как сетка отрисована).
 function refreshAllRenderedBlockImages() {
     document.querySelectorAll('#mineGrid .mine-block[data-block-id]').forEach(div => {
         applyCustomBlockImage(div, div.dataset.blockId);
     });
-}
-
-function toggleImageCustomizer() {
-    const box = document.getElementById('imageCustomizerBox');
-    if (!box) return;
-    box.classList.toggle('hidden');
-    if (!box.classList.contains('hidden')) {
-        renderImageCustomizerPanel();
-    }
-}
-
-const BLOCK_LABELS = {
-    grass: '🌱 Трава', stone: '🪨 Камень', coal: '⚫ Уголь', copper: '🟠 Медь',
-    iron: '⚪ Железо', lapis: '🔵 Лазурит', emerald: '🟢 Изумруд', diamond: '💎 Алмаз'
-};
-
-function renderImageCustomizerPanel() {
-    const blocksGrid = document.getElementById('imageCustomBlocksGrid');
-    const pickaxesGrid = document.getElementById('imageCustomPickaxesGrid');
-    if (blocksGrid) {
-        blocksGrid.innerHTML = CUSTOMIZABLE_BLOCK_IDS.map(id => {
-            const url = customImages.blocks[id];
-            const label = BLOCK_LABELS[id] || id;
-            return `
-                <div class="img-custom-slot">
-                    <div class="img-custom-preview" style="${url ? `background-image:url('${url}')` : ''}">${url ? '' : '—'}</div>
-                    <div class="img-custom-label">${label}</div>
-                    <label class="img-custom-upload-btn">
-                        Загрузить
-                        <input type="file" accept="image/*" onchange="onBlockImageSelected('${id}', this)">
-                    </label>
-                    ${url ? `<button class="img-custom-reset-btn" onclick="resetBlockImage('${id}')">Сбросить</button>` : ''}
-                </div>
-            `;
-        }).join('');
-    }
-    if (pickaxesGrid) {
-        pickaxesGrid.innerHTML = PICKAXE_TYPES.map(p => {
-            const url = customImages.pickaxes[p.id];
-            return `
-                <div class="img-custom-slot">
-                    <div class="img-custom-preview" style="${url ? `background-image:url('${url}')` : ''}">${url ? '' : p.emoji}</div>
-                    <div class="img-custom-label">${p.name}</div>
-                    <label class="img-custom-upload-btn">
-                        Загрузить
-                        <input type="file" accept="image/*" onchange="onPickaxeImageSelected('${p.id}', this)">
-                    </label>
-                    ${url ? `<button class="img-custom-reset-btn" onclick="resetPickaxeImage('${p.id}')">Сбросить</button>` : ''}
-                </div>
-            `;
-        }).join('');
-    }
 }
 
 // Пороги глубины и базовые шансы (%) появления руды — используются как "затравка"
@@ -1471,6 +1423,7 @@ const ORE_TIERS = [
     { id: 'diamond', minRow: 46, chance: 2.5 },
     { id: 'emerald', minRow: 36, chance: 3.5 },
     { id: 'lapis',   minRow: 26, chance: 5   },
+    { id: 'gold',    minRow: 20, chance: 6   },
     { id: 'iron',    minRow: 16, chance: 7   },
     { id: 'copper',  minRow: 9,  chance: 8   },
     { id: 'coal',    minRow: 4,  chance: 9   }
@@ -1724,12 +1677,12 @@ async function startPickaxeGame() {
     const rouletteTimer = setInterval(() => {
         const randP = PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
         applyCustomPickaxeVisual(display, randP);
-        nameLabel.textContent = `${randP.name} (${randP.hp} HP)`;
+        nameLabel.textContent = `${getPickaxeDisplayName(randP)} (${randP.hp} HP)`;
         spins++;
         if (spins > 14) {
             clearInterval(rouletteTimer);
             applyCustomPickaxeVisual(display, picked);
-            nameLabel.textContent = `${picked.name} (${picked.hp} HP)`;
+            nameLabel.textContent = `${getPickaxeDisplayName(picked)} (${picked.hp} HP)`;
             runMiningPhysics(picked, bet);
         }
     }, 80);
@@ -1791,12 +1744,13 @@ function runMiningPhysics(pickaxe, bet) {
     };
 
     // Всплывающая надпись с приростом выигрыша над разрушенным блоком руды —
-    // визуально показывает, что каждый "иксовый" блок сразу засчитывается в вин.
-    const spawnWinPopup = (rowIdx, colIdx, multGain) => {
+    // визуально показывает, что каждый "иксовый" блок сразу засчитывается в вин,
+    // и подписывает, какая именно руда сломалась (с учётом своего названия).
+    const spawnWinPopup = (rowIdx, colIdx, multGain, blockId) => {
         if (!multGain) return;
         const popup = document.createElement('div');
         popup.className = 'mine-win-popup';
-        popup.textContent = `+${roundMoney(bet * multGain).toFixed(2)}$`;
+        popup.textContent = `+${roundMoney(bet * multGain).toFixed(2)}$ ${getBlockDisplayName(blockId)}`;
         popup.style.left = `${colIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
         popup.style.top = `${rowIdx * BLOCK_SIZE}px`;
         worldEl.appendChild(popup);
@@ -1825,7 +1779,10 @@ function runMiningPhysics(pickaxe, bet) {
         const el = blockCellEl(rowIdx, colIdx);
 
         if (cell.durability <= 0) {
-            // Блок разрушен с этого удара — засчитываем "+", если это руда
+            // Блок разрушен с этого удара — засчитываем "+", если это руда.
+            // Запоминаем исходный id ДО его сброса на 'air', чтобы правильно
+            // подписать название руды во всплывающей надписи.
+            const brokenBlockId = cell.id;
             accumulatedMultiplier += cell.multiplier;
             cell.id = 'air';
             cell.class = 'b-air';
@@ -1845,7 +1802,7 @@ function runMiningPhysics(pickaxe, bet) {
                 }, 220);
             }
             spawnImpactDust(rowIdx, colIdx, true);
-            spawnWinPopup(rowIdx, colIdx, cell.multiplier);
+            spawnWinPopup(rowIdx, colIdx, cell.multiplier, brokenBlockId);
             return { solid: true, broken: true };
         } else {
             // Ещё держится — трещины, вспышка удара, отскок; награды пока нет
@@ -2718,7 +2675,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.Telegram.WebApp.expand();
     }
 
-    loadCustomImages();
+    preloadTypeImages();
     await loadUserData();
     updateLevelUI();
     goHome();
@@ -2782,11 +2739,7 @@ window.openPickaxe = openPickaxe;
 window.startPickaxeGame = startPickaxeGame;
 window.adjustPickaxeBet = adjustPickaxeBet;
 window.setPickaxeMaxBet = setPickaxeMaxBet;
-window.toggleImageCustomizer = toggleImageCustomizer;
-window.onBlockImageSelected = onBlockImageSelected;
-window.onPickaxeImageSelected = onPickaxeImageSelected;
-window.resetBlockImage = resetBlockImage;
-window.resetPickaxeImage = resetPickaxeImage;
+
 
 
 })();
