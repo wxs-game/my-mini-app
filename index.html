@@ -196,9 +196,16 @@
     </div>
 
     <section class="wheel-card">
-        <!-- Барабан рулетки кирки -->
+        <!-- Барабан рулетки кирки: в режиме ожидания медленно крутится по кругу
+             (как превью кейса), а при запуске игры прокручивается как настоящий
+             кейс — быстро, с торможением, и останавливается на выпавшей кирке. -->
         <div id="pickaxeRoulette" class="pickaxe-roulette">
-            <div id="pickaxeDisplay" class="pickaxe-display">⛏️</div>
+            <div class="pickaxe-reel-wrap">
+                <div class="pickaxe-reel-viewport" id="pickaxeReelViewport">
+                    <div class="pickaxe-reel-track" id="pickaxeReelTrack"></div>
+                </div>
+                <div class="pickaxe-reel-selector"></div>
+            </div>
             <div id="pickaxeName" class="pickaxe-name">Нажмите «БРОСИТЬ КИРКУ»</div>
         </div>
 
