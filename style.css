@@ -1,0 +1,2295 @@
+/* ==========================================
+   СБРОС И БАЗОВЫЕ НАСТРОЙКИ (RESET & BASE)
+========================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+html {
+    background-color: #090909;
+    scroll-behavior: smooth;
+    height: 100%;
+    overscroll-behavior: none;   /* запрет "растягивания" страницы за края (pull-to-refresh, bounce) */
+    touch-action: pan-y;         /* разрешаем только вертикальную прокрутку, блокируем pinch-zoom */
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background: 
+        radial-gradient(circle at 50% 0%, rgba(255, 160, 0, 0.15), transparent 40%),
+        radial-gradient(circle at 80% 50%, rgba(255, 120, 0, 0.05), transparent 50%),
+        #090909;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    touch-action: pan-y;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+    border: none;
+    background: transparent;
+}
+
+button {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+    user-select: none;
+}
+
+/* ==========================================
+   ОБЩИЕ КОНТЕЙНЕРЫ И СТРУКТУРА (LAYOUT)
+========================================== */
+.app {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 16px 18px 110px 18px;
+    position: relative;
+    min-height: 100vh;
+}
+
+main {
+    padding-top: 10px;
+}
+
+.profile-page {
+    padding-top: 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ==========================================
+   ВЕРХНЯЯ ПАНЕЛЬ ШАПКИ (LIQUID GLASS TOP HEADER)
+========================================== */
+.top {
+    position: sticky;
+    top: 12px;
+    z-index: 99;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border-radius: 30px;
+    
+    /* Liquid Glass Effect */
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.5),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3),
+        inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+}
+
+.profile-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 4px 10px 4px 4px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.profile-card:active {
+    transform: scale(0.97);
+    border-color: rgba(255, 170, 0, 0.3);
+}
+
+.avatar-frame {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    padding: 2px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffc800, #ff8c00, #ff5500);
+    box-shadow: 0 0 14px rgba(255, 150, 0, 0.35);
+}
+
+.avatar {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 25%, #333333, #121212 70%);
+    border: 2px solid #090909;
+    font-size: 22px;
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.profile-info {
+    min-width: 0;
+    width: 100px;
+}
+
+.username {
+    max-width: 100px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.2px;
+}
+
+.level {
+    margin-top: 1px;
+    color: #888888;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.level-line {
+    width: 100%;
+    height: 4px;
+    margin-top: 4px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.level-line div {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff8c00, #ffc800);
+}
+
+.balance {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.balance-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.balance-info small {
+    color: #888888;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.balance span {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.balance-add {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: #000000;
+    font-size: 22px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #ffd91e, #ff8500);
+    box-shadow: 0 4px 14px rgba(255, 140, 0, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.balance-add:active {
+    transform: scale(0.9);
+}
+
+/* ==========================================
+   HERO БАННЕР ГЛАВНОЙ (HERO SECTION)
+========================================== */
+.hero {
+    position: relative;
+    min-height: 240px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    padding: 30px;
+    border-radius: 32px;
+    border: 1px solid rgba(255, 170, 0, 0.3);
+    background:
+        radial-gradient(circle at 80% 20%, rgba(255, 190, 0, 0.25), transparent 40%),
+        linear-gradient(135deg, #221808 0%, #151006 50%, #0d0a04 100%);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(255, 170, 0, 0.05);
+    margin-bottom: 22px;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 3;
+    max-width: 70%;
+}
+
+.hero-small {
+    margin-bottom: 8px;
+    color: #ffb515;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.hero h1 {
+    margin: 0;
+    font-size: clamp(28px, 6vw, 42px);
+    line-height: 1.05;
+    font-weight: 950;
+    letter-spacing: -1px;
+}
+
+.hero h1 span {
+    color: #ffb900;
+    text-shadow: 0 0 20px rgba(255, 180, 0, 0.4);
+}
+
+.hero p {
+    margin: 12px 0 20px;
+    color: #aaaaaa;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.bonus-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 16px;
+    color: #000000;
+    font-size: 14px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #ffd928, #ff8b00);
+    box-shadow: 0 6px 20px rgba(255, 140, 0, 0.3);
+    transition: transform 0.15s ease;
+}
+
+.bonus-button:active {
+    transform: scale(0.95);
+}
+
+.money-orb {
+    position: absolute;
+    z-index: 2;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.money-orb span {
+    position: relative;
+    z-index: 3;
+    color: #ffc400;
+    font-size: 80px;
+    font-weight: 900;
+    text-shadow: 0 0 25px rgba(255, 190, 0, 0.6);
+}
+
+.money-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 200, 0, 0.3);
+    box-shadow: 0 0 30px rgba(255, 175, 0, 0.2);
+    animation: ringPulse 3s ease-in-out infinite;
+}
+
+/* ==========================================
+   БЫСТРЫЕ ДЕЙСТВИЯ (QUICK ACTIONS)
+========================================== */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.action {
+    padding: 16px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 22px;
+    color: #ffffff;
+    background: #121212;
+    border: 1px solid #222222;
+    transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.action:active {
+    transform: scale(0.94);
+    border-color: #ffaa00;
+    background: #181818;
+}
+
+.action-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    font-size: 24px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.action b {
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.action small {
+    color: #666666;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* ==========================================
+   СЕТКА ИГР (GAMES SECTION)
+========================================== */
+.games-section {
+    margin-top: 10px;
+}
+
+.section-title h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+}
+
+.games {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.game {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 24px;
+    color: #ffffff;
+    background: #121212;
+    border: 1px solid #222222;
+    transition: transform 0.15s ease, border-color 0.2s ease;
+    cursor: pointer;
+}
+
+.game:active {
+    transform: scale(0.96);
+    border-color: rgba(255, 170, 0, 0.5);
+}
+
+.game-image {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1; /* Квадратное превью под загруженные картинки */
+    border-radius: 24px;
+    object-fit: contain; /* Показываем картинку полностью, без обрезки */
+    background: #121212;
+}
+
+/* ==========================================
+   ИГРА МИНЫ (MINES GAME SECTION)
+========================================== */
+.mines-page {
+    animation: fadeIn 0.25s ease;
+    margin-top: -6px;
+}
+
+.mines-card {
+    background: #121212;
+    border-radius: 28px;
+    padding: 20px 16px;
+    border: 1px solid #222222;
+    text-align: center;
+}
+
+/* Лента коэффициентов сверху */
+.mines-coef-bar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+    scrollbar-width: none;
+}
+
+.mines-coef-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.coef-item {
+    flex: 0 0 auto;
+    background: #1a1a1a;
+    border: 1px solid #282828;
+    border-radius: 12px;
+    padding: 6px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.coef-item.active {
+    background: #281d09;
+    border-color: #ffc800;
+    box-shadow: 0 0 10px rgba(255, 200, 0, 0.2);
+}
+
+.coef-item .step-num {
+    font-size: 9px;
+    color: #666666;
+    font-weight: 700;
+}
+
+.coef-item .mult-val {
+    font-size: 12px;
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.coef-item.active .mult-val {
+    color: #ffc800;
+}
+
+/* Поле 5х5 */
+.mines-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+/* ==========================================
+   ОБНОВЛЕННЫЕ СТИЛИ ПЛИТОК МИН
+========================================== */
+.mine-tile {
+    aspect-ratio: 1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05);
+}
+
+.mine-tile:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 200, 0, 0.3);
+}
+
+.mine-tile:active:not(.disabled) {
+    transform: scale(0.92);
+}
+
+/* Открытый алмаз */
+.mine-tile.revealed-gem {
+    background: radial-gradient(circle, #1a3c27, #0d2115) !important;
+    border-color: #2ecc71 !important;
+    box-shadow: 0 0 12px rgba(46, 204, 113, 0.3);
+    animation: tilePop 0.25s ease;
+    opacity: 1 !important;
+}
+
+/* Открытая бомба (при взрыве) */
+.mine-tile.revealed-bomb {
+    background: radial-gradient(circle, #4a1515, #240a0a) !important;
+    border-color: #e74c3c !important;
+    box-shadow: 0 0 12px rgba(231, 76, 60, 0.4);
+    animation: tilePop 0.25s ease;
+    opacity: 1 !important;
+}
+
+/* Закрытая плитка после завершения игры (показ где были бомбы/алмазы) */
+.mine-tile.end-show {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.mine-tile.disabled {
+    pointer-events: none;
+}
+
+/* Панель управления */
+.mines-controls {
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 20px;
+    padding: 16px;
+    text-align: left;
+}
+
+.ctrl-box {
+    margin-bottom: 14px;
+}
+
+.ctrl-box label {
+    display: block;
+    font-size: 10px;
+    color: #666666;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+}
+
+.ctrl-box input[type="number"] {
+    width: 100%;
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.ctrl-btns-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.mines-count-selector {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.mines-count-btn {
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 12px;
+    padding: 8px 0;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    transition: all 0.2s ease;
+}
+
+.mines-count-btn.active {
+    background: #281d09;
+    border-color: #ffc800;
+    color: #ffc800;
+}
+
+.mines-actions {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.mines-main-btn {
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+    color: #000000;
+    font-size: 16px;
+    font-weight: 950;
+    padding: 14px;
+    border-radius: 14px;
+    box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3);
+    transition: transform 0.15s ease;
+}
+
+.mines-main-btn:active {
+    transform: scale(0.96);
+}
+
+.mines-auto-btn {
+    background: #1f1f1f;
+    border: 1px solid #333;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 14px 6px;
+    border-radius: 14px;
+    transition: all 0.15s ease;
+}
+
+.mines-auto-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ==========================================
+   СТРАНИЦА ПРОФИЛЯ (PROFILE PAGE)
+========================================== */
+.profile-page {
+    animation: fadeIn 0.25s ease;
+}
+
+.profile-header-card {
+    background: #121212;
+    border: 1px solid #222222;
+    border-radius: 28px;
+    padding: 24px 20px 20px;
+    text-align: center;
+    margin-bottom: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.profile-avatar-wrapper {
+    width: 86px;
+    height: 86px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, #ff9900, #ffcc00);
+    box-shadow: 0 0 20px rgba(255, 160, 0, 0.3);
+}
+
+.profile-avatar-circle {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #1c1c1c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 38px;
+    overflow: hidden;
+}
+
+.profile-avatar-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-header-card h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffffff;
+    word-break: break-word;
+}
+
+.profile-tag {
+    color: #777777;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.profile-level-block {
+    width: 100%;
+}
+
+.level-info {
+    display: flex;
+    justify-content: space-between;
+    color: #aaaaaa;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.level-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #222222;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.level-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff8c00, #ffc800);
+    border-radius: inherit;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.stat-card {
+    background: #121212;
+    border: 1px solid #222222;
+    border-radius: 22px;
+    padding: 18px 14px;
+    text-align: center;
+}
+
+.stat-icon-bg {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.stat-val {
+    font-size: 20px;
+    font-weight: 900;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.stat-lbl {
+    font-size: 12px;
+    color: #666666;
+    font-weight: 600;
+}
+
+.profile-balance-banner {
+    display: none !important;
+}
+
+.p-bal-left small {
+    color: #666666;
+    font-size: 11px;
+    display: block;
+    margin-bottom: 2px;
+    font-weight: 600;
+}
+
+.p-bal-left strong {
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.p-deposit-btn {
+    background: linear-gradient(135deg, #ffc800, #ff9000);
+    color: #000000;
+    font-size: 15px;
+    font-weight: 800;
+    padding: 12px 24px;
+    border-radius: 16px;
+    transition: transform 0.15s ease;
+}
+
+.p-deposit-btn:active {
+    transform: scale(0.95);
+}
+
+/* ==========================================
+   СТРАНИЦА БАЛАНСА (BALANCE PAGE)
+========================================== */
+.balance-page {
+    animation: fadeIn 0.25s ease;
+    margin-top: -6px;
+}
+
+.balance-page .page-header,
+.bonus-page .page-header {
+    margin-bottom: 8px;
+}
+
+.balance-gold-card {
+    display: none !important;
+}
+
+.bg-label {
+    color: #ffba26;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.bg-amount {
+    color: #ffffff;
+    font-size: 34px;
+    font-weight: 950;
+}
+
+.balance-mode-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    background: #121212;
+    padding: 6px;
+    border-radius: 20px;
+    border: 1px solid #222222;
+    margin-bottom: 14px;
+}
+
+.mode-btn {
+    background: transparent;
+    color: #666666;
+    padding: 14px;
+    border-radius: 16px;
+    font-size: 15px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #ffc800, #ff9000);
+    color: #000000;
+    box-shadow: 0 4px 15px rgba(255, 160, 0, 0.25);
+}
+
+.form-box {
+    background: #121212;
+    border: 1px solid #222222;
+    border-radius: 24px;
+    padding: 20px;
+}
+
+.form-box h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.sub-text {
+    color: #666666;
+    font-size: 12px;
+    margin: 0 0 20px;
+}
+
+.input-group {
+    margin-bottom: 16px;
+}
+
+.input-group label {
+    display: block;
+    color: #666666;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+}
+
+.custom-select {
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 18px;
+    padding: 12px 16px;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.select-selected {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.m-icon {
+    font-size: 26px;
+}
+
+.select-selected img.m-icon {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.m-text {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.m-text strong {
+    font-size: 15px;
+    color: #ffffff;
+}
+
+.m-text small {
+    font-size: 11px;
+    color: #666666;
+}
+
+.arrow {
+    color: #666666;
+    font-size: 10px;
+}
+
+.select-items {
+    display: none;
+    position: absolute;
+    top: 108%;
+    left: 0;
+    right: 0;
+    background: #181818;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 18px;
+    overflow: hidden;
+    z-index: 99;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+}
+
+.select-items.open {
+    display: block;
+}
+
+.select-items div {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #222222;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.select-items div:last-child {
+    border-bottom: none;
+}
+
+.select-items div:hover, .select-items div:active {
+    background: #2a2a2a;
+}
+
+.select-items div img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.sum-input-wrap {
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 18px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sum-input-wrap input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 900;
+    width: 100%;
+}
+
+.currency-symbol {
+    color: #666666;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.main-action-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #ffc800, #ff9000);
+    color: #000000;
+    font-size: 17px;
+    font-weight: 900;
+    padding: 16px;
+    border-radius: 18px;
+    margin-top: 10px;
+    box-shadow: 0 6px 20px rgba(255, 150, 0, 0.25);
+    transition: transform 0.15s ease;
+}
+
+.main-action-btn:active {
+    transform: scale(0.97);
+}
+
+/* ==========================================
+   СТРАНИЦА БОНУСОВ (BONUS PAGE)
+========================================== */
+.bonus-page {
+    animation: fadeIn 0.25s ease;
+    margin-top: -6px;
+}
+
+/* ==========================================
+   ИГРА КИРКА
+========================================== */
+.pickaxe-roulette {
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.pickaxe-reel-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+}
+.pickaxe-reel-viewport {
+    position: relative;
+    height: 64px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #262626;
+    /* Затемнение по краям — визуально подчёркивает, что лента длиннее видимой области */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+}
+.pickaxe-reel-track {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    will-change: transform;
+}
+.pickaxe-reel-item {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.25));
+}
+.pickaxe-reel-item.custom-img {
+    font-size: 0;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+/* Указатель по центру барабана — отмечает, какая ячейка "выигрышная" */
+.pickaxe-reel-selector {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64px;
+    height: 100%;
+    border-left: 2px solid #ffc800;
+    border-right: 2px solid #ffc800;
+    box-shadow: 0 0 10px rgba(255, 200, 0, 0.35) inset;
+    pointer-events: none;
+    border-radius: 4px;
+}
+/* Медленная зацикленная прокрутка в режиме ожидания — как превью кейса до открытия */
+@keyframes pickaxeIdleScroll {
+    from { transform: translateX(var(--idle-loop-start, -160px)); }
+    to   { transform: translateX(var(--idle-loop-shift, -384px)); }
+}
+
+.pickaxe-name {
+    font-weight: 800;
+    font-size: 14px;
+    color: #fff;
+    margin-top: 8px;
+}
+
+.pickaxe-controls-panel {
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 20px;
+    padding: 16px;
+    text-align: left;
+}
+
+/* Золотая подсветка поля ставки при фокусе — единая для всех игр */
+.card-input-wrap {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-input-wrap:focus-within {
+    border-color: #ffc800;
+    box-shadow: 0 0 0 3px rgba(255, 200, 0, 0.15);
+}
+
+/* ==========================================
+   ШАХТА — БЕСКОНЕЧНОЕ ПОЛЕ БЛОКОВ (в стиле вокселей)
+========================================== */
+:root {
+    --block-size: 44px;
+    --grid-cols: 7;
+}
+
+.mine-viewport {
+    position: relative;
+    width: calc(var(--block-size) * var(--grid-cols));
+    max-width: 100%;
+    height: 330px;
+    margin: 0 auto;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 2px solid #1f1f1f;
+    background: linear-gradient(180deg, #274a17 0%, #182a10 22%, #0c0c0c 75%, #050505 100%);
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.65), inset 0 2px 0 rgba(255,255,255,0.04);
+}
+
+.mine-world {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, 0);
+    will-change: transform;
+}
+
+.mine-grid-canvas {
+    display: grid;
+    grid-template-columns: repeat(var(--grid-cols), var(--block-size));
+}
+
+.mine-block {
+    width: var(--block-size);
+    height: var(--block-size);
+    position: relative;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    /* Переменные текстуры — задаются случайно из JS (applyBlockTexture),
+       чтобы одинаковые блоки рядом не выглядели как повторяющийся тайл. */
+    --tx: 6px; --ty: 8px; --tr: 0deg; --tb: 1;
+    filter: brightness(var(--tb, 1));
+}
+
+.b-air { background: transparent; border-color: transparent; }
+
+/* ===== Трава — многослойная текстура с травинками и комками земли ===== */
+.b-grass {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 30%),
+        linear-gradient(#6bd94a 0 36%, #4a3018 36% 100%);
+    box-shadow: inset 0 -6px 0 rgba(0,0,0,0.3), inset 0 2px 0 rgba(255,255,255,0.22);
+}
+.b-grass::before {
+    /* стебельки травы вдоль верхнего края */
+    content: '';
+    position: absolute; left: 0; right: 0; top: 0; height: 40%;
+    background-image:
+        linear-gradient(90deg, transparent 46%, rgba(37,110,20,0.9) 47%, rgba(37,110,20,0.9) 50%, transparent 51%),
+        linear-gradient(90deg, transparent 66%, rgba(120,220,70,0.7) 67%, rgba(120,220,70,0.7) 69%, transparent 70%);
+    background-size: 9px 9px, 11px 7px;
+    background-position: var(--tx) 0px, calc(var(--tx) * -1) 2px;
+    background-repeat: repeat-x;
+}
+.b-grass::after {
+    /* комья земли снизу */
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(rgba(0,0,0,0.32) 2.4px, transparent 2.6px),
+        radial-gradient(rgba(120,80,45,0.6) 3px, transparent 3.2px);
+    background-size: 13px 13px, 17px 17px;
+    background-position: var(--tx) calc(var(--ty) + 20px), calc(var(--tx) * -1 + 10px) calc(var(--ty) + 30px);
+    opacity: .85;
+}
+
+/* ===== Камень — гранитная зернистость + трещинки породы ===== */
+.b-stone {
+    background:
+        radial-gradient(120% 140% at 30% 20%, rgba(255,255,255,0.10), transparent 55%),
+        linear-gradient(155deg, #7a7a7a 0%, #626262 45%, #545454 100%);
+    box-shadow: inset 0 -6px 0 rgba(0,0,0,0.32), inset 0 2px 0 rgba(255,255,255,0.10);
+}
+.b-stone::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(rgba(255,255,255,0.14) 2px, transparent 2.2px),
+        radial-gradient(rgba(0,0,0,0.28) 2.4px, transparent 2.6px),
+        radial-gradient(rgba(0,0,0,0.16) 1.4px, transparent 1.6px);
+    background-position: var(--tx) var(--ty), calc(var(--ty) + 14px) calc(var(--tx) + 6px), calc(var(--tx) + 22px) calc(var(--ty) + 20px);
+    background-size: 15px 15px, 19px 19px, 11px 11px;
+}
+
+/* ===== Руды — тёмная порода-основа + кристаллы-вкрапления с бликом ===== */
+.mine-block[data-ore] {
+    background:
+        radial-gradient(120% 140% at 30% 15%, rgba(255,255,255,0.08), transparent 55%),
+        linear-gradient(155deg, #565656 0%, #444 55%, #3a3a3a 100%);
+    box-shadow: inset 0 -6px 0 rgba(0,0,0,0.32), inset 0 2px 0 rgba(255,255,255,0.08);
+}
+.mine-block[data-ore]::before {
+    /* фоновая зернистость породы, как у камня, но чуть темнее */
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(0,0,0,0.25) 2px, transparent 2.2px);
+    background-position: var(--tx) var(--ty);
+    background-size: 14px 14px;
+}
+.mine-block[data-ore]::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-repeat: no-repeat;
+}
+/* Каждое вкрапление — тёмное ядро + маленький блик, имитирующий грань кристалла */
+.b-coal::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #333 0%, #141414 55%, #141414 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #333 0%, #141414 55%, #141414 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #333 0%, #141414 55%, #141414 60%, transparent 61%);
+    background-size: 13px 13px, 13px 13px, 13px 13px;
+    background-position: calc(var(--tx) + 3px) calc(var(--ty) + 4px), calc(var(--tx) + 22px) calc(var(--ty) + 14px), calc(var(--tx) + 10px) calc(var(--ty) + 26px);
+}
+.b-copper::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #f3b27e 0%, #b5652a 55%, #8a4a1c 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #f3b27e 0%, #b5652a 55%, #8a4a1c 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #f3b27e 0%, #b5652a 55%, #8a4a1c 60%, transparent 61%);
+    background-size: 13px 13px, 13px 13px, 13px 13px;
+    background-position: calc(var(--tx) + 4px) calc(var(--ty) + 5px), calc(var(--tx) + 23px) calc(var(--ty) + 15px), calc(var(--tx) + 11px) calc(var(--ty) + 27px);
+}
+.b-iron::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #fff6e0 0%, #d9c093 55%, #a68a5c 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #fff6e0 0%, #d9c093 55%, #a68a5c 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #fff6e0 0%, #d9c093 55%, #a68a5c 60%, transparent 61%);
+    background-size: 13px 13px, 13px 13px, 13px 13px;
+    background-position: calc(var(--tx) + 3px) calc(var(--ty) + 4px), calc(var(--tx) + 22px) calc(var(--ty) + 14px), calc(var(--tx) + 10px) calc(var(--ty) + 26px);
+}
+.b-gold::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #fff6b0 0%, #ffd23f 55%, #c99a15 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #fff6b0 0%, #ffd23f 55%, #c99a15 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #fff6b0 0%, #ffd23f 55%, #c99a15 60%, transparent 61%);
+    background-size: 13px 13px, 13px 13px, 13px 13px;
+    background-position: calc(var(--tx) + 4px) calc(var(--ty) + 5px), calc(var(--tx) + 23px) calc(var(--ty) + 15px), calc(var(--tx) + 11px) calc(var(--ty) + 27px);
+}
+.b-gold { box-shadow: inset 0 -6px 0 rgba(0,0,0,0.32), inset 0 2px 0 rgba(255,255,255,0.08), 0 0 6px rgba(255,210,63,0.25); }
+.b-lapis::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #9fc4ff 0%, #2e5fd6 55%, #1d3f99 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #9fc4ff 0%, #2e5fd6 55%, #1d3f99 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #9fc4ff 0%, #2e5fd6 55%, #1d3f99 60%, transparent 61%);
+    background-size: 14px 14px, 14px 14px, 14px 14px;
+    background-position: calc(var(--tx) + 4px) calc(var(--ty) + 5px), calc(var(--tx) + 23px) calc(var(--ty) + 15px), calc(var(--tx) + 11px) calc(var(--ty) + 27px);
+}
+.b-emerald::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #b6ffd9 0%, #20d66d 55%, #128a45 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #b6ffd9 0%, #20d66d 55%, #128a45 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #b6ffd9 0%, #20d66d 55%, #128a45 60%, transparent 61%);
+    background-size: 14px 14px, 14px 14px, 14px 14px;
+    background-position: calc(var(--tx) + 4px) calc(var(--ty) + 5px), calc(var(--tx) + 23px) calc(var(--ty) + 15px), calc(var(--tx) + 11px) calc(var(--ty) + 27px);
+}
+.b-diamond::after {
+    background-image:
+        radial-gradient(circle at 35% 35%, #eafff9 0%, #4fe0ff 55%, #1a9dc4 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #eafff9 0%, #4fe0ff 55%, #1a9dc4 60%, transparent 61%),
+        radial-gradient(circle at 35% 35%, #eafff9 0%, #4fe0ff 55%, #1a9dc4 60%, transparent 61%);
+    background-size: 15px 15px, 15px 15px, 15px 15px;
+    background-position: calc(var(--tx) + 4px) calc(var(--ty) + 5px), calc(var(--tx) + 23px) calc(var(--ty) + 15px), calc(var(--tx) + 11px) calc(var(--ty) + 27px);
+}
+.b-diamond { box-shadow: inset 0 -6px 0 rgba(0,0,0,0.32), inset 0 2px 0 rgba(255,255,255,0.08), 0 0 10px rgba(79,224,255,0.3); }
+
+/* ===== Своя картинка блока вместо нарисованной текстуры =====
+   Скрываем нарисованные ::before/::after слои и растягиваем загруженное
+   изображение на весь блок. */
+.mine-block.custom-img {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+.mine-block.custom-img::before,
+.mine-block.custom-img::after {
+    display: none !important;
+}
+
+/* Трещины при попадании кирки по прочной руде (не разрушилась с 1 удара) */
+.mine-block.crack-1 { filter: brightness(0.86); }
+.mine-block.crack-2 { filter: brightness(0.68); }
+.mine-block.crack-3 { filter: brightness(0.5); }
+.mine-block.crack-1::before,
+.mine-block.crack-2::before,
+.mine-block.crack-3::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+        linear-gradient(35deg, transparent 46%, rgba(0,0,0,0.55) 47%, rgba(0,0,0,0.55) 49%, transparent 50%),
+        linear-gradient(-50deg, transparent 60%, rgba(0,0,0,0.5) 61%, rgba(0,0,0,0.5) 63%, transparent 64%);
+    pointer-events: none;
+}
+
+/* Короткая вспышка в момент удара кирки — усиливает ощущение "хита" */
+@keyframes blockHitFlash {
+    0%   { filter: brightness(2.1) saturate(1.3); }
+    100% { filter: brightness(var(--tb, 1)); }
+}
+.block-hit-flash { animation: blockHitFlash 0.16s ease-out; }
+
+/* Анимация уничтожения блока */
+@keyframes blockBreak {
+    0%   { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1.7); }
+    100% { transform: scale(0.3) rotate(var(--tr, 20deg)); opacity: 0; filter: brightness(0.4); }
+}
+.block-break-anim {
+    animation: blockBreak 0.22s ease-out forwards;
+}
+
+/* Осколки/пыль в момент удара кирки о блок */
+@keyframes impactDustPop {
+    0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0.9; }
+    100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+}
+.mine-impact-dust {
+    position: absolute;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(230,220,200,0.85) 0%, rgba(230,220,200,0.35) 45%, transparent 70%);
+    pointer-events: none;
+    z-index: 4;
+    animation: impactDustPop 0.4s ease-out forwards;
+}
+.mine-impact-dust.dust-big {
+    width: 30px; height: 30px;
+    background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,240,190,0.5) 40%, transparent 70%);
+}
+
+/* Всплывающая надпись выигрыша над разрушенным блоком руды */
+@keyframes minePopupFloat {
+    0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.8); }
+    18%  { opacity: 1; transform: translate(-50%, -6px) scale(1.08); }
+    100% { opacity: 0; transform: translate(-50%, -36px) scale(1); }
+}
+.mine-win-popup {
+    position: absolute;
+    transform: translate(-50%, 0);
+    font-weight: 900;
+    font-size: 13px;
+    color: #3dff9a;
+    text-shadow: 0 0 6px rgba(61,255,154,0.85), 0 1px 2px rgba(0,0,0,0.85);
+    pointer-events: none;
+    z-index: 6;
+    white-space: nowrap;
+    animation: minePopupFloat 0.7s ease-out forwards;
+}
+
+/* Летящая кирка */
+.pickaxe-sprite {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 38px;
+    height: 38px;
+    font-size: 30px;
+    line-height: 38px;
+    text-align: center;
+    z-index: 5;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 5px rgba(0,0,0,0.65)) drop-shadow(0 0 8px rgba(255,200,0,0.35));
+    transform-origin: 50% 50%;
+}
+.pickaxe-sprite.custom-img {
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+
+/* HUD поверх шахты */
+.mine-hud {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+    z-index: 6;
+    pointer-events: none;
+}
+.hud-item {
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+#hudHp { color: #ff5a5a; }
+#hudWin { color: #3dff9a; }
+#hudDepth { color: #ffc800; }
+
+/* ==========================================
+   ИГРА КОЛЕСО ФОРТУНЫ (3D ЗОЛОТО, ЗУМ И ТАБЫ)
+========================================== */
+.wheel-card {
+    background: #121212;
+    border-radius: 28px;
+    padding: 24px 16px;
+    border: 1px solid #222222;
+    text-align: center;
+}
+
+.wheel-subtitle {
+    color: #666666;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.wheel-stage {
+    position: relative;
+    width: 290px;
+    height: 290px;
+    margin: 25px auto;
+    transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.wheel-stage.zoomed {
+    transform: scale(1.35);
+}
+
+.wheel-pointer {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+}
+
+.pointer-tip {
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 22px solid #ffc800;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));
+}
+
+.wheel-gold-frame {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    padding: 12px;
+    background: conic-gradient(
+        from 0deg, 
+        #ffe259, #ffa751, #ffd700, #996515, 
+        #ffffff, #ffd700, #ffa751, #ffe259
+    );
+    box-shadow: 
+        0 0 35px rgba(255, 215, 0, 0.5),
+        0 15px 40px rgba(0, 0, 0, 0.9),
+        inset 0 0 15px rgba(255, 255, 255, 0.8),
+        inset 0 -6px 12px rgba(0, 0, 0, 0.8);
+    position: relative;
+}
+
+.gold-bezel-glow {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+    animation: goldRotateGlow 20s linear infinite;
+}
+
+.wheel-outer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #000000;
+}
+
+.wheel-svg {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    transition: transform 5s cubic-bezier(0.15, 0.99, 0.18, 1);
+}
+
+.wheel-sector {
+    stroke: #090909;
+    stroke-width: 2.5px;
+}
+
+.wheel-sector-text {
+    fill: #ffffff;
+    font-weight: 900;
+    text-anchor: middle;
+    dominant-baseline: middle;
+}
+
+.wheel-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #2a2a2a, #111111);
+    border: 3px solid #ffc800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 15px rgba(255, 200, 0, 0.4);
+    z-index: 10;
+}
+
+.wheel-center span {
+    font-size: 14px;
+    font-weight: 950;
+    color: #ffc800;
+}
+
+.wheel-result {
+    margin: 15px 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.wheel-result.show {
+    opacity: 1;
+}
+
+.result-small {
+    display: block;
+    font-size: 10px;
+    color: #666666;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.wheel-result strong {
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.wheel-bet-panels {
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 20px;
+    padding: 16px;
+    margin: 16px 0;
+    text-align: left;
+}
+
+.bet-panel-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #666666;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.color-tabs-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.color-tab-btn {
+    flex: 1;
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 12px;
+    padding: 8px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.color-tab-btn.active {
+    border-color: #ffd700;
+    background: #221d10;
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
+    transform: translateY(-2px);
+}
+
+.tab-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.tab-name {
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.tab-mult {
+    font-size: 9px;
+    color: #888888;
+    font-weight: 700;
+}
+
+.active-bet-box {
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 16px;
+    padding: 14px;
+}
+
+.card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.color-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.card-input-wrap {
+    display: flex;
+    align-items: center;
+    background: #090909;
+    border: 1px solid #282828;
+    border-radius: 10px;
+    padding: 4px 10px;
+    width: 110px;
+}
+
+.card-input-wrap input {
+    width: 100%;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 800;
+    text-align: right;
+    outline: none;
+    border: none;
+    background: transparent;
+}
+
+.card-percent-btns {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.pct-btn {
+    background: #202020;
+    color: #aaaaaa;
+    border-radius: 8px;
+    padding: 6px 0;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+    transition: all 0.15s ease;
+}
+
+.pct-btn:active {
+    background: #ffc800;
+    color: #000000;
+}
+
+.total-bet-info {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #888888;
+    font-weight: 700;
+    text-align: right;
+}
+
+.spin-button-gold {
+    width: 100%;
+    padding: 18px;
+    margin-top: 15px;
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+    color: #000000;
+    font-size: 18px;
+    font-weight: 950;
+    border-radius: 20px;
+    border: 1px solid #ffe875;
+    box-shadow: 0 8px 25px rgba(255, 140, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.5);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.5px;
+}
+
+.spin-button-gold:active {
+    transform: scale(0.97);
+    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+}
+
+.spin-button-gold:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+}
+
+/* ==========================================
+   ИСТОРИЯ ТРАНЗАКЦИЙ (TRANSACTIONS HISTORY)
+========================================== */
+.history-box {
+    margin-top: 16px;
+    background: #121212;
+    border: 1px solid #222222;
+    border-radius: 24px;
+    padding: 20px;
+}
+
+.history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.history-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.history-header small {
+    color: #666666;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #090909;
+    border: 1px solid #1a1a1a;
+    border-radius: 16px;
+    padding: 12px 14px;
+}
+
+.tx-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tx-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.tx-icon.deposit {
+    background: rgba(46, 204, 113, 0.12);
+    color: #2ecc71;
+}
+
+.tx-icon.withdraw {
+    background: rgba(231, 76, 60, 0.12);
+    color: #e74c3c;
+}
+
+.tx-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.tx-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.tx-subtitle {
+    font-size: 11px;
+    color: #666666;
+    margin-top: 2px;
+}
+
+.tx-subtitle img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-right: 2px;
+}
+
+.tx-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.tx-amount {
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.tx-amount.deposit {
+    color: #2ecc71;
+}
+
+.tx-amount.withdraw {
+    color: #ffffff;
+}
+
+.tx-status {
+    font-size: 10px;
+    font-weight: 800;
+    margin-top: 3px;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.tx-status.success {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+}
+
+.tx-status.pending {
+    background: rgba(241, 196, 15, 0.15);
+    color: #f1c40f;
+}
+
+/* ==========================================
+   НИЖНЯЯ НАВИГАЦИЯ (LIQUID GLASS BOTTOM NAV)
+========================================== */
+.bottom-nav {
+    position: fixed;
+    z-index: 100;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    width: calc(100% - 24px);
+    max-width: 736px;
+    height: 70px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    align-items: center;
+    border-radius: 26px;
+    
+    /* Liquid Glass Effect */
+    background: rgba(18, 18, 20, 0.45);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 
+        0 15px 35px rgba(0, 0, 0, 0.6),
+        0 0 15px rgba(255, 200, 0, 0.05),
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.35),
+        inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.5);
+    padding-bottom: env(safe-area-inset-bottom);
+    transition: all 0.3s ease;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: rgba(255, 255, 255, 0.5);
+    background: transparent;
+    height: 100%;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.nav-item:active {
+    transform: scale(0.88);
+}
+
+.nav-icon {
+    font-size: 22px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.nav-item small {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+}
+
+.nav-item.active {
+    color: #ffc800;
+}
+
+.nav-item.active .nav-icon {
+    text-shadow: 0 0 12px rgba(255, 200, 0, 0.8);
+    transform: translateY(-1px);
+}
+
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 6px;
+    width: 16px;
+    height: 3px;
+    border-radius: 10px;
+    background: #ffc800;
+    box-shadow: 0 0 10px #ffc800, 0 0 20px #ffc800;
+}
+
+/* ==========================================
+   ЗАГОЛОВКИ СТРАНИЦ И ШАПКИ (PAGE HEADERS)
+========================================== */
+.page-header {
+    display: grid;
+    grid-template-columns: 40px 1fr 40px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.page-header h1 {
+    margin: 0;
+    text-align: center;
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.back-button {
+    width: 38px;
+    height: 38px;
+    background: #121212;
+    border: 1px solid #222222;
+    border-radius: 12px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.back-button::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-left: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
+    transform: rotate(45deg);
+    margin-left: 3px;
+}
+
+.header-space {
+    width: 38px;
+}
+
+/* ==========================================
+   КАСТОМИЗАЦИЯ ПРОФИЛЯ
+========================================== */
+#bgEmojiPattern {
+    opacity: 0.18;
+    font-size: 24px;
+    letter-spacing: 12px;
+    user-select: none;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    filter: blur(0.3px);
+}
+
+.color-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.color-option {
+    height: 38px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.color-option.active {
+    border-color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+}
+
+.emoji-picker-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: space-between;
+}
+
+.emoji-option {
+    flex: 1;
+    height: 42px;
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.emoji-option.active {
+    border-color: #f39c12;
+    background: #2a2215;
+    box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
+    transform: scale(1.05);
+}
+
+/* ==========================================
+   АНИМАЦИИ (KEYFRAMES)
+========================================== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ringPulse {
+    0%, 100% { transform: scale(0.92); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+@keyframes gamePulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.4; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+@keyframes goldRotateGlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes tilePop {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* ==========================================
+   АДАПТИВНОСТЬ (MEDIA QUERIES)
+========================================== */
+@media (max-width: 480px) {
+    .app {
+        padding: 12px 10px 95px 10px;
+    }
+    
+    .top {
+        top: 8px;
+        padding: 6px 10px;
+        margin-bottom: 10px;
+    }
+
+    .hero {
+        padding: 22px;
+        min-height: 210px;
+    }
+    
+    .hero h1 {
+        font-size: 32px;
+    }
+    
+    .money-orb {
+        width: 110px;
+        height: 110px;
+        right: 10px;
+    }
+    
+    .money-orb span {
+        font-size: 60px;
+    }
+    
+    .stats-grid {
+        gap: 8px;
+    }
+    
+    .stat-card {
+        padding: 14px 10px;
+    }
+    
+    .stat-val {
+        font-size: 17px;
+    }
+}
+
+/* ==========================================
+   ВЫРОВНЕННАЯ ШАПКА ПОЛЯ СТАВКИ В МИНАХ
+========================================== */
+.mines-bet-header {
+    display: flex;
+    align-items: center; /* Выравнивает label и карточку ввода строго по центру по вертикали */
+    justify-content: space-between;
+    width: 100%;
+}
+
+.mines-bet-header label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #888888;
+    letter-spacing: 0.5px;
+    margin: 0;
+    line-height: 1;
+}
+
+/* Компактный инпут с фиксированной высотой и вертикальным выравниванием */
+.mines-bet-header .card-input-wrap {
+    display: flex;
+    align-items: center; /* Центрирует внутренний input и значок $ */
+    justify-content: flex-end;
+    background: #121212;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 0 12px;
+    height: 38px; /* Выравниваем общую высоту контейнера */
+    width: 130px;
+    box-sizing: border-box;
+}
+
+.mines-bet-header .card-input-wrap input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: right;
+    padding: 0;
+    margin: 0;
+    height: 100%;
+    line-height: normal; /* Центрирует плейсхолдер и текст */
+}
+
+.mines-bet-header .card-input-wrap input::placeholder {
+    color: #666666;
+}
+
+.mines-bet-header .card-input-wrap .currency-symbol {
+    color: #666666;
+    font-size: 15px;
+    font-weight: 700;
+    margin-left: 5px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    user-select: none;
+}
+
+/* ==================== КАПСУЛА ВЫБОРА МИН ==================== */
+
+/* Стилизация контейнера-капсулы */
+.mines-stepper-capsule {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.mines-stepper-capsule:focus-within {
+  border-color: rgba(255, 200, 0, 0.4) !important; /* Легкая подсветка при фокусе */
+}
+
+/* Скрытие стандартных стрелок у input type="number" */
+#customMinesInput::-webkit-outer-spin-button,
+#customMinesInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+#customMinesInput[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Кнопки + и - */
+.stepper-btn {
+  transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.stepper-btn:hover {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.stepper-btn:active {
+  transform: scale(0.9);
+       }
