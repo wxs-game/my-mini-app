@@ -2175,6 +2175,13 @@ function runMiningPhysics(pickaxe, bet) {
         hudHp.textContent = Math.max(0, hp);
         hudWin.textContent = `${(bet * accumulatedMultiplier).toFixed(2)} $ (${accumulatedMultiplier.toFixed(2)}x)`;
         hudDepth.textContent = String(brokenRow);
+
+        // Скип бесполезен, если HP уже на уровне 15% или ниже — блокируем кнопку
+        if (!pickaxeSkipUsed && hp <= skipThresholdHp) {
+            pickaxeSkipUsed = true;
+            const skipBtn = document.getElementById('pickaxeSkipBtn');
+            if (skipBtn) skipBtn.disabled = true;
+        }
     };
 
     // Один шаг симуляции (один "кадр" физики): гравитация, падение, обработка
