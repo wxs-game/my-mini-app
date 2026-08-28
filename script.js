@@ -3125,8 +3125,8 @@ function hideAppLoader() {
             // Небольшая пауза, чтобы глаз успел увидеть 100%, затем — резкий свайп вверх
             setTimeout(() => {
                 loader.classList.add('app-loader-hidden');
-                setTimeout(() => loader.remove(), 550);
-            }, 180);
+                setTimeout(() => loader.remove(), 220);
+            }, 100);
         }, remaining);
     };
 
