@@ -432,6 +432,10 @@ main {
     border: 1px solid #222222;
     transition: transform 0.15s ease, border-color 0.2s ease;
     cursor: pointer;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .game:active {
@@ -447,6 +451,13 @@ main {
     object-fit: cover; /* Заполняем карточку целиком, одинаковый отступ у всех превью */
     object-position: center;
     background: #121212;
+    transform: scale(1.18); /* Небольшой зум, чтобы скрыть свой кантик/рамку картинки */
+    -webkit-touch-callout: none; /* Убираем меню iOS по долгому нажатию */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+    pointer-events: none; /* Клик всё равно ловит кнопка .game */
 }
 
 /* ==========================================
