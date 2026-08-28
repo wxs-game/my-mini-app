@@ -678,6 +678,34 @@ main {
     transform: scale(0.96);
 }
 
+.pickaxe-run-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.pickaxe-speed-btn {
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+    color: #000000;
+    font-size: 14px;
+    font-weight: 950;
+    padding: 14px;
+    border-radius: 14px;
+    box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.pickaxe-speed-btn:active {
+    transform: scale(0.96);
+}
+
+.pickaxe-speed-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
 .mines-auto-btn {
     background: #1f1f1f;
     border: 1px solid #333;
