@@ -58,11 +58,13 @@ button, input, select, textarea {
         radial-gradient(circle at 50% 0%, rgba(255, 160, 0, 0.15), transparent 40%),
         radial-gradient(circle at 80% 50%, rgba(255, 120, 0, 0.05), transparent 50%),
         #090909;
-    transition: opacity 0.4s ease;
+    transition: transform 0.5s cubic-bezier(0.6, 0, 0.85, 1), opacity 0.4s ease;
 }
 
+/* При завершении загрузки экран резко "уезжает" вверх, как свайп */
 .app-loader.app-loader-hidden {
-    opacity: 0;
+    transform: translateY(-100%);
+    opacity: 0.4;
     pointer-events: none;
 }
 
@@ -70,37 +72,145 @@ button, input, select, textarea {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
+    gap: 22px;
+    padding: 0 32px;
 }
 
-.app-loader-logo {
-    font-size: 34px;
+/* ---------- Луна-логотип ---------- */
+.app-loader-moon-wrap {
+    position: relative;
+    width: 168px;
+    height: 168px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.app-loader-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 190, 60, 0.25);
+    animation: appLoaderRotate 8s linear infinite;
+}
+
+.app-loader-ring-1 {
+    width: 168px;
+    height: 168px;
+    border-top-color: rgba(255, 200, 80, 0.7);
+    border-right-color: transparent;
+}
+
+.app-loader-ring-2 {
+    width: 140px;
+    height: 140px;
+    border-bottom-color: rgba(120, 210, 255, 0.45);
+    border-left-color: transparent;
+    animation-direction: reverse;
+    animation-duration: 6s;
+}
+
+.app-loader-moon {
+    position: relative;
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.55), transparent 45%),
+        radial-gradient(circle at 68% 78%, rgba(0, 0, 0, 0.55), transparent 55%),
+        linear-gradient(155deg, #d9d9de 0%, #9a9aa4 45%, #55555e 100%);
+    box-shadow:
+        0 0 18px 4px rgba(255, 190, 70, 0.45),
+        0 0 42px 12px rgba(255, 160, 0, 0.25),
+        inset -8px -8px 16px rgba(0, 0, 0, 0.45),
+        inset 6px 6px 14px rgba(255, 255, 255, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    animation: appLoaderMoonPop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+               appLoaderMoonFloat 3.2s ease-in-out 0.9s infinite;
+}
+
+/* Кратеры — просто затемнённые вмятины на поверхности луны для реализма */
+.app-loader-moon-crater {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.12) 70%, transparent 100%);
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.app-loader-moon-crater-a { width: 20px; height: 20px; top: 14px; left: 18px; }
+.app-loader-moon-crater-b { width: 12px; height: 12px; bottom: 16px; right: 20px; }
+.app-loader-moon-crater-c { width: 9px; height: 9px; bottom: 30px; left: 16px; }
+
+/* Надпись "WXS" будто выбита кратером на поверхности луны (вдавленный текст) */
+.app-loader-moon-text {
+    position: relative;
+    z-index: 2;
+    font-size: 26px;
     font-weight: 950;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
+    color: #7c7c86;
+    text-shadow:
+        1px 1px 1px rgba(255, 255, 255, 0.55),
+        -1px -1px 2px rgba(0, 0, 0, 0.65),
+        0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes appLoaderMoonPop {
+    0%   { transform: scale(0) translateY(30px); opacity: 0; }
+    55%  { transform: scale(1.18) translateY(-8px); opacity: 1; }
+    75%  { transform: scale(0.92) translateY(2px); }
+    100% { transform: scale(1) translateY(0); }
+}
+
+@keyframes appLoaderMoonFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+}
+
+@keyframes appLoaderRotate {
+    to { transform: rotate(360deg); }
+}
+
+/* ---------- Заголовок ---------- */
+.app-loader-title {
+    font-size: 30px;
+    font-weight: 950;
+    letter-spacing: 1px;
+}
+
+.app-loader-title .w { color: #ffffff; }
+.app-loader-title .g {
     background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
 }
 
-.app-loader-spinner {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 3px solid rgba(255, 170, 0, 0.15);
-    border-top-color: #ffaa00;
-    animation: appLoaderSpin 0.8s linear infinite;
+.app-loader-subtitle {
+    margin-top: -10px;
+    font-size: 14px;
+    color: #8a8a92;
+    text-align: center;
 }
 
-.app-loader-text {
-    font-size: 13px;
-    font-weight: 600;
-    color: #888888;
-    letter-spacing: 0.5px;
+/* ---------- Прогресс-бар (капсула) ---------- */
+.app-loader-progress-track {
+    width: 220px;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
 }
 
-@keyframes appLoaderSpin {
-    to { transform: rotate(360deg); }
+.app-loader-progress-fill {
+    height: 100%;
+    width: 6%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff8c00, #ffd700);
+    box-shadow: 0 0 10px rgba(255, 180, 0, 0.6);
+    transition: width 0.35s ease;
 }
 
 button {
