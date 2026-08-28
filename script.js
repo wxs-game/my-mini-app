@@ -2058,7 +2058,9 @@ function runMiningPhysics(pickaxe, bet) {
     hudDepth.textContent = "0";
 
     const runControls = document.getElementById('pickaxeRunControls');
+    const actionBtn = document.getElementById('pickaxeActionBtn');
     if (runControls) runControls.classList.remove('hidden');
+    if (actionBtn) actionBtn.classList.add('hidden');
 
     const maxHp = pickaxe.hp;
     const skipThresholdHp = Math.ceil(maxHp * 0.15); // Порог для кнопки "Скип" — 15% от стартового HP
@@ -2071,6 +2073,7 @@ function runMiningPhysics(pickaxe, bet) {
         pickaxePhysicsRAF = null;
         sprite.classList.add('hidden');
         if (runControls) runControls.classList.add('hidden');
+        if (actionBtn) actionBtn.classList.remove('hidden');
 
         // Итоговая выплата округляется ВНИЗ (не в пользу игрока) — если накопленный
         // множитель даёт, например, 1.2347x от ставки, дробные центы свыше двух
