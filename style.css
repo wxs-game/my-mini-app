@@ -451,7 +451,7 @@ main {
     object-fit: cover; /* Заполняем карточку целиком, одинаковый отступ у всех превью */
     object-position: center;
     background: #121212;
-    transform: scale(1.18); /* Небольшой зум, чтобы скрыть свой кантик/рамку картинки */
+    transform: scale(1.18); /* Зум по умолчанию, если для картинки нет своего класса ниже */
     -webkit-touch-callout: none; /* Убираем меню iOS по долгому нажатию */
     -webkit-user-select: none;
     user-select: none;
@@ -459,6 +459,12 @@ main {
     user-drag: none;
     pointer-events: none; /* Клик всё равно ловит кнопка .game */
 }
+
+/* Индивидуальный зум под каждую картинку — меняй цифру scale() под свою картинку */
+.game-image.pickaxe-img { transform: scale(1.18); }
+.game-image.mines-img   { transform: scale(1.18); }
+.game-image.wheel-img   { transform: scale(1.18); }
+.game-image.crash-img   { transform: scale(1.18); }
 
 /* ==========================================
    ИГРА МИНЫ (MINES GAME SECTION)
