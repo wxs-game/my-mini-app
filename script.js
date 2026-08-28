@@ -1390,13 +1390,13 @@ const BLOCK_TYPES = {
     AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00, baseDur: 0, depthStep: Infinity },
     GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00, baseDur: 1, depthStep: Infinity },
     STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00, baseDur: 1, depthStep: Infinity },
-    COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02, baseDur: 1, depthStep: 40  },
-    COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04, baseDur: 1, depthStep: 30  },
-    IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07, baseDur: 2, depthStep: 26  },
-    GOLD:    { id: 'gold',    class: 'b-gold',    multiplier: 0.11, baseDur: 2, depthStep: 22  },
-    LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15, baseDur: 2, depthStep: 20  },
-    EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18, baseDur: 3, depthStep: 16  },
-    DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30, baseDur: 3, depthStep: 12  }
+    COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02, baseDur: 2, depthStep: 40  },
+    COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04, baseDur: 3, depthStep: 30  },
+    IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07, baseDur: 4, depthStep: 26  },
+    GOLD:    { id: 'gold',    class: 'b-gold',    multiplier: 0.11, baseDur: 5, depthStep: 22  },
+    LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15, baseDur: 5, depthStep: 20  },
+    EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18, baseDur: 5, depthStep: 16  },
+    DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30, baseDur: 5, depthStep: 12  }
 };
 const ORE_IDS = ['coal', 'copper', 'iron', 'gold', 'lapis', 'emerald', 'diamond'];
 
@@ -1590,14 +1590,14 @@ const VEIN_MAX_SIZE = 6;
 const GRID_COLS = 7;
 const BLOCK_SIZE = 44; // Должно совпадать с --block-size в style.css
 const SPRITE_SIZE = 38;
-// Падение замедлено в ~4 раза относительно исходных значений — кирка теперь
-// разгоняется гораздо плавнее, удары по блокам легче отслеживать глазами.
-const GRAVITY = 0.14;       // Ускорение свободного падения кирки (px/кадр²)
-const MAX_FALL_SPEED = 6;   // Максимальная скорость падения
-const BOUNCE_SPEED = -1.6;  // Лёгкий отскок при ударе о ещё не разрушенную руду
-const BOUNCE_MAX = -3;      // Верхний предел скорости отскока (реалистичное затухание)
+// Падение замедлено ещё в 2 раза (итого ~8 раз медленнее исходных значений) —
+// кирка падает заметно медленнее, удары по блокам легче отслеживать глазами.
+const GRAVITY = 0.07;       // Ускорение свободного падения кирки (px/кадр²)
+const MAX_FALL_SPEED = 3;   // Максимальная скорость падения
+const BOUNCE_SPEED = -0.8;  // Лёгкий отскок при ударе о ещё не разрушенную руду
+const BOUNCE_MAX = -1.5;    // Верхний предел скорости отскока (реалистичное затухание)
 const BOUNCE_RESTITUTION = 0.5; // Доля скорости удара, возвращаемая при отскоке
-const START_FALL_SPEED = 0.6;
+const START_FALL_SPEED = 0.3;
 const SQUASH_FRAMES = 12;   // Длительность визуального "сплющивания" кирки при ударе
 
 let mineGridMap = [];  // Массив блоков шахты (каждая ячейка — независимый объект с durability)
