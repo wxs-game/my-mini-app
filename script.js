@@ -783,6 +783,14 @@ function endMinesGame(isWin) {
 // Пауза между раундами (в это же время принимаются ставки на следующий раунд)
 const CRASH_WAIT_MS = 5000;
 
+// Хранение ленты прошлых коэффициентов — переживает перезаход в приложение.
+const CRASH_HISTORY_STORAGE_KEY = 'wxsCrashHistory';
+const CRASH_HISTORY_TS_STORAGE_KEY = 'wxsCrashHistoryTs';
+const CRASH_HISTORY_MAX = 25; // сколько прошедших раундов видно в ленте
+// Средняя длительность одного раунда (пауза + полёт) — используется только
+// чтобы прикинуть, сколько раундов "прошло в фоне", пока приложение было закрыто.
+const CRASH_AVG_ROUND_MS = 12000;
+
 // Скорость роста коэффициента: x2 за 10 секунд полёта (исходный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
 // Время «раскачки» — исходные 6000 мс (6 сек)
@@ -940,6 +948,8 @@ function initCrashPage() {
 function startCrashEngine() {
     if (crashLoopStarted) return;
     crashLoopStarted = true;
+    loadOrSeedCrashHistory();
+    renderCrashHistory();
     beginWaitingPhase();
 }
 
@@ -971,6 +981,60 @@ function generateCrashPoint() {
     if (r < houseEdge) return 1.00;
     const point = (1 - houseEdge) / (1 - r);
     return Math.max(1.00, Math.floor(point * 100) / 100);
+}
+
+// Сохраняет текущую ленту коэффициентов и момент сохранения — чтобы при
+// следующем заходе можно было понять, сколько раундов "прошло без нас".
+function saveCrashHistory() {
+    try {
+        localStorage.setItem(CRASH_HISTORY_STORAGE_KEY, JSON.stringify(crashHistory));
+        localStorage.setItem(CRASH_HISTORY_TS_STORAGE_KEY, String(Date.now()));
+    } catch (e) {
+        // localStorage недоступен (приватный режим и т.п.) — просто не сохраняем
+    }
+}
+
+// При первом заходе — сразу генерирует полную ленту "прошедших" раундов, чтобы
+// не было пусто. При повторном заходе — подгружает сохранённую ленту и
+// досимулирует раунды, которые должны были пройти за время отсутствия
+// (имитация того, что игра "крутится" 24/7, даже когда никто не играет).
+function loadOrSeedCrashHistory() {
+    let stored = [];
+    let storedTs = null;
+
+    try {
+        const raw = localStorage.getItem(CRASH_HISTORY_STORAGE_KEY);
+        if (raw) stored = JSON.parse(raw) || [];
+        const rawTs = localStorage.getItem(CRASH_HISTORY_TS_STORAGE_KEY);
+        if (rawTs) storedTs = parseInt(rawTs, 10);
+    } catch (e) {
+        stored = [];
+        storedTs = null;
+    }
+
+    if (!Array.isArray(stored) || stored.length === 0) {
+        // Ничего не сохранено — первый визит. Генерируем стартовую ленту,
+        // будто раунды уже шли до нас.
+        crashHistory = Array.from({ length: CRASH_HISTORY_MAX }, () => generateCrashPoint());
+    } else {
+        crashHistory = stored.slice(0, CRASH_HISTORY_MAX);
+
+        if (storedTs && !isNaN(storedTs)) {
+            const elapsedMs = Date.now() - storedTs;
+            const backfillCount = Math.min(
+                CRASH_HISTORY_MAX,
+                Math.max(0, Math.floor(elapsedMs / CRASH_AVG_ROUND_MS))
+            );
+            for (let i = 0; i < backfillCount; i++) {
+                crashHistory.unshift(generateCrashPoint());
+            }
+            if (crashHistory.length > CRASH_HISTORY_MAX) {
+                crashHistory.length = CRASH_HISTORY_MAX;
+            }
+        }
+    }
+
+    saveCrashHistory();
 }
 
 function beginFlyingPhase() {
@@ -1054,8 +1118,9 @@ function endCrashRound() {
 
     lastCrashPoint = crashGame.crashPoint;
     crashHistory.unshift(crashGame.crashPoint);
-    if (crashHistory.length > 15) crashHistory.pop();
+    if (crashHistory.length > CRASH_HISTORY_MAX) crashHistory.length = CRASH_HISTORY_MAX;
     renderCrashHistory();
+    saveCrashHistory();
 
     if (window.tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
