@@ -1603,9 +1603,34 @@ const SQUASH_FRAMES = 12;   // Длительность визуального "
 let mineGridMap = [];  // Массив блоков шахты (каждая ячейка — независимый объект с durability)
 let isPickaxeRunning = false;
 let pickaxePhysicsRAF = null;
+let pickaxeSpeedMult = 1;       // Множитель скорости текущего забега (1 = обычная, 2.5 = ускорено)
+let pickaxeSpeedUsed = false;   // "Ускорить" можно применить только один раз за забег
+let pickaxeSkipRequested = false; // Флаг: скип до 15% HP запрошен, но ещё не выполнен
+let pickaxeSkipUsed = false;    // "Скип" можно применить только один раз за забег
 
 function adjustPickaxeBet(factor) {
     applyBetFactor(document.getElementById('pickaxeBetInput'), factor);
+}
+
+// Ускоряет текущий забег в 2.5 раза (гравитация/скорость падения/отскок).
+// Действует один раз за забег — после нажатия кнопка блокируется.
+function acceleratePickaxeGame() {
+    if (!isPickaxeRunning || pickaxeSpeedUsed) return;
+    pickaxeSpeedMult = 2.5;
+    pickaxeSpeedUsed = true;
+    const btn = document.getElementById('pickaxeSpeedBtn');
+    if (btn) btn.disabled = true;
+}
+
+// Мгновенно прокручивает забег вперёд до момента, когда у кирки останется
+// 15% HP от стартового запаса, дальше игра продолжается как обычно (анимированно).
+// Действует один раз за забег — после нажатия кнопка блокируется.
+function skipPickaxeGame() {
+    if (!isPickaxeRunning || pickaxeSkipUsed) return;
+    pickaxeSkipRequested = true;
+    pickaxeSkipUsed = true;
+    const btn = document.getElementById('pickaxeSkipBtn');
+    if (btn) btn.disabled = true;
 }
 
 function setPickaxeMaxBet() {
@@ -1966,6 +1991,14 @@ async function startPickaxeGame() {
 
     isPickaxeRunning = true;
     document.getElementById('pickaxeActionBtn').disabled = true;
+    pickaxeSpeedMult = 1;
+    pickaxeSpeedUsed = false;
+    pickaxeSkipRequested = false;
+    pickaxeSkipUsed = false;
+    const speedBtn = document.getElementById('pickaxeSpeedBtn');
+    const skipBtn = document.getElementById('pickaxeSkipBtn');
+    if (speedBtn) speedBtn.disabled = false;
+    if (skipBtn) skipBtn.disabled = false;
 
     // Списание баланса
     const snapshot = snapshotBalanceState();
@@ -2024,6 +2057,12 @@ function runMiningPhysics(pickaxe, bet) {
     hudWin.textContent = "0.00 $";
     hudDepth.textContent = "0";
 
+    const runControls = document.getElementById('pickaxeRunControls');
+    if (runControls) runControls.classList.remove('hidden');
+
+    const maxHp = pickaxe.hp;
+    const skipThresholdHp = Math.ceil(maxHp * 0.15); // Порог для кнопки "Скип" — 15% от стартового HP
+
     // posX хранится как смещение от центра колонки (в px, для колонки curCol)
     let xOffset = 0; // текущее смещение спрайта от центра его колонки (для эффекта покачивания)
 
@@ -2031,6 +2070,7 @@ function runMiningPhysics(pickaxe, bet) {
         cancelAnimationFrame(pickaxePhysicsRAF);
         pickaxePhysicsRAF = null;
         sprite.classList.add('hidden');
+        if (runControls) runControls.classList.add('hidden');
 
         // Итоговая выплата округляется ВНИЗ (не в пользу игрока) — если накопленный
         // множитель даёт, например, 1.2347x от ставки, дробные центы свыше двух
@@ -2134,11 +2174,19 @@ function runMiningPhysics(pickaxe, bet) {
         hudDepth.textContent = String(brokenRow);
     };
 
-    const tick = () => {
-        if (hp <= 0) { finish(); return; }
+    // Один шаг симуляции (один "кадр" физики): гравитация, падение, обработка
+    // столкновений с блоками. Вынесен отдельно от рендера, чтобы скип мог
+    // прокрутить много шагов подряд без отрисовки каждого кадра.
+    const physicsStep = () => {
+        if (hp <= 0) return;
+
+        const gravity = GRAVITY * pickaxeSpeedMult;
+        const maxFall = MAX_FALL_SPEED * pickaxeSpeedMult;
+        const bounceSpeed = BOUNCE_SPEED * pickaxeSpeedMult;
+        const bounceMax = BOUNCE_MAX * pickaxeSpeedMult;
 
         // Гравитация — скорость падения растёт со временем (реальная физика)
-        vy = Math.min(vy + GRAVITY, MAX_FALL_SPEED);
+        vy = Math.min(vy + gravity, maxFall);
         posY += vy;
         rotation += 10 + Math.min(18, Math.abs(vy) * 1.6);
 
@@ -2155,7 +2203,7 @@ function runMiningPhysics(pickaxe, bet) {
                 // удара (коэффициент восстановления, как у настоящего упругого отскока),
                 // дальше не проходит в этом кадре, потом падает снова под гравитацией.
                 posY = rowToHit * BLOCK_SIZE - 0.5;
-                vy = Math.max(BOUNCE_MAX, Math.min(BOUNCE_SPEED, -Math.abs(vy) * BOUNCE_RESTITUTION));
+                vy = Math.max(bounceMax, Math.min(bounceSpeed, -Math.abs(vy) * BOUNCE_RESTITUTION));
                 squashTimer = SQUASH_FRAMES; // визуальное сплющивание в момент контакта
                 targetRow = brokenRow; // остаёмся на месте
                 break;
@@ -2174,30 +2222,30 @@ function runMiningPhysics(pickaxe, bet) {
             if (hp <= 0) break;
         }
 
-        if (hp <= 0) { finish(); return; }
-
         // Лёгкое покачивание кирки при полёте (визуальная "реальная физика")
         xOffset = Math.sin(rotation * Math.PI / 180) * 3;
 
         // Сплющивание ("squash & stretch") в момент удара о блок — плавно
-        // затухает за SQUASH_FRAMES кадров, придавая отскоку ощущение реального
-        // физического контакта, а не просто смены направления скорости.
+        // затухает за SQUASH_FRAMES кадров.
+        if (squashTimer > 0) squashTimer--;
+    };
+
+    // Отрисовка текущего состояния (спрайт, камера, HUD) — вызывается один раз
+    // за видимый кадр, даже если physicsStep() был вызван много раз подряд (скип).
+    const renderFrame = () => {
         let scaleX = 1, scaleY = 1;
         if (squashTimer > 0) {
             const p = squashTimer / SQUASH_FRAMES; // 1 → 0
             scaleX = 1 + 0.4 * p;
             scaleY = 1 - 0.4 * p;
-            squashTimer--;
         }
 
-        // Позиция спрайта: центр колонки curCol + покачивание
         const colCenterOffset = (curCol - Math.floor(GRID_COLS / 2)) * BLOCK_SIZE;
         sprite.style.transform =
             `translate(calc(-50% + ${colCenterOffset + xOffset}px), ${posY}px) rotate(${rotation}deg) scale(${scaleX}, ${scaleY})`;
 
         // Камера плавно следует за киркой по пикселям, но НИКОГДА не откатывается
         // назад — иначе короткие отскоки от прочной руды выглядят как "падение вверх".
-        // Вместо мгновенной привязки — плавное сглаживание (лерп) в одну сторону.
         const viewportH = viewportEl ? viewportEl.clientHeight : 330;
         const followThreshold = viewportH * 0.35;
         const desiredCameraY = Math.max(0, posY - followThreshold);
@@ -2207,7 +2255,27 @@ function runMiningPhysics(pickaxe, bet) {
         worldEl.style.transform = `translate(-50%, -${cameraY}px)`;
 
         updateHud();
+    };
 
+    const tick = () => {
+        if (hp <= 0) { finish(); return; }
+
+        if (pickaxeSkipRequested) {
+            // Мгновенно прокручиваем симуляцию (без покадровой отрисовки), пока
+            // HP не упадёт до 15% от стартового запаса или забег не закончится.
+            // Ограничение по числу шагов — просто защита от бесконечного цикла.
+            let safety = 20000;
+            while (hp > skipThresholdHp && hp > 0 && safety-- > 0) {
+                physicsStep();
+            }
+            pickaxeSkipRequested = false; // разовое действие — дальше снова обычная анимация
+        } else {
+            physicsStep();
+        }
+
+        if (hp <= 0) { finish(); return; }
+
+        renderFrame();
         pickaxePhysicsRAF = requestAnimationFrame(tick);
     };
 
@@ -3053,6 +3121,8 @@ window.openPickaxe = openPickaxe;
 window.startPickaxeGame = startPickaxeGame;
 window.adjustPickaxeBet = adjustPickaxeBet;
 window.setPickaxeMaxBet = setPickaxeMaxBet;
+window.acceleratePickaxeGame = acceleratePickaxeGame;
+window.skipPickaxeGame = skipPickaxeGame;
 window.clampBetInputOnBlur = clampBetInputOnBlur;
 window.blockInvalidBetKeys = blockInvalidBetKeys;
 
