@@ -241,6 +241,26 @@ button, input, select, textarea {
     transition: width 0.35s ease;
 }
 
+/* ---------- Лента прошлых коэффициентов краша — один скроллящийся ряд ---------- */
+.crash-history-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-bottom: 14px;
+    padding-bottom: 2px;
+}
+
+.crash-history-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.crash-history-scroll > span {
+    flex: 0 0 auto;
+}
+
 button {
     cursor: pointer;
     user-select: none;
