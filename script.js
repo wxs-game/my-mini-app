@@ -3094,22 +3094,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     hideAppLoader();
 });
 
-// Убирает экран загрузки: ждёт полной загрузки страницы (картинки, шрифты и
-// т.д.) через событие window 'load' И держит минимум 600мс на экране, чтобы
-// загрузка не "мелькала" на быстром интернете и выглядела как настоящая.
+// Управляет экраном загрузки: плавно "подкручивает" прогресс-бар, пока
+// страница реально грузится (картинки, шрифты и т.д. через 'load'), держит
+// минимум minVisibleMs на экране, чтобы не мелькало на быстром интернете,
+// а в конце резко "свайпает" весь экран загрузки вверх и убирает из DOM.
 function hideAppLoader() {
     const loader = document.getElementById('appLoader');
+    const fill = document.getElementById('appLoaderProgressFill');
     if (!loader) return;
 
-    const minVisibleMs = 600;
+    const minVisibleMs = 900;
     const startedAt = Date.now();
+
+    // Прогресс сам по себе не привязан к реальным байтам — плавно ползёт
+    // к ~92%, имитируя "движение" загрузки, и не более, пока не готово.
+    let progress = 6;
+    const progressTimer = setInterval(() => {
+        const step = (92 - progress) * 0.06 + 0.4;
+        progress = Math.min(92, progress + step);
+        if (fill) fill.style.width = progress + '%';
+    }, 120);
 
     const finishLoading = () => {
         const elapsed = Date.now() - startedAt;
         const remaining = Math.max(0, minVisibleMs - elapsed);
         setTimeout(() => {
-            loader.classList.add('app-loader-hidden');
-            setTimeout(() => loader.remove(), 450); // убираем из DOM после анимации исчезновения
+            clearInterval(progressTimer);
+            if (fill) fill.style.width = '100%'; // добиваем полосу до конца
+
+            // Небольшая пауза, чтобы глаз успел увидеть 100%, затем — резкий свайп вверх
+            setTimeout(() => {
+                loader.classList.add('app-loader-hidden');
+                setTimeout(() => loader.remove(), 550);
+            }, 180);
         }, remaining);
     };
 
