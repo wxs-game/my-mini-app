@@ -694,6 +694,20 @@ main {
     border-radius: 14px;
     box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3);
     transition: transform 0.15s ease, opacity 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.pickaxe-speed-btn .btn-icon {
+    width: 15px;
+    height: 15px;
+    object-fit: contain;
+    display: inline-block;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    user-drag: none;
 }
 
 .pickaxe-speed-btn:active {
