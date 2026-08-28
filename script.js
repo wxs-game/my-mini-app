@@ -3090,7 +3090,35 @@ document.addEventListener("DOMContentLoaded", async () => {
             e.preventDefault();
         }
     }, { passive: false });
+
+    hideAppLoader();
 });
+
+// Убирает экран загрузки: ждёт полной загрузки страницы (картинки, шрифты и
+// т.д.) через событие window 'load' И держит минимум 600мс на экране, чтобы
+// загрузка не "мелькала" на быстром интернете и выглядела как настоящая.
+function hideAppLoader() {
+    const loader = document.getElementById('appLoader');
+    if (!loader) return;
+
+    const minVisibleMs = 600;
+    const startedAt = Date.now();
+
+    const finishLoading = () => {
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, minVisibleMs - elapsed);
+        setTimeout(() => {
+            loader.classList.add('app-loader-hidden');
+            setTimeout(() => loader.remove(), 450); // убираем из DOM после анимации исчезновения
+        }, remaining);
+    };
+
+    if (document.readyState === 'complete') {
+        finishLoading();
+    } else {
+        window.addEventListener('load', finishLoading, { once: true });
+    }
+}
 
 // Экспорт функций в глобальную область для onclick-обработчиков в HTML
 window.adjustMinesBet = adjustMinesBet;
