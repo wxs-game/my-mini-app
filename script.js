@@ -212,11 +212,83 @@ function addCrashHistoryItem(coef) {
 // ==========================================
 function openCrashFairnessModal() {
     document.getElementById('crashFairnessModal')?.classList.remove('hidden');
+    document.body.classList.add('fairness-modal-open');
 }
 
 function closeCrashFairnessModal() {
     document.getElementById('crashFairnessModal')?.classList.add('hidden');
+    document.body.classList.remove('fairness-modal-open');
+
+    const content = document.getElementById('crashFairnessContent');
+    if (content) {
+        content.classList.remove('dragging');
+        content.style.transform = '';
+    }
 }
+
+// ==========================================
+// ПЕРЕТЯГИВАНИЕ ВНИЗ ДЛЯ ЗАКРЫТИЯ ДОК ЧЕСТНОСТИ
+// ==========================================
+(function initCrashFairnessDrag() {
+    const handle = document.getElementById('crashFairnessDragHandle');
+    const content = document.getElementById('crashFairnessContent');
+    if (!handle || !content) return;
+
+    const CLOSE_THRESHOLD = 80; // px, после которых плашка закрывается при отпускании
+    let startY = 0;
+    let currentY = 0;
+    let dragging = false;
+    let moved = false;
+
+    function onPointerDown(e) {
+        dragging = true;
+        moved = false;
+        content.classList.add('dragging');
+        startY = (e.touches ? e.touches[0].clientY : e.clientY);
+        currentY = 0;
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+    }
+
+    function onPointerMove(e) {
+        if (!dragging) return;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY);
+        const delta = y - startY;
+        currentY = Math.max(0, delta); // тянуть можно только вниз
+        if (currentY > 4) moved = true;
+        content.style.transform = `translateY(${currentY}px)`;
+        if (e.cancelable) e.preventDefault();
+    }
+
+    function onPointerUp() {
+        if (!dragging) return;
+        dragging = false;
+        content.classList.remove('dragging');
+        document.removeEventListener('touchmove', onPointerMove);
+        document.removeEventListener('touchend', onPointerUp);
+        document.removeEventListener('mousemove', onPointerMove);
+        document.removeEventListener('mouseup', onPointerUp);
+
+        if (currentY > CLOSE_THRESHOLD) {
+            closeCrashFairnessModal();
+        } else {
+            content.style.transform = '';
+        }
+        currentY = 0;
+    }
+
+    handle.addEventListener('touchstart', onPointerDown, { passive: true });
+    handle.addEventListener('mousedown', onPointerDown);
+
+    // Просто тап по полоске-хэндлу без перетягивания — закрывает меню
+    handle.addEventListener('click', () => {
+        if (!moved) {
+            closeCrashFairnessModal();
+        }
+    });
+})();
 
 function copyCrashHash() {
     const val = document.getElementById('crashRoundHashInput')?.value;

@@ -488,11 +488,12 @@
 <!-- Закругленное всплывающее меню (Bottom Sheet) -->
 <div id="crashFairnessModal" class="crash-fairness-modal hidden">
     <div class="crash-fairness-backdrop" id="crashFairnessBackdrop" onclick="closeCrashFairnessModal()"></div>
-    <div class="crash-fairness-content">
-        <div class="crash-fairness-drag-handle"></div>
+    <div class="crash-fairness-content" id="crashFairnessContent">
+        <div class="crash-fairness-drag-handle-area" id="crashFairnessDragHandle">
+            <div class="crash-fairness-drag-handle"></div>
+        </div>
         <div class="crash-fairness-header">
             <h3>Доказуемая честность</h3>
-            <button class="crash-fairness-close" id="crashFairnessClose" onclick="closeCrashFairnessModal()">&times;</button>
         </div>
 
         <div class="crash-fairness-body">

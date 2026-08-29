@@ -1210,6 +1210,13 @@ main {
     padding: 12px 20px 28px 20px;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
     animation: slideUpModal 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+    transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+    will-change: transform;
+}
+
+.crash-fairness-content.dragging {
+    transition: none;
+    animation: none;
 }
 
 @keyframes slideUpModal {
@@ -1217,18 +1224,36 @@ main {
     to { transform: translateY(0); }
 }
 
+/* Увеличенная область захвата над плашкой: можно тянуть вниз или просто тапнуть */
+.crash-fairness-drag-handle-area {
+    padding: 6px 0 14px 0;
+    margin: -6px 0 0 0;
+    display: flex;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+}
+
+.crash-fairness-drag-handle-area:active {
+    cursor: grabbing;
+}
+
 .crash-fairness-drag-handle {
     width: 36px;
     height: 4px;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
-    margin: 0 auto 12px auto;
+    transition: background-color 0.15s ease;
+}
+
+.crash-fairness-drag-handle-area:active .crash-fairness-drag-handle {
+    background: rgba(255, 255, 255, 0.4);
 }
 
 .crash-fairness-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     margin-bottom: 16px;
 }
 
@@ -1239,14 +1264,11 @@ main {
     color: #ffffff;
 }
 
-.crash-fairness-close {
-    font-size: 24px;
-    color: #888888;
-    line-height: 1;
-    padding: 0 4px;
-    background: none;
-    border: none;
-    cursor: pointer;
+/* Пока открыт док честности — блокируем прокрутку/свайпы фона (экрана ракетки) */
+body.fairness-modal-open {
+    overflow: hidden !important;
+    touch-action: none !important;
+    overscroll-behavior: none !important;
 }
 
 .fairness-field-group {
