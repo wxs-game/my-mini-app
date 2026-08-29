@@ -44,6 +44,46 @@ button, input, select, textarea {
 }
 
 /* ==========================================
+   БЛОКИРОВКА ДОСТУПА ВНЕ TELEGRAM
+========================================== */
+.tg-block-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 999999; /* поверх абсолютно всего, включая экран загрузки */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #090909;
+    padding: 24px;
+}
+
+.tg-block-inner {
+    max-width: 320px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.tg-block-icon {
+    font-size: 46px;
+    margin-bottom: 4px;
+}
+
+.tg-block-title {
+    font-size: 20px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.tg-block-text {
+    font-size: 14px;
+    color: #999999;
+    line-height: 1.5;
+}
+
+/* ==========================================
    ЭКРАН ЗАГРУЗКИ (появляется при заходе в приложение,
    скрывает интерфейс, пока всё не прогрузится)
 ========================================== */
@@ -259,6 +299,146 @@ button, input, select, textarea {
 
 .crash-history-scroll > span {
     flex: 0 0 auto;
+}
+
+/* ---------- Промокод (страница "Бонусы") ---------- */
+.promo-card {
+    text-align: left;
+}
+
+.promo-label {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #ffd23f;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.promo-title {
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffffff;
+    margin: 0 0 16px 0;
+}
+
+.promo-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.promo-input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 15px;
+    color: #ffffff;
+}
+
+.promo-input::placeholder {
+    color: #6b6b6b;
+}
+
+.promo-apply-btn {
+    flex: 0 0 auto;
+    background: #a4841a;
+    color: #0c0c0c;
+    font-weight: 900;
+    font-size: 14px;
+    padding: 14px 20px;
+    border-radius: 14px;
+    white-space: nowrap;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.promo-apply-btn:active {
+    transform: scale(0.96);
+}
+
+/* ---------- Админ-панель: список игроков ---------- */
+.admin-players-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.admin-player-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px 14px;
+}
+
+.admin-player-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.admin-player-name {
+    font-weight: 800;
+    font-size: 14px;
+    color: #ffffff;
+}
+
+.admin-player-meta {
+    font-size: 11px;
+    color: #888888;
+    margin-top: 2px;
+}
+
+.admin-player-balance {
+    font-weight: 900;
+    font-size: 15px;
+    color: #ffd23f;
+    white-space: nowrap;
+}
+
+.admin-player-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-amount-input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 9px 10px;
+    font-size: 13px;
+    color: #ffffff;
+}
+
+.admin-credit-btn, .admin-debit-btn {
+    flex: 0 0 auto;
+    font-weight: 900;
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    transition: transform 0.15s ease;
+}
+
+.admin-credit-btn {
+    background: #2ecc71;
+    color: #0c2016;
+}
+
+.admin-debit-btn {
+    background: #e74c3c;
+    color: #240b09;
+}
+
+.admin-credit-btn:active, .admin-debit-btn:active {
+    transform: scale(0.94);
 }
 
 button {
