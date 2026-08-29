@@ -497,25 +497,23 @@
 
         <div class="crash-fairness-body">
             <div class="fairness-field-group">
-                <label>Хеш раунда (SHA-256)</label>
+                <label>Хеш раунда</label>
                 <div class="fairness-input-box">
                     <input type="text" id="crashRoundHashInput" readonly placeholder="Генерация..." />
                     <button id="copyCrashHashBtn" class="copy-btn" onclick="copyCrashHash()">📋</button>
                 </div>
-                <small class="field-hint">Доступен до и во время раунда. Зашифрованный результат.</small>
             </div>
 
             <div class="fairness-field-group">
-                <label>SHA-256 Ключ (Соль раунда)</label>
+                <label>SHA-256 Ключ</label>
                 <div class="fairness-input-box">
-                    <input type="text" id="crashRoundKeyInput" readonly placeholder="Откроется после раунда" />
+                    <input type="text" id="crashRoundKeyInput" readonly placeholder="Раскроется сервером после раунда" />
                     <button id="copyCrashKeyBtn" class="copy-btn" onclick="copyCrashKey()">📋</button>
                 </div>
-                <small class="field-hint">Раскрывается строго по окончании раунда.</small>
             </div>
 
             <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" rel="noopener" class="fairness-verify-link">
-                Проверить честность (SHA256 Calculator) ↗
+                Проверить честность ↗
             </a>
         </div>
     </div>
