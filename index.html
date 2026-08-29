@@ -479,6 +479,49 @@
         </section>
     </main>
 
+<!-- КНОПКА И МОДАЛЬНОЕ ОКНО "ДОКАЗУЕМАЯ ЧЕСТНОСТЬ" -->
+
+<!-- 1. Круглая кнопка с "#" внизу справа на экране игры Crash -->
+<button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность">
+    <span>#</span>
+</button>
+
+<!-- 2. Закругленное всплывающее меню (Bottom Sheet) -->
+<div id="crashFairnessModal" class="crash-fairness-modal hidden">
+    <div class="crash-fairness-backdrop" id="crashFairnessBackdrop"></div>
+    <div class="crash-fairness-content">
+        <div class="crash-fairness-drag-handle"></div>
+        <div class="crash-fairness-header">
+            <h3>Доказуемая честность</h3>
+            <button class="crash-fairness-close" id="crashFairnessClose">&times;</button>
+        </div>
+
+        <div class="crash-fairness-body">
+            <div class="fairness-field-group">
+                <label>Хеш раунда (SHA-256)</label>
+                <div class="fairness-input-box">
+                    <input type="text" id="crashRoundHashInput" readonly placeholder="Генерация..." />
+                    <button id="copyCrashHashBtn" class="copy-btn">📋</button>
+                </div>
+                <small class="field-hint">Доступен до и во время раунда. Зашифрованный результат.</small>
+            </div>
+
+            <div class="fairness-field-group">
+                <label>SHA-256 Ключ (Соль раунда)</label>
+                <div class="fairness-input-box">
+                    <input type="text" id="crashRoundKeyInput" readonly placeholder="Откроется после раунда" />
+                    <button id="copyCrashKeyBtn" class="copy-btn">📋</button>
+                </div>
+                <small class="field-hint">Раскрывается строго по окончании раунда.</small>
+            </div>
+
+            <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" rel="noopener" class="fairness-verify-link">
+                Проверить честность (SHA256 Calculator) ↗
+            </a>
+        </div>
+    </div>
+</div>
+
     <!-- ==================== БАЛАНС ==================== -->
     <main id="balancePage" class="balance-page hidden">
         <div class="page-header" style="margin-top: 10px;">
