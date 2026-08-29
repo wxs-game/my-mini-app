@@ -760,6 +760,117 @@ main {
 }
 
 /* ==========================================
+   ЛЕНТА ПОСЛЕДНИХ ВЫИГРЫШЕЙ (LIVE WINS)
+========================================== */
+.live-wins-section {
+    margin-bottom: 22px;
+}
+
+.live-wins-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 0 2px;
+}
+
+.live-wins-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff3b30;
+    box-shadow: 0 0 10px rgba(255, 59, 48, 0.7);
+    animation: liveWinsDotPulse 1.4s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes liveWinsDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.live-wins-title {
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #ff5c4d;
+}
+
+.live-wins-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    padding-bottom: 2px;
+}
+
+.live-wins-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.live-win-card {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px 8px 8px;
+    border-radius: 18px;
+    background: #121212;
+    border: 1px solid #222222;
+    animation: liveWinCardIn 0.35s ease;
+}
+
+@keyframes liveWinCardIn {
+    from { opacity: 0; transform: translateX(-12px) scale(0.92); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.live-win-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+}
+
+.live-win-icon img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.live-win-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.live-win-amount {
+    font-size: 14px;
+    font-weight: 900;
+    color: #2ecc71;
+}
+
+.live-win-time {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: #666666;
+}
+
+/* ==========================================
    БЫСТРЫЕ ДЕЙСТВИЯ (QUICK ACTIONS)
 ========================================== */
 .quick-actions {
