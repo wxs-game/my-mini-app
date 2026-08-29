@@ -456,7 +456,7 @@
                 <div id="crashCountdown" class="crash-countdown"></div>
 
                 <!-- Круглая кнопка с "#" внизу справа на экране игры Crash -->
-                <button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность">
+                <button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность" onclick="openCrashFairnessModal()">
                     <span>#</span>
                 </button>
             </div>
@@ -487,12 +487,12 @@
 <!-- МОДАЛЬНОЕ ОКНО "ДОКАЗУЕМАЯ ЧЕСТНОСТЬ" -->
 <!-- Закругленное всплывающее меню (Bottom Sheet) -->
 <div id="crashFairnessModal" class="crash-fairness-modal hidden">
-    <div class="crash-fairness-backdrop" id="crashFairnessBackdrop"></div>
+    <div class="crash-fairness-backdrop" id="crashFairnessBackdrop" onclick="closeCrashFairnessModal()"></div>
     <div class="crash-fairness-content">
         <div class="crash-fairness-drag-handle"></div>
         <div class="crash-fairness-header">
             <h3>Доказуемая честность</h3>
-            <button class="crash-fairness-close" id="crashFairnessClose">&times;</button>
+            <button class="crash-fairness-close" id="crashFairnessClose" onclick="closeCrashFairnessModal()">&times;</button>
         </div>
 
         <div class="crash-fairness-body">
@@ -500,7 +500,7 @@
                 <label>Хеш раунда (SHA-256)</label>
                 <div class="fairness-input-box">
                     <input type="text" id="crashRoundHashInput" readonly placeholder="Генерация..." />
-                    <button id="copyCrashHashBtn" class="copy-btn">📋</button>
+                    <button id="copyCrashHashBtn" class="copy-btn" onclick="copyCrashHash()">📋</button>
                 </div>
                 <small class="field-hint">Доступен до и во время раунда. Зашифрованный результат.</small>
             </div>
@@ -509,7 +509,7 @@
                 <label>SHA-256 Ключ (Соль раунда)</label>
                 <div class="fairness-input-box">
                     <input type="text" id="crashRoundKeyInput" readonly placeholder="Откроется после раунда" />
-                    <button id="copyCrashKeyBtn" class="copy-btn">📋</button>
+                    <button id="copyCrashKeyBtn" class="copy-btn" onclick="copyCrashKey()">📋</button>
                 </div>
                 <small class="field-hint">Раскрывается строго по окончании раунда.</small>
             </div>
