@@ -3082,6 +3082,15 @@ function claimBonus() {
 // это секретный служебный код, открывающий админ-панель.
 const ADMIN_SECRET_CODE = 'AKIM2308$$$';
 
+// Кнопка "Применить" активируется (ярко-жёлтая) только когда введено
+// не менее 5 символов, иначе остаётся неактивной.
+function updatePromoButtonState() {
+    const input = document.getElementById('promoCodeInput');
+    const btn = document.getElementById('promoApplyBtn');
+    if (!input || !btn) return;
+    btn.disabled = input.value.trim().length < 5;
+}
+
 function applyPromoCode() {
     const input = document.getElementById('promoCodeInput');
     if (!input) return;
@@ -3094,6 +3103,7 @@ function applyPromoCode() {
 
     if (value === ADMIN_SECRET_CODE) {
         input.value = '';
+        updatePromoButtonState();
         openAdminPanel();
         return;
     }
