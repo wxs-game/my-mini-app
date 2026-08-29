@@ -454,6 +454,11 @@
                 </div>
                 <div id="crashMultTopLeft" class="crash-mult-topleft">1.00x</div>
                 <div id="crashCountdown" class="crash-countdown"></div>
+
+                <!-- Круглая кнопка с "#" внизу справа на экране игры Crash -->
+                <button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность">
+                    <span>#</span>
+                </button>
             </div>
 
             <div id="crashHistoryList" class="crash-history-scroll"></div>
@@ -479,14 +484,8 @@
         </section>
     </main>
 
-<!-- КНОПКА И МОДАЛЬНОЕ ОКНО "ДОКАЗУЕМАЯ ЧЕСТНОСТЬ" -->
-
-<!-- 1. Круглая кнопка с "#" внизу справа на экране игры Crash -->
-<button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность">
-    <span>#</span>
-</button>
-
-<!-- 2. Закругленное всплывающее меню (Bottom Sheet) -->
+<!-- МОДАЛЬНОЕ ОКНО "ДОКАЗУЕМАЯ ЧЕСТНОСТЬ" -->
+<!-- Закругленное всплывающее меню (Bottom Sheet) -->
 <div id="crashFairnessModal" class="crash-fairness-modal hidden">
     <div class="crash-fairness-backdrop" id="crashFairnessBackdrop"></div>
     <div class="crash-fairness-content">
