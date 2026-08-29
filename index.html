@@ -16,7 +16,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=3">
 
     <!-- Шрифт для большого таймера обратного отсчёта в Краше -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -631,10 +631,32 @@
             <div class="promo-label">ПРОМОКОД</div>
             <h2 class="promo-title">Активировать бонус</h2>
             <div class="promo-row">
-                <input type="text" id="promoCodeInput" class="promo-input" placeholder="Введите промокод" autocomplete="off" oninput="updatePromoButtonState()">
+                <input type="text" id="promoCodeInput" class="promo-input" placeholder="Введите промокод" autocomplete="off">
                 <button class="promo-apply-btn" id="promoApplyBtn" onclick="applyPromoCode()" disabled>Применить</button>
             </div>
         </section>
+        <script>
+        // Логика включения/выключения кнопки "Применить" вынесена прямо
+        // сюда, в index.html, а не в script.js. Так она гарантированно
+        // работает даже если внешний script.js на сервере/в кеше ещё
+        // старый — этому блоку не нужно ничего, кроме самой страницы.
+        (function () {
+            var promoInput = document.getElementById('promoCodeInput');
+            var promoBtn = document.getElementById('promoApplyBtn');
+            if (!promoInput || !promoBtn) return;
+
+            function refreshPromoBtn() {
+                promoBtn.disabled = promoInput.value.trim().length < 5;
+            }
+
+            promoInput.addEventListener('input', refreshPromoBtn);
+            refreshPromoBtn();
+
+            // Дублируем глобально — applyPromoCode() из script.js вызывает
+            // эту функцию после очистки поля, чтобы кнопка снова стала серой.
+            window.updatePromoButtonState = refreshPromoBtn;
+        })();
+        </script>
 
         <section class="wheel-card">
             <h2>Ежедневный бонус</h2>
@@ -702,6 +724,6 @@
 <script src="animations/explosion-data-part7.js"></script>
 <script src="animations/explosion-data-part8.js"></script>
 <!-- Исполняемый скрипт логики приложения -->
-<script src="script.js?v=2"></script>
+<script src="script.js?v=3"></script>
 </body>
 </html>
