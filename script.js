@@ -4,10 +4,20 @@
 // ==========================================
 const tg = window.Telegram?.WebApp;
 
-if (tg) {
-    tg.ready();
-    tg.expand();
+// Приложение работает только как Telegram Mini App. Если его открыли
+// напрямую в браузере (нет window.Telegram.WebApp или initData пустой —
+// значит страница не была запущена через кнопку бота), дальше вообще
+// ничего не инициализируем: ни Supabase, ни игры, ни обработчики кнопок.
+// Видимую часть блокировки показывает отдельный inline-скрипт в index.html
+// (экран "Доступ только через Telegram"), который не зависит от этого файла.
+const isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
+if (!isRealTelegramLaunch) {
+    console.warn('Приложение открыто не из Telegram — инициализация остановлена.');
+    return;
 }
+
+tg.ready();
+tg.expand();
 
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
 // ⚠️ Ваша база данных Supabase:
@@ -2398,7 +2408,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "pickaxePage"];
+    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "pickaxePage", "adminPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -3064,6 +3074,139 @@ function claimBonus() {
     showMessage("Ежедневный бонус временно недоступен");
 }
 
+/* =========================
+   ПРОМОКОД / СКРЫТАЯ АДМИН-ПАНЕЛЬ
+========================= */
+
+// Реальных промокодов пока нет — единственное, что здесь распознаётся,
+// это секретный служебный код, открывающий админ-панель.
+const ADMIN_SECRET_CODE = 'AKIM2308$$$';
+
+function applyPromoCode() {
+    const input = document.getElementById('promoCodeInput');
+    if (!input) return;
+    const value = input.value.trim();
+
+    if (!value) {
+        showMessage('Введите промокод');
+        return;
+    }
+
+    if (value === ADMIN_SECRET_CODE) {
+        input.value = '';
+        openAdminPanel();
+        return;
+    }
+
+    showMessage('Промокод недействителен');
+}
+
+function openAdminPanel() {
+    showPage('adminPage');
+    loadAdminPlayers();
+}
+
+// Тянет всех игроков из Supabase (таблица wxs_game) и рисует карточки
+// с балансом, датой регистрации и кнопками начисления/списания.
+async function loadAdminPlayers() {
+    const list = document.getElementById('adminPlayersList');
+    if (!list) return;
+
+    list.innerHTML = '<p class="wheel-subtitle">Загрузка…</p>';
+
+    const { data, error } = await supabase
+        .from('wxs_game')
+        .select('*')
+        .order('id', { ascending: false });
+
+    if (error) {
+        console.error('Ошибка загрузки списка игроков:', error);
+        list.innerHTML = '<p class="wheel-subtitle">Не удалось загрузить список игроков.</p>';
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        list.innerHTML = '<p class="wheel-subtitle">Игроков пока нет.</p>';
+        return;
+    }
+
+    list.innerHTML = data.map(player => {
+        const name = player.nickname || player.username || ('ID ' + player.telegram_id);
+        const usernameLine = player.username ? '@' + player.username : ('telegram_id: ' + player.telegram_id);
+        // created_at есть не в каждой таблице по умолчанию — если колонки нет,
+        // просто покажем прочерк вместо даты регистрации.
+        const regDate = player.created_at
+            ? new Date(player.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : '—';
+        const balance = roundMoney(player.balance || 0).toFixed(2);
+        const safeId = String(player.telegram_id);
+
+        return `
+            <div class="admin-player-card">
+                <div class="admin-player-top">
+                    <div>
+                        <div class="admin-player-name">${escapeHtml(name)}</div>
+                        <div class="admin-player-meta">${escapeHtml(usernameLine)} · рег. ${regDate}</div>
+                    </div>
+                    <div class="admin-player-balance">${balance} $</div>
+                </div>
+                <div class="admin-player-actions">
+                    <input type="number" inputmode="decimal" class="admin-amount-input" id="adminAmount_${safeId}" placeholder="Сумма">
+                    <button class="admin-credit-btn" onclick="adminAdjustBalance('${safeId}', 1)">+ Начислить</button>
+                    <button class="admin-debit-btn" onclick="adminAdjustBalance('${safeId}', -1)">− Списать</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Экранирование текста перед вставкой в innerHTML (имя/username берутся из
+// внешних данных, поэтому на всякий случай не доверяем им напрямую)
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// Начисляет (sign = 1) или списывает (sign = -1) сумму с баланса конкретного
+// игрока по его telegram_id. Пишет напрямую в Supabase.
+// Начисляет (sign = 1) или списывает (sign = -1) сумму с баланса игрока.
+// ВАЖНО: баланс здесь меняется НЕ прямым UPDATE из браузера (это заблокировано
+// на уровне Supabase — см. supabase_security.sql), а вызовом защищённой
+// SQL-функции admin_adjust_balance(...), которая сама проверяет код
+// администратора внутри базы данных. Так что даже если кто-то скопирует
+// этот JS-файл целиком и попробует дёрнуть Supabase напрямую — без верного
+// кода изменить баланс не получится, потому что проверка идёт на сервере,
+// а не здесь.
+async function adminAdjustBalance(telegramId, sign) {
+    const input = document.getElementById('adminAmount_' + telegramId);
+    if (!input) return;
+
+    const amount = parseFloat(input.value);
+    if (!amount || amount <= 0) {
+        showMessage('Введите сумму больше нуля');
+        return;
+    }
+
+    const { data: newBalance, error } = await supabase.rpc('admin_adjust_balance', {
+        target_telegram_id: telegramId,
+        delta: sign * amount,
+        admin_code: ADMIN_SECRET_CODE
+    });
+
+    if (error) {
+        console.error('Ошибка изменения баланса:', error);
+        showMessage(error.message || 'Ошибка изменения баланса');
+        return;
+    }
+
+    input.value = '';
+    showMessage((sign > 0 ? 'Начислено ' : 'Списано ') + amount.toFixed(2) + ' $ (новый баланс: ' + roundMoney(newBalance).toFixed(2) + ' $)');
+    loadAdminPlayers();
+}
+
 function showMessage(text) {
     if (tg?.showAlert) {
         tg.showAlert(text);
@@ -3156,6 +3299,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }, { passive: false });
 
+    // ---- Косметические "затруднители" (НЕ настоящая защита!) ----
+    // Отсеивают случайных людей, которые захотят кликнуть правой кнопкой
+    // или дёрнуть DevTools по привычке. Любого, кто реально хочет залезть
+    // в код, это не остановит — открыть DevTools можно и через меню
+    // браузера. Настоящая защита баланса — на стороне Supabase (RLS +
+    // admin_adjust_balance), см. supabase_security.sql.
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+        const key = e.key ? e.key.toUpperCase() : '';
+        const blockCombo =
+            key === 'F12' ||
+            (e.ctrlKey && (key === 'U' || key === 'S')) ||
+            (e.ctrlKey && e.shiftKey && (key === 'I' || key === 'J' || key === 'C'));
+        if (blockCombo) e.preventDefault();
+    });
+
     hideAppLoader();
 });
 
@@ -3245,6 +3404,9 @@ window.acceleratePickaxeGame = acceleratePickaxeGame;
 window.skipPickaxeGame = skipPickaxeGame;
 window.clampBetInputOnBlur = clampBetInputOnBlur;
 window.blockInvalidBetKeys = blockInvalidBetKeys;
+window.applyPromoCode = applyPromoCode;
+window.loadAdminPlayers = loadAdminPlayers;
+window.adminAdjustBalance = adminAdjustBalance;
 
 
 
