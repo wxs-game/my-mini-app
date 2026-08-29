@@ -70,20 +70,27 @@
         }
         #crashTrailDot {
             transition: opacity 0.9s ease;
+            /* Было 4 стековых drop-shadow — на слабом/среднем мобильном GPU
+               пересчёт нескольких размытий на каждое движение точки (это
+               происходит десятки раз в секунду) — одна из главных причин
+               подвисаний. Оставляем 2 слоя, чуть усилив средний, чтобы
+               свечение выглядело почти так же. */
+            filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 26px rgba(46,204,113,0.85));
         }
         #crashTrailDot.crash-dot-live {
             animation: crashDotPulse 1s ease-in-out infinite;
         }
         #crashTrailLine {
             transition: opacity 0.9s ease, stroke 0.15s ease;
+            filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 22px rgba(46,204,113,0.8));
         }
         #crashTrailLine.crash-trail-crashed {
             stroke: #ff3b3b;
-            filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 24px #ff2b2b) drop-shadow(0 0 50px rgba(255,43,43,0.75)) drop-shadow(0 0 90px rgba(255,43,43,0.45)) !important;
+            filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 22px rgba(255,43,43,0.8)) !important;
         }
         #crashTrailDot.crash-trail-crashed {
             fill: #ffdada;
-            filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 28px #ff2b2b) drop-shadow(0 0 55px rgba(255,43,43,0.9)) drop-shadow(0 0 95px rgba(255,43,43,0.5)) !important;
+            filter: drop-shadow(0 0 8px #ff3b3b) drop-shadow(0 0 26px rgba(255,43,43,0.85)) !important;
         }
 
         .crash-mult-topleft {
@@ -96,7 +103,7 @@
             line-height: 1;
             letter-spacing: 0.5px;
             color: #3dff9a;
-            text-shadow: 0 0 8px rgba(61,255,154,0.9), 0 0 22px rgba(61,255,154,0.7), 0 0 46px rgba(46,204,113,0.45);
+            text-shadow: 0 0 8px rgba(61,255,154,0.9), 0 0 24px rgba(46,204,113,0.6);
             z-index: 7;
             display: none;
             pointer-events: none;
@@ -104,7 +111,7 @@
         }
         .crash-mult-topleft.crashed {
             color: #ff4d4d;
-            text-shadow: 0 0 8px rgba(255,77,77,0.9), 0 0 22px rgba(255,77,77,0.7), 0 0 46px rgba(255,43,43,0.45);
+            text-shadow: 0 0 8px rgba(255,77,77,0.9), 0 0 24px rgba(255,43,43,0.6);
         }
     </style>
 </head>
@@ -443,8 +450,8 @@
 
             <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
                 <svg id="crashTrail" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
-                    <path id="crashTrailLine" d="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 24px #2ecc71) drop-shadow(0 0 50px rgba(46,204,113,0.75)) drop-shadow(0 0 90px rgba(46,204,113,0.45));"/>
-                    <circle id="crashTrailDot" cx="0" cy="0" r="13" fill="#eafff2" style="opacity:0; filter: drop-shadow(0 0 8px #3dff9a) drop-shadow(0 0 28px #2ecc71) drop-shadow(0 0 55px rgba(46,204,113,0.9)) drop-shadow(0 0 95px rgba(46,204,113,0.5));"/>
+                    <path id="crashTrailLine" d="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle id="crashTrailDot" cx="0" cy="0" r="13" fill="#eafff2" style="opacity:0;"/>
                 </svg>
                 <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; transition: transform 0.08s linear;"></div>
                 <div id="crashExplosion" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; text-align:center; display:none; transition: transform 0.08s linear, opacity 0.3s ease;"></div>

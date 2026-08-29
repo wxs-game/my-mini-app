@@ -1155,7 +1155,12 @@ main {
     position: relative;
 }
 
-/* Круглая кнопка с значком # внизу справа */
+/* Круглая кнопка с значком # внизу справа.
+   Раньше здесь был backdrop-filter: blur — но кнопка лежит поверх сцены
+   с ракетой, которая перерисовывается каждый кадр полёта, и GPU был
+   вынужден на каждый такой кадр пересчитывать размытие фона под кнопкой.
+   Заменили на более плотный полупрозрачный фон без backdrop-filter —
+   визуально почти то же самое "стекло", но без непрерывного пересчёта. */
 .crash-fairness-trigger {
     position: absolute;
     bottom: 12px;
@@ -1163,10 +1168,8 @@ main {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(40, 40, 40, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     color: #ffd700;
     font-size: 18px;
     font-weight: 900;
