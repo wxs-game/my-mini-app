@@ -3,12 +3,7 @@
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
 // ==========================================
 const tg = window.Telegram?.WebApp;
-
-// Приложение работает только как Telegram Mini App. Если его открыли
-// напрямую в браузере (нет window.Telegram.WebApp или initData пустой —
-// значит страница не была запущена через кнопку бота), дальше вообще
-// ничего не инициализируем: ни Supabase, ни игры, ни обработчики кнопок.
-// Видимую часть блокировки показывает отдельный inline-скрипт в index.html
+    
 // (экран "Доступ только через Telegram"), который не зависит от этого файла.
 const isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
 if (!isRealTelegramLaunch) {
@@ -20,10 +15,7 @@ tg.ready();
 tg.expand();
 
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
-// ⚠️ Ваша база данных Supabase:
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
-
-// Используем имя supabase, чтобы не менять вызовы по всему коду
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Переменные состояния пользователя
@@ -149,11 +141,6 @@ let currentCrashState = {
 };
 
 // Вызывать ПЕРЕД началом раунда (возвращает коэффициент для анимации).
-// Хеш нового раунда публикуется СРАЗУ (до ставок, во время 5-сек ожидания) —
-// это и есть "commit" честной игры. Поле ключа НЕ трогаем здесь: ключ
-// предыдущего раунда должен оставаться видимым, пока игрок не выйдет со
-// страницы краша (см. hook в showPage()), а не пропадать через 3 секунды
-// с началом следующего раунда.
 async function prepareNextCrashRound() {
     const salt = generateRandomSeed(32);
     const hash = await generateSHA256(salt);
@@ -172,9 +159,7 @@ async function prepareNextCrashRound() {
     return crashPoint;
 }
 
-// Вызывать ПОСЛЕ завершения раунда (когда произошел краш) — раскрывает
-// секретный ключ (соль) текущего раунда, чтобы можно было проверить, что
-// SHA256(ключ) действительно равен ранее опубликованному хешу.
+// Вызывать ПОСЛЕ завершения раунда (когда произошел краш)
 function revealCrashRoundKey() {
     currentCrashState.isFinished = true;
 
@@ -224,9 +209,6 @@ function addCrashHistoryItem(coef) {
 
 // ==========================================
 // ОБРАБОТЧИКИ СОБЫТИЙ ОКНА И КОПИРОВАНИЯ
-// (объявлены как обычные функции + window.xxx, как и остальные обработчики
-// в проекте — вызываются через onclick="" прямо из HTML, без привязки к
-// DOMContentLoaded/addEventListener, чтобы не зависеть от порядка загрузки)
 // ==========================================
 function openCrashFairnessModal() {
     document.getElementById('crashFairnessModal')?.classList.remove('hidden');
