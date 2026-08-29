@@ -497,10 +497,12 @@ function renderLiveBetsTicker() {
 
     const itemHtml = (bet) =>
         '<span class="live-wins-item">' +
-            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
-            '<span class="live-wins-name">' + escapeHtml(bet.name) + '</span>' +
-            ' поставил <span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-            (bet.game ? ' <span class="live-wins-game">· ' + escapeHtml(bet.game) + '</span>' : '') +
+            '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
+            '<span class="live-wins-meta">' +
+                escapeHtml(bet.game || 'Игра') + ' • ' +
+                '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+                '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+            '</span>' +
         '</span>';
 
     // Дублируем контент — это позволяет анимации бесшовно "зациклиться"
