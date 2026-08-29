@@ -111,6 +111,31 @@
 
 <body>
 
+<!-- ================================================================
+     БЛОКИРОВКА ДОСТУПА ВНЕ TELEGRAM.
+     Показан по умолчанию (safe-default), скрывается синхронным скриптом
+     ниже только если страница реально открыта как Telegram Mini App
+     (есть window.Telegram.WebApp.initData). Если её открыли просто в
+     обычном браузере — initData пустой, и экран остаётся поверх всего.
+================================================================== -->
+<div id="tgBlockScreen" class="tg-block-screen">
+    <div class="tg-block-inner">
+        <div class="tg-block-icon">✈️</div>
+        <div class="tg-block-title">Доступ только через Telegram</div>
+        <p class="tg-block-text">Это приложение работает только внутри Telegram. Откройте его через бота, чтобы продолжить.</p>
+    </div>
+</div>
+<script>
+(function () {
+    var tg = window.Telegram && window.Telegram.WebApp;
+    var isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
+    if (isRealTelegramLaunch) {
+        var block = document.getElementById('tgBlockScreen');
+        if (block) block.style.display = 'none';
+    }
+})();
+</script>
+
 <div id="appLoader" class="app-loader">
     <div class="app-loader-inner">
         <div class="app-loader-moon-wrap">
@@ -602,11 +627,42 @@
             <div class="header-space"></div>
         </div>
 
+        <section class="wheel-card promo-card">
+            <div class="promo-label">ПРОМОКОД</div>
+            <h2 class="promo-title">Активировать бонус</h2>
+            <div class="promo-row">
+                <input type="text" id="promoCodeInput" class="promo-input" placeholder="Введите промокод" autocomplete="off">
+                <button class="promo-apply-btn" onclick="applyPromoCode()">Применить</button>
+            </div>
+        </section>
+
         <section class="wheel-card">
             <h2>Ежедневный бонус</h2>
             <p class="wheel-subtitle">Заходите каждый день и получайте бесплатные средства!</p>
             <div style="font-size: 60px; margin: 20px 0;">🎁</div>
             <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
+        </section>
+    </main>
+
+    <!-- ================================================================
+         СЛУЖЕБНАЯ АДМИН-ПАНЕЛЬ. Открывается только по секретному коду,
+         введённому в поле промокода на странице "Бонусы". В обычной
+         навигации никак не участвует и не появляется в нижнем меню.
+    ================================================================== -->
+    <main id="adminPage" class="admin-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Админ-панель</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card" style="text-align: left;">
+            <h2 style="margin-bottom: 4px;">Игроки</h2>
+            <p class="wheel-subtitle" style="margin-bottom: 14px;">Список всех зарегистрированных игроков, их баланс и дата регистрации. Начисление/списание — сразу в базе.</p>
+            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminPlayers()">🔄 Обновить список</button>
+            <div id="adminPlayersList" class="admin-players-list">
+                <p class="wheel-subtitle">Загрузка…</p>
+            </div>
         </section>
     </main>
 
