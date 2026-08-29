@@ -156,6 +156,12 @@ async function prepareNextCrashRound() {
     const hashInput = document.getElementById('crashRoundHashInput');
     if (hashInput) hashInput.value = hash;
 
+    // Новый раунд — новый секрет. Ключ прошлого (уже завершённого) раунда
+    // обязательно прячем здесь же, иначе он остаётся видимым в поле все
+    // время ожидания и полёта СЛЕДУЮЩЕГО раунда, создавая впечатление,
+    // будто текущий раунд уже "раскрыт" до его завершения.
+    hideCrashRoundKey();
+
     return crashPoint;
 }
 

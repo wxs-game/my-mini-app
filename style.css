@@ -1279,13 +1279,23 @@ body.fairness-modal-open {
 }
 
 .fairness-field-group label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-size: 11px;
     font-weight: 800;
     color: #888888;
     margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+/* Иконка перед подписью (замок/ключ) — размер как у обычного эмодзи в строке */
+.fairness-label-icon {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .fairness-input-box {
@@ -1309,7 +1319,9 @@ body.fairness-modal-open {
 }
 
 .copy-btn {
-    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 6px;
     opacity: 0.7;
     background: none;
@@ -1321,6 +1333,14 @@ body.fairness-modal-open {
 .copy-btn:active {
     opacity: 1;
     transform: scale(0.9);
+}
+
+/* Иконка внутри кнопки копирования — тот же размер, что был у эмодзи 📋 */
+.copy-btn-icon {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    display: block;
 }
 
 .field-hint {
