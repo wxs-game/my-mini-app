@@ -3,12 +3,7 @@
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
 // ==========================================
 const tg = window.Telegram?.WebApp;
-
-// Приложение работает только как Telegram Mini App. Если его открыли
-// напрямую в браузере (нет window.Telegram.WebApp или initData пустой —
-// значит страница не была запущена через кнопку бота), дальше вообще
-// ничего не инициализируем: ни Supabase, ни игры, ни обработчики кнопок.
-// Видимую часть блокировки показывает отдельный inline-скрипт в index.html
+    
 // (экран "Доступ только через Telegram"), который не зависит от этого файла.
 const isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
 if (!isRealTelegramLaunch) {
@@ -20,10 +15,7 @@ tg.ready();
 tg.expand();
 
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
-// ⚠️ Ваша база данных Supabase:
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
-
-// Используем имя supabase, чтобы не менять вызовы по всему коду
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Переменные состояния пользователя
@@ -149,11 +141,6 @@ let currentCrashState = {
 };
 
 // Вызывать ПЕРЕД началом раунда (возвращает коэффициент для анимации).
-// Хеш нового раунда публикуется СРАЗУ (до ставок, во время 5-сек ожидания) —
-// это и есть "commit" честной игры. Поле ключа НЕ трогаем здесь: ключ
-// предыдущего раунда должен оставаться видимым, пока игрок не выйдет со
-// страницы краша (см. hook в showPage()), а не пропадать через 3 секунды
-// с началом следующего раунда.
 async function prepareNextCrashRound() {
     const salt = generateRandomSeed(32);
     const hash = await generateSHA256(salt);
@@ -169,12 +156,16 @@ async function prepareNextCrashRound() {
     const hashInput = document.getElementById('crashRoundHashInput');
     if (hashInput) hashInput.value = hash;
 
+    // Новый раунд — новый секрет. Ключ прошлого (уже завершённого) раунда
+    // обязательно прячем здесь же, иначе он остаётся видимым в поле все
+    // время ожидания и полёта СЛЕДУЮЩЕГО раунда, создавая впечатление,
+    // будто текущий раунд уже "раскрыт" до его завершения.
+    hideCrashRoundKey();
+
     return crashPoint;
 }
 
-// Вызывать ПОСЛЕ завершения раунда (когда произошел краш) — раскрывает
-// секретный ключ (соль) текущего раунда, чтобы можно было проверить, что
-// SHA256(ключ) действительно равен ранее опубликованному хешу.
+// Вызывать ПОСЛЕ завершения раунда (когда произошел краш)
 function revealCrashRoundKey() {
     currentCrashState.isFinished = true;
 
@@ -224,17 +215,86 @@ function addCrashHistoryItem(coef) {
 
 // ==========================================
 // ОБРАБОТЧИКИ СОБЫТИЙ ОКНА И КОПИРОВАНИЯ
-// (объявлены как обычные функции + window.xxx, как и остальные обработчики
-// в проекте — вызываются через onclick="" прямо из HTML, без привязки к
-// DOMContentLoaded/addEventListener, чтобы не зависеть от порядка загрузки)
 // ==========================================
 function openCrashFairnessModal() {
     document.getElementById('crashFairnessModal')?.classList.remove('hidden');
+    document.body.classList.add('fairness-modal-open');
 }
 
 function closeCrashFairnessModal() {
     document.getElementById('crashFairnessModal')?.classList.add('hidden');
+    document.body.classList.remove('fairness-modal-open');
+
+    const content = document.getElementById('crashFairnessContent');
+    if (content) {
+        content.classList.remove('dragging');
+        content.style.transform = '';
+    }
 }
+
+// ==========================================
+// ПЕРЕТЯГИВАНИЕ ВНИЗ ДЛЯ ЗАКРЫТИЯ ДОК ЧЕСТНОСТИ
+// ==========================================
+(function initCrashFairnessDrag() {
+    const handle = document.getElementById('crashFairnessDragHandle');
+    const content = document.getElementById('crashFairnessContent');
+    if (!handle || !content) return;
+
+    const CLOSE_THRESHOLD = 80; // px, после которых плашка закрывается при отпускании
+    let startY = 0;
+    let currentY = 0;
+    let dragging = false;
+    let moved = false;
+
+    function onPointerDown(e) {
+        dragging = true;
+        moved = false;
+        content.classList.add('dragging');
+        startY = (e.touches ? e.touches[0].clientY : e.clientY);
+        currentY = 0;
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+    }
+
+    function onPointerMove(e) {
+        if (!dragging) return;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY);
+        const delta = y - startY;
+        currentY = Math.max(0, delta); // тянуть можно только вниз
+        if (currentY > 4) moved = true;
+        content.style.transform = `translateY(${currentY}px)`;
+        if (e.cancelable) e.preventDefault();
+    }
+
+    function onPointerUp() {
+        if (!dragging) return;
+        dragging = false;
+        content.classList.remove('dragging');
+        document.removeEventListener('touchmove', onPointerMove);
+        document.removeEventListener('touchend', onPointerUp);
+        document.removeEventListener('mousemove', onPointerMove);
+        document.removeEventListener('mouseup', onPointerUp);
+
+        if (currentY > CLOSE_THRESHOLD) {
+            closeCrashFairnessModal();
+        } else {
+            content.style.transform = '';
+        }
+        currentY = 0;
+    }
+
+    handle.addEventListener('touchstart', onPointerDown, { passive: true });
+    handle.addEventListener('mousedown', onPointerDown);
+
+    // Просто тап по полоске-хэндлу без перетягивания — закрывает меню
+    handle.addEventListener('click', () => {
+        if (!moved) {
+            closeCrashFairnessModal();
+        }
+    });
+})();
 
 function copyCrashHash() {
     const val = document.getElementById('crashRoundHashInput')?.value;
@@ -367,6 +427,92 @@ async function loadUserData() {
     currentWithdrawals = Number(data.withdrawals) || 0;
 
     updateProfileUI(data);
+}
+
+/* =========================
+   БЕГУЩАЯ СТРОКА СО СТАВКАМИ ИГРОКОВ (LIVE WINS)
+   Реалтайм через Supabase Broadcast: когда любой игрок делает ставку в
+   любой игре, у ВСЕХ, кто сейчас открыл приложение, в бегущей строке
+   на главном экране появляется запись об этом. Отдельная таблица в
+   БД не нужна — Broadcast-сообщения ни в чём не сохраняются, это просто
+   мгновенная рассылка всем подключённым клиентам "здесь и сейчас".
+========================= */
+const LIVE_BETS_CHANNEL_NAME = 'wxs-live-bets';
+const LIVE_BETS_MAX = 25;
+let liveBetsChannel = null;
+let liveBetsQueue = [];
+
+function initLiveBetsFeed() {
+    const track = document.getElementById('liveWinsTrack');
+    if (!track || !window.supabase) return;
+
+    try {
+        liveBetsChannel = supabase.channel(LIVE_BETS_CHANNEL_NAME, {
+            config: { broadcast: { self: false } }
+        });
+        liveBetsChannel.on('broadcast', { event: 'bet' }, (msg) => {
+            if (msg && msg.payload) addLiveBetToTicker(msg.payload);
+        }).subscribe();
+    } catch (e) {
+        console.error('Не удалось подключиться к каналу live-ставок:', e);
+    }
+}
+
+// Вызывается сразу после успешного списания ставки в каждой игре
+// (Мины, Кирка, Краш, Колесо), чтобы сообщить о ней всем игрокам.
+function broadcastLiveBet(amount, gameLabel) {
+    const nameFromUI = document.getElementById('username')?.textContent?.trim();
+    const payload = {
+        name: nameFromUI || 'Игрок',
+        amount: roundMoney(amount),
+        game: gameLabel
+    };
+
+    // Себе показываем сразу, не дожидаясь round-trip до сервера
+    addLiveBetToTicker(payload);
+
+    if (liveBetsChannel) {
+        liveBetsChannel.send({ type: 'broadcast', event: 'bet', payload }).catch(() => {});
+    }
+}
+
+function addLiveBetToTicker(bet) {
+    liveBetsQueue.push(bet);
+    if (liveBetsQueue.length > LIVE_BETS_MAX) {
+        liveBetsQueue.splice(0, liveBetsQueue.length - LIVE_BETS_MAX);
+    }
+    renderLiveBetsTicker();
+}
+
+function renderLiveBetsTicker() {
+    const track = document.getElementById('liveWinsTrack');
+    if (!track) return;
+
+    if (liveBetsQueue.length === 0) {
+        track.classList.remove('live-wins-marquee');
+        track.style.animationDuration = '';
+        track.innerHTML = '<span class="live-wins-empty">Пока никто не сделал ставку — станьте первым!</span>';
+        return;
+    }
+
+    const itemHtml = (bet) =>
+        '<span class="live-wins-item">' +
+            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+            '<span class="live-wins-name">' + escapeHtml(bet.name) + '</span>' +
+            ' поставил <span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+            (bet.game ? ' <span class="live-wins-game">· ' + escapeHtml(bet.game) + '</span>' : '') +
+        '</span>';
+
+    // Дублируем контент — это позволяет анимации бесшовно "зациклиться"
+    // (translateX(-50%) ровно до начала второй, идентичной, копии).
+    const itemsHtml = liveBetsQueue.map(itemHtml).join('');
+    track.innerHTML = itemsHtml + itemsHtml;
+
+    // Скорость подстраивается под количество записей, чтобы строка не
+    // "неслась" слишком быстро, когда ставок много.
+    const duration = Math.max(18, liveBetsQueue.length * 4);
+    track.style.animationDuration = duration + 's';
+    track.classList.add('live-wins-marquee');
 }
 
 /* =========================
@@ -793,6 +939,7 @@ async function startMinesGame() {
 
     minesGame.active = true;
     minesGame.bet = bet;
+    broadcastLiveBet(bet, 'Мины');
     minesGame.gemsFound = 0;
     minesGame.revealed = Array(25).fill(false);
     minesGame.field = Array(25).fill('gem');
@@ -979,6 +1126,13 @@ let crashExplosionAnim = null; // экземпляр Lottie-анимации в�
 let crashExplosionTotalFrames = 0; // общее число кадров анимации взрыва (берётся из её JSON)
 let crashExplosionHideTimeout = null; // таймер плавного скрытия взрыва после проигрывания нужной части
 
+// "Тяжёлые" визуальные обновления (SVG-след со стековыми drop-shadow,
+// текст с text-shadow) обновляем не чаще ~30 раз/сек вместо 60 — глазом
+// разница незаметна, а нагрузка на рендер падает почти вдвое. Ракета и
+// тряска экрана (дешёвые transform) продолжают обновляться каждый кадр.
+let crashLastHeavyUpdate = 0;
+const CRASH_HEAVY_UPDATE_INTERVAL_MS = 33;
+
 // Доля анимации взрыва, которая реально проигрывается при краше — по ТЗ
 // нужна только самая первая часть (меньше половины), дальше идёт "хвост"
 // анимации, который не нужен. Меняйте это число, чтобы точнее подогнать
@@ -1036,10 +1190,15 @@ function initCrashRocketAnim() {
 
     crashRocketAnim = lottie.loadAnimation({
         container: dom.rocketEl,
-        renderer: 'svg',
+        renderer: 'canvas',
         loop: true,
         autoplay: true,
-        animationData: animationData
+        animationData: animationData,
+        rendererSettings: {
+            clearCanvas: true,
+            progressiveLoad: true,
+            preserveAspectRatio: 'xMidYMid meet'
+        }
     });
 }
 
@@ -1067,10 +1226,15 @@ function initCrashExplosionAnim() {
 
     crashExplosionAnim = lottie.loadAnimation({
         container: dom.explosionEl,
-        renderer: 'svg',
+        renderer: 'canvas',
         loop: false,
         autoplay: false,
-        animationData: animationData
+        animationData: animationData,
+        rendererSettings: {
+            clearCanvas: true,
+            progressiveLoad: true,
+            preserveAspectRatio: 'xMidYMid meet'
+        }
     });
     crashExplosionTotalFrames = animationData.op || 0;
 
@@ -1097,11 +1261,33 @@ function openCrash() {
     initCrashPage();
 }
 
+// Кэш размеров сцены — чтения clientWidth/clientHeight на каждом кадре
+// requestAnimationFrame вызывают принудительный синхронный reflow, что и было
+// основной причиной лагов/фризов даже на мощных телефонах. Меряем размеры
+// только когда они реально могут измениться (открытие страницы, начало
+// раунда, поворот экрана/ресайз), а не 60 раз в секунду.
+let crashStageW = 300;
+let crashStageH = 340;
+
+function syncCrashStageDims() {
+    const dom = getCrashDom();
+    if (!dom.stageEl) return;
+    crashStageW = dom.stageEl.clientWidth || crashStageW;
+    crashStageH = dom.stageEl.clientHeight || crashStageH;
+}
+
+window.addEventListener('resize', syncCrashStageDims);
+window.addEventListener('orientationchange', syncCrashStageDims);
+
 function initCrashPage() {
     renderCrashHistory();
     renderCrashUI();
     initCrashRocketAnim();
     initCrashExplosionAnim();
+    syncCrashStageDims();
+    // Подстраховка: сразу после открытия страницы её CSS-переход может ещё
+    // не завершиться, поэтому один раз перемеряем на следующем кадре.
+    requestAnimationFrame(syncCrashStageDims);
 }
 
 function startCrashEngine() {
@@ -1210,10 +1396,13 @@ function beginFlyingPhase() {
     crashGame.crashPoint = currentCrashState.crashPoint;
     crashGame.currentMult = 1.00;
     crashGame.startTime = performance.now();
+    crashLastHeavyUpdate = 0;
+
+    syncCrashStageDims();
 
     crashTrailPoints = [];
     const dom = getCrashDom();
-    
+
     if (dom.trailLine) {
         dom.trailLine.setAttribute('d', '');
         dom.trailLine.classList.remove('crash-trail-crashed');
@@ -1229,6 +1418,13 @@ function beginFlyingPhase() {
         dom.topLeftMult.classList.remove('crashed');
         dom.topLeftMult.style.display = 'block';
     }
+
+    // Разовые переключения состояния экрана на весь полёт — раньше
+    // выполнялись заново в каждом кадре renderCrashUI без необходимости.
+    if (dom.countdownEl) dom.countdownEl.style.display = 'none';
+    if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+    if (dom.betInput) dom.betInput.disabled = true;
 
     renderCrashUI();
     tickCrash();
@@ -1254,7 +1450,8 @@ function explosionShake(el, duration = 500, magnitude = 20) {
 }
 
 function tickCrash() {
-    const elapsed = performance.now() - crashGame.startTime;
+    const now = performance.now();
+    const elapsed = now - crashGame.startTime;
 
     let rawMult;
     if (elapsed < CRASH_SLOW_START_MS) {
@@ -1271,7 +1468,15 @@ function tickCrash() {
         Math.floor(rawMult * 100) / 100
     );
 
-    renderCrashUI();
+    let heavy = true;
+    if (now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS) {
+        crashLastHeavyUpdate = now;
+        heavy = true;
+    } else {
+        heavy = false;
+    }
+
+    renderCrashUI(heavy);
 
     if (crashGame.currentMult >= crashGame.crashPoint) {
         endCrashRound();
@@ -1395,6 +1600,7 @@ async function placeCrashBet() {
 
     crashGame.bet = bet;
     crashGame.betPlaced = true;
+    broadcastLiveBet(bet, 'Краш');
     crashGame.cashedOut = false;
     crashGame.isProcessing = false;
     unlockEconomy();
@@ -1468,7 +1674,7 @@ function renderCrashHistory() {
     }).join('');
 }
 
-function renderCrashUI() {
+function renderCrashUI(heavy = true) {
     const dom = getCrashDom();
     if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
 
@@ -1496,11 +1702,11 @@ function renderCrashUI() {
         }
 
         if (dom.rocketEl) {
-            const stageW = dom.stageEl ? dom.stageEl.clientWidth : 300;
-            const stageH = dom.stageEl ? dom.stageEl.clientHeight : 340;
+            const stageW = crashStageW;
+            const stageH = crashStageH;
             const centerXWait = (stageW - 200) / 2 - 16;
             const centerYWait = 16 - (stageH - 200) / 2;
-            
+
             dom.rocketEl.style.transform = `translate3d(${centerXWait}px, ${centerYWait}px, 0px) rotate(45deg)`;
         }
         if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
@@ -1529,32 +1735,33 @@ function renderCrashUI() {
     }
 
     // phase === 'flying'
-    if (dom.topLeftMult) {
-        dom.topLeftMult.textContent = crashGame.currentMult.toFixed(2) + 'x';
-        dom.topLeftMult.classList.remove('crashed');
-        dom.topLeftMult.style.display = 'block';
-    }
+    // Расчёт позиции ракеты и точки следа — дешёвая математика, считаем
+    // каждый кадр, чтобы ракета двигалась идеально плавно.
+    const stageW = crashStageW;
+    const stageH = crashStageH;
 
-    if (dom.countdownEl) dom.countdownEl.style.display = 'none';
-    if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
-    if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+    const centerX = (stageW - 200) / 2 - 16;
+    const centerY = 16 - (stageH - 200) / 2;
+
+    const currentM = crashGame.currentMult;
+
+    // Скорость полета ракеты: достигает верхнего угла (пика) ровно при 3.00x
+    const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
+
+    // Поворот ракеты адаптирован под траекторию до 3.00x
+    const angle = 45 - (90 * trailProgress);
 
     if (dom.rocketEl) {
-        const stageW = dom.stageEl ? dom.stageEl.clientWidth : 300;
-        const stageH = dom.stageEl ? dom.stageEl.clientHeight : 340;
-
-        const centerX = (stageW - 200) / 2 - 16;
-        const centerY = 16 - (stageH - 200) / 2;
-
-        const currentM = crashGame.currentMult;
-
-        // Скорость полета ракеты: достигает верхнего угла (пика) ровно при 3.00x
-        const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
-
-        // Поворот ракеты адаптирован под траекторию до 3.00x
-        const angle = 45 - (90 * trailProgress);
-
         dom.rocketEl.style.transform = `translate3d(${centerX}px, ${centerY}px, 0px) rotate(${angle}deg)`;
+    }
+
+    // "Тяжёлые" обновления — текст с text-shadow и SVG-след с несколькими
+    // drop-shadow — троттлим до ~30 раз/сек (см. CRASH_HEAVY_UPDATE_INTERVAL_MS
+    // в tickCrash), чтобы не грузить рендер на каждый из 60 кадров.
+    if (heavy) {
+        if (dom.topLeftMult) {
+            dom.topLeftMult.textContent = currentM.toFixed(2) + 'x';
+        }
 
         const trailStartX = stageW * 0.05;
         const trailStartY = stageH * 0.95;
@@ -1580,27 +1787,27 @@ function renderCrashUI() {
             dom.trailDot.style.opacity = '1';
             dom.trailDot.classList.add('crash-dot-live');
         }
+
+        if (crashGame.betPlaced && !crashGame.cashedOut) {
+            const potential = (crashGame.bet * currentM).toFixed(2);
+            dom.actionBtn.textContent = `Забрать ${potential}$`;
+            dom.actionBtn.disabled = false;
+        } else if (crashGame.cashedOut) {
+            dom.actionBtn.textContent = 'Выигрыш забран ✓';
+            dom.actionBtn.disabled = true;
+        } else {
+            dom.actionBtn.textContent = 'Ждите следующего раунда';
+            dom.actionBtn.disabled = true;
+        }
     }
 
+    // Тряска экрана — дешёвый compositor-only transform, оставляем на каждый
+    // кадр ради плавности вибрации.
     if (dom.stageEl) {
         const shakeStrength = Math.min(8, (crashGame.currentMult - 1) * 1.2);
         const dx = (Math.random() - 0.5) * shakeStrength;
         const dy = (Math.random() - 0.5) * shakeStrength;
         dom.stageEl.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
-    }
-
-    if (dom.betInput) dom.betInput.disabled = true;
-
-    if (crashGame.betPlaced && !crashGame.cashedOut) {
-        const potential = (crashGame.bet * crashGame.currentMult).toFixed(2);
-        dom.actionBtn.textContent = `Забрать ${potential}$`;
-        dom.actionBtn.disabled = false;
-    } else if (crashGame.cashedOut) {
-        dom.actionBtn.textContent = 'Выигрыш забран ✓';
-        dom.actionBtn.disabled = true;
-    } else {
-        dom.actionBtn.textContent = 'Ждите следующего раунда';
-        dom.actionBtn.disabled = true;
     }
 }
 
@@ -2255,6 +2462,7 @@ async function startPickaxeGame() {
     }
 
     resetMineWorld();
+    broadcastLiveBet(bet, 'Кирка');
 
     // 1. Вращение рулетки — как открытие кейса: лента быстро прокручивается
     // и тормозит ровно на выпавшей (уже определённой заранее) кирке.
@@ -2924,6 +3132,7 @@ async function spinWheel() {
 
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
+    broadcastLiveBet(totalBet, 'Колесо');
 
     const result = document.getElementById('wheelResult');
     const resultValue = document.getElementById('resultValue');
@@ -3454,6 +3663,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadUserData();
     updateLevelUI();
     goHome();
+    initLiveBetsFeed();
     applyDesign();
     startCrashEngine();
 
