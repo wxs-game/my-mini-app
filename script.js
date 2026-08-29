@@ -26,11 +26,6 @@ const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 // Используем имя supabase, чтобы не менять вызовы по всему коду
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ==========================================
-// АДРЕС БЭКЕНДА (api.py), поднятого через ngrok
-// ==========================================
-const API_BASE = 'https://cable-coral-ahead.ngrok-free.dev';
-
 // Переменные состояния пользователя
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
@@ -107,6 +102,374 @@ function updateLevelUI() {
     if (profileLevelPercent) profileLevelPercent.textContent = percentRounded + "%";
     if (profileLevelFill) profileLevelFill.style.width = percentRounded + "%";
 }
+<!-- ==========================================
+     КНОПКА И МОДАЛЬНОЕ ОКНО "ДОКАЗУЕМАЯ ЧЕСТНОСТЬ" (CRASH PROVABLY FAIR)
+========================================== -->
+
+<!-- 1. Круглая кнопка с "#" внизу справа на экране игры Crash -->
+<button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность">
+    <span>#</span>
+</button>
+
+<!-- 2. Закругленное всплывающее меню (Bottom Sheet) -->
+<div id="crashFairnessModal" class="crash-fairness-modal hidden">
+    <div class="crash-fairness-backdrop" id="crashFairnessBackdrop"></div>
+    <div class="crash-fairness-content">
+        <div class="crash-fairness-drag-handle"></div>
+        <div class="crash-fairness-header">
+            <h3>Доказуемая честность</h3>
+            <button class="crash-fairness-close" id="crashFairnessClose">&times;</button>
+        </div>
+        
+        <div class="crash-fairness-body">
+            <div class="fairness-field-group">
+                <label>Хеш раунда (SHA-256)</label>
+                <div class="fairness-input-box">
+                    <input type="text" id="crashRoundHashInput" readonly placeholder="Генерация..." />
+                    <button id="copyCrashHashBtn" class="copy-btn">📋</button>
+                </div>
+                <small class="field-hint">Доступен до и во время раунда. Зашифрованный результат.</small>
+            </div>
+
+            <div class="fairness-field-group">
+                <label>SHA-256 Ключ (Соль раунда)</label>
+                <div class="fairness-input-box">
+                    <input type="text" id="crashRoundKeyInput" readonly placeholder="Откроется после раунда" />
+                    <button id="copyCrashKeyBtn" class="copy-btn">📋</button>
+                </div>
+                <small class="field-hint">Раскрывается строго по окончании раунда.</small>
+            </div>
+
+            <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" rel="noopener" class="fairness-verify-link">
+                Проверить честность (SHA256 Calculator) ↗
+            </a>
+        </div>
+    </div>
+</div>
+
+/* ==========================================
+   СТИЛИ ДЛЯ ДОКАЗУЕМОЙ ЧЕСТНОСТИ (CRASH)
+========================================== */
+
+/* Относительное позиционирование контейнера игры */
+.crash-page, .crash-card {
+    position: relative;
+}
+
+/* Круглая кнопка с значком # внизу справа */
+.crash-fairness-trigger {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #ffd700;
+    font-size: 18px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 25;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    transition: transform 0.15s ease, background-color 0.2s ease;
+}
+
+.crash-fairness-trigger:active {
+    transform: scale(0.92);
+    background: rgba(255, 215, 0, 0.2);
+}
+
+/* Нижнее закругленное меню (Bottom Sheet) */
+.crash-fairness-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.crash-fairness-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.crash-fairness-content {
+    position: relative;
+    z-index: 2;
+    background: #141414;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 28px 28px 0 0;
+    padding: 12px 20px 28px 20px;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+    animation: slideUpModal 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+@keyframes slideUpModal {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.crash-fairness-drag-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 auto 12px auto;
+}
+
+.crash-fairness-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.crash-fairness-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.crash-fairness-close {
+    font-size: 24px;
+    color: #888888;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.fairness-field-group {
+    margin-bottom: 14px;
+}
+
+.fairness-field-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    color: #888888;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fairness-input-box {
+    display: flex;
+    align-items: center;
+    background: #090909;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 4px 8px 4px 12px;
+}
+
+.fairness-input-box input {
+    flex: 1;
+    color: #ffd700;
+    font-size: 13px;
+    font-family: monospace;
+    text-overflow: ellipsis;
+}
+
+.copy-btn {
+    font-size: 14px;
+    padding: 6px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.copy-btn:active {
+    opacity: 1;
+    transform: scale(0.9);
+}
+
+.field-hint {
+    display: block;
+    font-size: 10px;
+    color: #555555;
+    margin-top: 4px;
+}
+
+.fairness-verify-link {
+    display: block;
+    margin-top: 18px;
+    text-align: center;
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+    color: #000000;
+    font-weight: 900;
+    font-size: 13px;
+    padding: 12px;
+    border-radius: 14px;
+    box-shadow: 0 4px 15px rgba(255, 140, 0, 0.25);
+}
+
+.fairness-verify-link:active {
+    transform: scale(0.98);
+}
+
+// ==========================================
+// ЛОГИКА PROVABLY FAIR (SHA-256) ДЛЯ ИГРЫ CRASH
+// ==========================================
+
+// Генерируем криптографический SHA-256 хеш с помощью Web Crypto API
+async function generateSHA256(message) {
+    const msgUint8 = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Случайная генерация соли (Secret Key)
+function generateRandomSeed(length = 32) {
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    const randomValues = new Uint8Array(length);
+    crypto.getRandomValues(randomValues);
+    for (let i = 0; i < length; i++) {
+        result += charset[randomValues[i] % charset.length];
+    }
+    return result;
+}
+
+// Расчет честного коэффициента на базе соли и хеша
+function calculateCrashPoint(seed, salt) {
+    // Детерминированный расчёт выигрышного коэффициента
+    let hash = seed + salt;
+    let hex = hash.substring(0, 8);
+    let intVal = parseInt(hex, 16);
+    
+    // 3% преимущество заведения (House Edge)
+    if (intVal % 33 === 0) return 1.00;
+    
+    let crash = Math.max(1.00, parseFloat((100 / (1 - (intVal / 4294967296))).toFixed(2)));
+    return Math.min(crash, 1000.00); // Ограничение сверху
+}
+
+// Переменные состояния раунда Crash
+let currentCrashState = {
+    salt: '',
+    hash: '',
+    crashPoint: 1.00,
+    isFinished: false
+};
+
+// Вызывать ПЕРЕД началом нового раунда
+async function prepareNextCrashRound() {
+    // 1. Создаем секретную соль раунда
+    const salt = generateRandomSeed(32);
+    // 2. Вычисляем хеш для игрока
+    const hash = await generateSHA256(salt);
+    // 3. Рассчитываем итоговый коэффициент раунда
+    const crashPoint = calculateCrashPoint(hash, salt);
+
+    currentCrashState = {
+        salt: salt,
+        hash: hash,
+        crashPoint: crashPoint,
+        isFinished: false
+    };
+
+    // Обновляем модальное окно (скрываем соль до окончания)
+    const hashInput = document.getElementById('crashRoundHashInput');
+    const keyInput = document.getElementById('crashRoundKeyInput');
+    
+    if (hashInput) hashInput.value = hash;
+    if (keyInput) keyInput.value = 'Откроется после раунда';
+    
+    return crashPoint;
+}
+
+// Вызывать ПОСЛЕ завершения раунда (когда произошел краш)
+function finishCrashRound(finalCoefficient) {
+    currentCrashState.isFinished = true;
+    
+    // 1. Показываем раскрытую соль (SHA256 Ключ) в модальном окне
+    const keyInput = document.getElementById('crashRoundKeyInput');
+    if (keyInput) keyInput.value = currentCrashState.salt;
+
+    // 2. Добавляем коэффициент в историю над игрой
+    addCrashHistoryItem(finalCoefficient);
+}
+
+// Добавление коэффициента в верхнюю ленту истории
+function addCrashHistoryItem(coef) {
+    const historyContainer = document.querySelector('.crash-history-scroll');
+    if (!historyContainer) return;
+
+    const span = document.createElement('span');
+    span.className = 'crash-history-badge';
+    span.textContent = coef.toFixed(2) + 'x';
+    
+    // Подсветка коэффициентов
+    if (coef >= 2.0) {
+        span.style.color = '#2ecc71';
+    } else if (coef < 1.5) {
+        span.style.color = '#e74c3c';
+    } else {
+        span.style.color = '#ffd700';
+    }
+    
+    span.style.padding = '4px 8px';
+    span.style.background = 'rgba(255,255,255,0.05)';
+    span.style.borderRadius = '8px';
+    span.style.fontSize = '12px';
+    span.style.fontWeight = '800';
+    span.style.cursor = 'pointer';
+
+    // По нажатию на коэффициент в истории можно просмотреть его значенин
+    span.onclick = () => {
+        showMessage(`Коэффициент раунда: ${coef.toFixed(2)}x`);
+    };
+
+    historyContainer.insertBefore(span, historyContainer.firstChild);
+}
+
+// ==========================================
+// ОБРАБОТЧИКИ СОБЫТИЙ ДЛЯ МОДАЛЬНОГО ОКНА
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const fairnessBtn = document.getElementById('crashFairnessBtn');
+    const fairnessModal = document.getElementById('crashFairnessModal');
+    const fairnessClose = document.getElementById('crashFairnessClose');
+    const fairnessBackdrop = document.getElementById('crashFairnessBackdrop');
+
+    // Открытие модального окна
+    if (fairnessBtn && fairnessModal) {
+        fairnessBtn.addEventListener('click', () => {
+            fairnessModal.classList.remove('hidden');
+        });
+    }
+
+    // Закрытие модального окна
+    const closeModal = () => fairnessModal?.classList.add('hidden');
+    if (fairnessClose) fairnessClose.addEventListener('click', closeModal);
+    if (fairnessBackdrop) fairnessBackdrop.addEventListener('click', closeModal);
+
+    // Копирование хеша
+    document.getElementById('copyCrashHashBtn')?.addEventListener('click', () => {
+        const val = document.getElementById('crashRoundHashInput')?.value;
+        if (val) {
+            navigator.clipboard.writeText(val);
+            showMessage('Хеш скопирован в буфер обмена');
+        }
+    });
+
+    // Копирование ключа
+    document.getElementById('copyCrashKeyBtn')?.addEventListener('click', () => {
+        const val = document.getElementById('crashRoundKeyInput')?.value;
+        if (val && val !== 'Откроется после раунда') {
+            navigator.clipboard.writeText(val);
+            showMessage('Ключ скопирован в буфер обмена');
+        }
+    });
+});
 
 // ==========================================
 // 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
