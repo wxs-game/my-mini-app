@@ -26,11 +26,6 @@ const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 // Используем имя supabase, чтобы не менять вызовы по всему коду
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ==========================================
-// АДРЕС БЭКЕНДА (api.py), поднятого через ngrok
-// ==========================================
-const API_BASE = 'https://cable-coral-ahead.ngrok-free.dev';
-
 // Переменные состояния пользователя
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
@@ -107,6 +102,160 @@ function updateLevelUI() {
     if (profileLevelPercent) profileLevelPercent.textContent = percentRounded + "%";
     if (profileLevelFill) profileLevelFill.style.width = percentRounded + "%";
 }
+
+// ==========================================
+// ЛОГИКА PROVABLY FAIR (SHA-256) ДЛЯ ИГРЫ CRASH
+// ==========================================
+
+// 1. Генерация SHA-256 хеша (Web Crypto API)
+async function generateSHA256(message) {
+    const msgUint8 = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 2. Случайная генерация соли (Secret Key)
+function generateRandomSeed(length = 32) {
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    const randomValues = new Uint8Array(length);
+    crypto.getRandomValues(randomValues);
+    for (let i = 0; i < length; i++) {
+        result += charset[randomValues[i] % charset.length];
+    }
+    return result;
+}
+
+// 3. Расчет коэффициента на базе соли и хеша
+function calculateCrashPoint(seed, salt) {
+    let hash = seed + salt;
+    let hex = hash.substring(0, 8);
+    let intVal = parseInt(hex, 16);
+
+    // 3% преимущество заведения (House Edge)
+    if (intVal % 33 === 0) return 1.00;
+
+    let crash = Math.max(1.00, parseFloat((100 / (1 - (intVal / 4294967296))).toFixed(2)));
+    return Math.min(crash, 1000.00);
+}
+
+// Переменные состояния раунда
+let currentCrashState = {
+    salt: '',
+    hash: '',
+    crashPoint: 1.00,
+    isFinished: false
+};
+
+// Вызывать ПЕРЕД началом раунда (возвращает коэффициент для анимации).
+// Хеш нового раунда публикуется СРАЗУ (до ставок, во время 5-сек ожидания) —
+// это и есть "commit" честной игры. Поле ключа НЕ трогаем здесь: ключ
+// предыдущего раунда должен оставаться видимым, пока игрок не выйдет со
+// страницы краша (см. hook в showPage()), а не пропадать через 3 секунды
+// с началом следующего раунда.
+async function prepareNextCrashRound() {
+    const salt = generateRandomSeed(32);
+    const hash = await generateSHA256(salt);
+    const crashPoint = calculateCrashPoint(hash, salt);
+
+    currentCrashState = {
+        salt: salt,
+        hash: hash,
+        crashPoint: crashPoint,
+        isFinished: false
+    };
+
+    const hashInput = document.getElementById('crashRoundHashInput');
+    if (hashInput) hashInput.value = hash;
+
+    return crashPoint;
+}
+
+// Вызывать ПОСЛЕ завершения раунда (когда произошел краш) — раскрывает
+// секретный ключ (соль) текущего раунда, чтобы можно было проверить, что
+// SHA256(ключ) действительно равен ранее опубликованному хешу.
+function revealCrashRoundKey() {
+    currentCrashState.isFinished = true;
+
+    const keyInput = document.getElementById('crashRoundKeyInput');
+    if (keyInput) keyInput.value = currentCrashState.salt;
+}
+
+// Вызывать при выходе со страницы краша — прячет раскрытый ключ обратно,
+// чтобы при следующем заходе он снова появился только после нового краша.
+function hideCrashRoundKey() {
+    const keyInput = document.getElementById('crashRoundKeyInput');
+    if (keyInput) keyInput.value = '';
+}
+
+// Добавление коэффициента в ленту истории
+function addCrashHistoryItem(coef) {
+    const historyContainer = document.querySelector('.crash-history-scroll');
+    if (!historyContainer) return;
+
+    const span = document.createElement('span');
+    span.className = 'crash-history-badge';
+    span.textContent = coef.toFixed(2) + 'x';
+
+    if (coef >= 2.0) {
+        span.style.color = '#2ecc71';
+    } else if (coef < 1.5) {
+        span.style.color = '#e74c3c';
+    } else {
+        span.style.color = '#ffd700';
+    }
+
+    span.style.padding = '4px 8px';
+    span.style.background = 'rgba(255,255,255,0.05)';
+    span.style.borderRadius = '8px';
+    span.style.fontSize = '12px';
+    span.style.fontWeight = '800';
+    span.style.cursor = 'pointer';
+
+    span.onclick = () => {
+        if (typeof showMessage === 'function') {
+            showMessage(`Коэффициент раунда: ${coef.toFixed(2)}x`);
+        }
+    };
+
+    historyContainer.insertBefore(span, historyContainer.firstChild);
+}
+
+// ==========================================
+// ОБРАБОТЧИКИ СОБЫТИЙ ОКНА И КОПИРОВАНИЯ
+// (объявлены как обычные функции + window.xxx, как и остальные обработчики
+// в проекте — вызываются через onclick="" прямо из HTML, без привязки к
+// DOMContentLoaded/addEventListener, чтобы не зависеть от порядка загрузки)
+// ==========================================
+function openCrashFairnessModal() {
+    document.getElementById('crashFairnessModal')?.classList.remove('hidden');
+}
+
+function closeCrashFairnessModal() {
+    document.getElementById('crashFairnessModal')?.classList.add('hidden');
+}
+
+function copyCrashHash() {
+    const val = document.getElementById('crashRoundHashInput')?.value;
+    if (val) {
+        navigator.clipboard.writeText(val);
+        if (typeof showMessage === 'function') showMessage('Хеш скопирован в буфер обмена');
+    }
+}
+
+function copyCrashKey() {
+    const val = document.getElementById('crashRoundKeyInput')?.value;
+    if (val) {
+        navigator.clipboard.writeText(val);
+        if (typeof showMessage === 'function') showMessage('Ключ скопирован в буфер обмена');
+    }
+}
+
+window.openCrashFairnessModal = openCrashFairnessModal;
+window.closeCrashFairnessModal = closeCrashFairnessModal;
+window.copyCrashHash = copyCrashHash;
+window.copyCrashKey = copyCrashKey;
 
 // ==========================================
 // 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
@@ -971,6 +1120,12 @@ function beginWaitingPhase() {
     crashGame.bet = 0;
     crashGame.phaseEndsAt = Date.now() + CRASH_WAIT_MS;
 
+    // Публикуем хеш нового раунда сразу в начале 5-сек ожидания (commit
+    // честной игры до того, как раунд полетит). Коэффициент краша уже
+    // зашит в currentCrashState.crashPoint и будет использован в
+    // beginFlyingPhase() — так итог раунда реально соответствует хешу.
+    prepareNextCrashRound();
+
     renderCrashUI();
 
     clearInterval(crashTimerHandle);
@@ -1049,7 +1204,10 @@ function loadOrSeedCrashHistory() {
 
 function beginFlyingPhase() {
     crashGame.phase = 'flying';
-    crashGame.crashPoint = generateCrashPoint();
+    // Коэффициент краша берём из уже опубликованного в начале ожидания
+    // хеша (currentCrashState), а не генерируем заново — иначе показанный
+    // игроку хеш никак не будет связан с реальным результатом раунда.
+    crashGame.crashPoint = currentCrashState.crashPoint;
     crashGame.currentMult = 1.00;
     crashGame.startTime = performance.now();
 
@@ -1125,6 +1283,10 @@ function tickCrash() {
 
 function endCrashRound() {
     cancelAnimationFrame(crashAnimHandle);
+
+    // Раскрываем секретный ключ (соль) этого раунда — теперь можно
+    // проверить, что SHA256(ключ) равен хешу, показанному ДО раунда.
+    revealCrashRoundKey();
 
     lastCrashPoint = crashGame.crashPoint;
     crashHistory.unshift(crashGame.crashPoint);
@@ -2417,6 +2579,14 @@ function hideAllPages() {
 }
 
 function showPage(id) {
+    // Если игрок уходит со страницы краша на любую другую — прячем
+    // раскрытый SHA-256 ключ обратно. При новом заходе на краш он снова
+    // появится только после того, как раунд закрашится.
+    const crashPageEl = document.getElementById("crashPage");
+    if (id !== "crashPage" && crashPageEl && !crashPageEl.classList.contains("hidden")) {
+        hideCrashRoundKey();
+    }
+
     hideAllPages();
     const page = document.getElementById(id);
     if (page) page.classList.remove("hidden");
