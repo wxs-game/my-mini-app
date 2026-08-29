@@ -431,57 +431,111 @@ async function loadUserData() {
 
 /* =========================
    БЕГУЩАЯ СТРОКА СО СТАВКАМИ ИГРОКОВ (LIVE WINS)
-   Реалтайм через Supabase Broadcast: когда любой игрок делает ставку в
-   любой игре, у ВСЕХ, кто сейчас открыл приложение, в бегущей строке
-   на главном экране появляется запись об этом. Отдельная таблица в
-   БД не нужна — Broadcast-сообщения ни в чём не сохраняются, это просто
-   мгновенная рассылка всем подключённым клиентам "здесь и сейчас".
+   Ставки хранятся в таблице public.live_bets в Supabase — поэтому лента
+   переживает перезаход в приложение (последние 10 ставок подгружаются
+   при старте) и видна ВСЕМ игрокам: новые строки в таблицу ловятся через
+   Supabase Realtime (postgres_changes на INSERT), так что у каждого
+   открытого приложения лента обновляется вживую, включая чужие ставки.
+
+   Требуется один раз выполнить в Supabase (SQL Editor):
+
+   create table if not exists public.live_bets (
+       id bigint generated always as identity primary key,
+       telegram_id bigint,
+       name text not null,
+       amount numeric not null,
+       game text not null,
+       created_at timestamptz not null default now()
+   );
+   alter table public.live_bets enable row level security;
+   create policy "live_bets_select_all" on public.live_bets for select using (true);
+   create policy "live_bets_insert_all" on public.live_bets for insert with check (true);
+   alter publication supabase_realtime add table public.live_bets;
+
+   (И включить Realtime для таблицы live_bets в Database → Replication,
+   если ALTER PUBLICATION выше почему-то не сработает автоматически.)
 ========================= */
-const LIVE_BETS_CHANNEL_NAME = 'wxs-live-bets';
-const LIVE_BETS_MAX = 25;
-let liveBetsChannel = null;
+const LIVE_BETS_TABLE = 'live_bets';
+const LIVE_BETS_MAX = 10;
+// Минимум записей в одном "круге" ленты — если реальных ставок мало,
+// контент дублируется до этого числа, чтобы бегущая строка не обрывалась
+// пустым просветом посреди экрана при зацикливании анимации.
+const LIVE_BETS_MIN_LOOP_ITEMS = 8;
 let liveBetsQueue = [];
 
-function initLiveBetsFeed() {
+async function initLiveBetsFeed() {
     const track = document.getElementById('liveWinsTrack');
     if (!track || !window.supabase) return;
 
+    await loadLiveBetsHistory();
+
     try {
-        liveBetsChannel = supabase.channel(LIVE_BETS_CHANNEL_NAME, {
-            config: { broadcast: { self: false } }
-        });
-        liveBetsChannel.on('broadcast', { event: 'bet' }, (msg) => {
-            if (msg && msg.payload) addLiveBetToTicker(msg.payload);
-        }).subscribe();
+        supabase
+            .channel('live_bets_inserts')
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: LIVE_BETS_TABLE },
+                (payload) => {
+                    if (payload?.new) addLiveBetToTicker(payload.new, true);
+                }
+            )
+            .subscribe();
     } catch (e) {
-        console.error('Не удалось подключиться к каналу live-ставок:', e);
+        console.error('Не удалось подписаться на реалтайм live_bets:', e);
+    }
+}
+
+// Подгружает последние 10 ставок (своих и чужих) из БД при открытии приложения
+async function loadLiveBetsHistory() {
+    try {
+        const { data, error } = await supabase
+            .from(LIVE_BETS_TABLE)
+            .select('name, amount, game, created_at')
+            .order('created_at', { ascending: false })
+            .limit(LIVE_BETS_MAX);
+
+        if (error) {
+            console.error('Ошибка загрузки истории live_bets:', error);
+            renderLiveBetsTicker();
+            return;
+        }
+
+        liveBetsQueue = (data || []).slice().reverse();
+        renderLiveBetsTicker();
+    } catch (e) {
+        console.error('Ошибка загрузки истории live_bets:', e);
+        renderLiveBetsTicker();
     }
 }
 
 // Вызывается сразу после успешного списания ставки в каждой игре
-// (Мины, Кирка, Краш, Колесо), чтобы сообщить о ней всем игрокам.
-function broadcastLiveBet(amount, gameLabel) {
+// (Мины, Кирка, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
+// через Realtime увидят все игроки (включая нас самих).
+async function broadcastLiveBet(amount, gameLabel) {
+    const tgUser = tg?.initDataUnsafe?.user;
     const nameFromUI = document.getElementById('username')?.textContent?.trim();
-    const payload = {
+    const row = {
+        telegram_id: tgUser?.id || null,
         name: nameFromUI || 'Игрок',
         amount: roundMoney(amount),
         game: gameLabel
     };
 
-    // Себе показываем сразу, не дожидаясь round-trip до сервера
-    addLiveBetToTicker(payload);
-
-    if (liveBetsChannel) {
-        liveBetsChannel.send({ type: 'broadcast', event: 'bet', payload }).catch(() => {});
+    try {
+        const { error } = await supabase.from(LIVE_BETS_TABLE).insert(row);
+        if (error) console.error('Не удалось сохранить ставку в live_bets:', error);
+    } catch (e) {
+        console.error('Не удалось сохранить ставку в live_bets:', e);
     }
+    // Realtime-подписка добавит эту запись в ленту сама (и себе, и всем
+    // остальным) — локально ничего не дублируем.
 }
 
-function addLiveBetToTicker(bet) {
+function addLiveBetToTicker(bet, isNew) {
     liveBetsQueue.push(bet);
     if (liveBetsQueue.length > LIVE_BETS_MAX) {
         liveBetsQueue.splice(0, liveBetsQueue.length - LIVE_BETS_MAX);
     }
-    renderLiveBetsTicker();
+    renderLiveBetsTicker(isNew);
 }
 
 function renderLiveBetsTicker() {
@@ -505,14 +559,25 @@ function renderLiveBetsTicker() {
             '</span>' +
         '</span>';
 
+    // Если реальных ставок меньше LIVE_BETS_MIN_LOOP_ITEMS — повторяем их
+    // по кругу до этого числа, чтобы в ленте всегда было достаточно
+    // контента и зацикливание анимации не показывало пустой разрыв.
+    let padded = liveBetsQueue;
+    if (padded.length < LIVE_BETS_MIN_LOOP_ITEMS) {
+        padded = [];
+        while (padded.length < LIVE_BETS_MIN_LOOP_ITEMS) {
+            padded = padded.concat(liveBetsQueue);
+        }
+    }
+
     // Дублируем контент — это позволяет анимации бесшовно "зациклиться"
     // (translateX(-50%) ровно до начала второй, идентичной, копии).
-    const itemsHtml = liveBetsQueue.map(itemHtml).join('');
+    const itemsHtml = padded.map(itemHtml).join('');
     track.innerHTML = itemsHtml + itemsHtml;
 
     // Скорость подстраивается под количество записей, чтобы строка не
     // "неслась" слишком быстро, когда ставок много.
-    const duration = Math.max(18, liveBetsQueue.length * 4);
+    const duration = Math.max(18, padded.length * 4);
     track.style.animationDuration = duration + 's';
     track.classList.add('live-wins-marquee');
 }
