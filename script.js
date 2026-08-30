@@ -472,6 +472,27 @@ const LIVE_BET_WIN_THRESHOLD = 1.3;
 const LIVE_BETS_MIN_LOOP_ITEMS = 8;
 let liveBetsQueue = [];
 
+// Id ставок, которые уже показывались в ленте хотя бы раз — нужно, чтобы
+// анимация появления проигрывалась только для реально новых карточек,
+// а не для всех подряд при каждом перерисовывании ленты.
+let seenLiveWinIds = new Set();
+let lastPinnedLiveWinId = null;
+
+// Инжектим CSS анимации один раз — плавное появление новой карточки
+// (fade + лёгкий сдвиг вверх) вместо мгновенной подмены содержимого.
+(function injectLiveWinsAnimationStyles() {
+    if (document.getElementById('liveWinsAnimStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'liveWinsAnimStyles';
+    style.textContent =
+        '.live-win-card--enter{animation:liveWinCardIn 420ms cubic-bezier(.22,1,.36,1);}' +
+        '@keyframes liveWinCardIn{' +
+        'from{opacity:0;transform:translateY(-10px) scale(.96);}' +
+        'to{opacity:1;transform:translateY(0) scale(1);}' +
+        '}';
+    document.head.appendChild(style);
+})();
+
 async function initLiveBetsFeed() {
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
@@ -626,11 +647,15 @@ function renderLiveBetsTicker() {
         pinned.innerHTML =
             '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
             '<span class="live-wins-empty-pinned">Пока нет</span>';
+        lastPinnedLiveWinId = null;
     } else {
         const topWin = bigWins.reduce(
             (best, b) => (Number(b.win_amount) > Number(best.win_amount) ? b : best),
             bigWins[0]
         );
+        const isNewPin = String(topWin.id) !== String(lastPinnedLiveWinId);
+        lastPinnedLiveWinId = topWin.id;
+
         pinned.innerHTML =
             '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
             '<span class="live-wins-name" title="' + escapeHtml(topWin.name) + '">' + escapeHtml(topWin.name) + '</span>' +
@@ -639,16 +664,25 @@ function renderLiveBetsTicker() {
                 '<span class="live-wins-amount live-wins-win">' + Number(topWin.win_amount).toFixed(2) + ' $</span>' +
                 '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
             '</span>';
+
+        // Перезапускаем анимацию появления только когда реально сменился
+        // лидер (иначе при каждом ре-рендере пиновая карточка бы моргала).
+        if (isNewPin) {
+            pinned.classList.remove('live-win-card--enter');
+            void pinned.offsetWidth; // форсируем reflow, чтобы анимация точно перезапустилась
+            pinned.classList.add('live-win-card--enter');
+        }
     }
 
-    // --- Свайпаемый список последних крупных выигрышей (без анимации) ---
+    // --- Свайпаемый список последних крупных выигрышей (с анимацией появления) ---
     if (bigWins.length === 0) {
         scroll.innerHTML = '<span class="live-wins-empty">Пока нет крупных выигрышей</span>';
         return;
     }
 
     const cardHtml = (bet) => {
-        return '<div class="live-win-card">' +
+        const isNew = !seenLiveWinIds.has(String(bet.id));
+        return '<div class="live-win-card' + (isNew ? ' live-win-card--enter' : '') + '">' +
             '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
             '<span class="live-wins-meta">' +
                 escapeHtml(bet.game || 'Игра') + ' • ' +
@@ -661,7 +695,13 @@ function renderLiveBetsTicker() {
     };
 
     // Самые новые выигрыши — в начало списка.
-    scroll.innerHTML = bigWins.slice().reverse().map(cardHtml).join('');
+    const ordered = bigWins.slice().reverse();
+    scroll.innerHTML = ordered.map(cardHtml).join('');
+
+    // Помечаем все показанные id как уже виденные — при следующем
+    // перерисовывании (например, из-за patchLiveBetLocally) они больше
+    // не будут проигрывать анимацию появления заново.
+    ordered.forEach((bet) => seenLiveWinIds.add(String(bet.id)));
 }
 
 /* =========================
