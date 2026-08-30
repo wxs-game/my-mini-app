@@ -562,16 +562,32 @@ async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
     const multiplier = winAmount / betAmount;
     if (multiplier < LIVE_BET_WIN_THRESHOLD) return;
 
+    const winPatch = { win_amount: roundMoney(winAmount), multiplier: roundMoney(multiplier) };
+
+    // Показываем стрелку "ставка → выигрыш" у автора ставки сразу же, не
+    // дожидаясь ответа сервера — так это гарантированно видно на своём
+    // экране, даже если запись в БД по какой-то причине задержится.
+    patchLiveBetLocally(liveBetId, winPatch);
+
     try {
         const { error } = await supabase
             .from(LIVE_BETS_TABLE)
-            .update({ win_amount: roundMoney(winAmount), multiplier: roundMoney(multiplier) })
+            .update(winPatch)
             .eq('id', liveBetId);
         if (error) console.error('Не удалось обновить выигрыш в live_bets:', error);
     } catch (e) {
         console.error('Не удалось обновить выигрыш в live_bets:', e);
     }
-    // Realtime-подписка (UPDATE) сама обновит запись в ленте у всех игроков.
+    // Остальным игрокам обновление принесёт Realtime-подписка (UPDATE) —
+    // при условии, что запись успешно сохранилась в БД.
+}
+
+// Точечно обновляет уже показанную запись в ленте по id, не трогая остальные
+function patchLiveBetLocally(id, patch) {
+    const idx = liveBetsQueue.findIndex(b => String(b.id) === String(id));
+    if (idx === -1) return;
+    liveBetsQueue[idx] = { ...liveBetsQueue[idx], ...patch };
+    renderLiveBetsTicker();
 }
 
 function addLiveBetToTicker(bet) {
@@ -583,7 +599,10 @@ function addLiveBetToTicker(bet) {
 }
 
 function updateLiveBetInTicker(updatedBet) {
-    const idx = liveBetsQueue.findIndex(b => b.id === updatedBet.id);
+    // Supabase иногда отдаёт bigint id как строку в Realtime-payload (в
+    // отличие от обычного select через REST) — сравниваем как строки,
+    // чтобы обновление всегда находило нужную запись независимо от типа.
+    const idx = liveBetsQueue.findIndex(b => String(b.id) === String(updatedBet.id));
     if (idx === -1) return; // запись уже выпала из последних 10 — не показываем задним числом
     liveBetsQueue[idx] = updatedBet;
     renderLiveBetsTicker();
