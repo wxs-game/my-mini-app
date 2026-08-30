@@ -797,70 +797,78 @@ main {
     color: #ff5c4d;
 }
 
-.live-wins-scroll {
+/* ---------- Лента крупных выигрышей (свайп, без автопрокрутки) ---------- */
+.live-wins-row {
     display: flex;
+    align-items: stretch;
+    gap: 10px;
+}
+
+/* Неподвижная карточка "Выигрыш дня" — максимум за последние 24 часа */
+.live-win-pinned {
+    flex: 0 0 34%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, rgba(255, 176, 32, 0.14), #121212 65%);
+    border: 1px solid #6b4b12;
+    box-shadow: 0 0 14px rgba(255, 176, 32, 0.18);
+    min-width: 0;
+}
+
+.live-win-pinned-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #ffb020;
+    margin-bottom: 1px;
+}
+
+.live-wins-empty-pinned {
+    font-size: 12px;
+    color: #a67b2e;
+    font-weight: 700;
+}
+
+/* Свайпаемый список последних крупных выигрышей — до 10 штук, без анимации */
+.live-wins-scroll {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
     gap: 10px;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
-    padding-bottom: 2px;
 }
 
 .live-wins-scroll::-webkit-scrollbar {
     display: none;
 }
 
-/* ---------- Бегущая строка со ставками игроков (реалтайм, Supabase Broadcast) ---------- */
-.live-wins-marquee-wrap {
-    position: relative;
-    overflow: hidden;
-    border-radius: 18px;
+.live-win-card {
+    flex: 0 0 47%;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 16px;
     background: #121212;
     border: 1px solid #222222;
-    padding: 14px 0;
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    min-width: 0;
 }
 
-.live-wins-track {
-    display: inline-flex;
-    align-items: center;
-    gap: 26px;
-    white-space: nowrap;
-    padding-left: 26px;
-    will-change: transform;
-}
-
-.live-wins-track.live-wins-marquee {
-    animation-name: liveWinsScrollX;
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-}
-
-.live-wins-track.live-wins-paused {
-    animation-play-state: paused;
-}
-
-@keyframes liveWinsScrollX {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-}
-
-/* Каждая запись — блок из двух строк: имя сверху, режим + сумма + иконка снизу */
-.live-wins-item {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 3px;
-    max-width: 160px;
-}
-
+/* Общие стили содержимого карточки (и неподвижной, и свайпаемых) */
 .live-wins-name {
     display: block;
-    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -871,10 +879,9 @@ main {
 }
 
 .live-wins-meta {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 4px;
-    max-width: 160px;
     overflow: hidden;
     white-space: nowrap;
     font-size: 11px;
@@ -906,11 +913,12 @@ main {
 }
 
 .live-wins-empty {
-    display: inline-block;
-    font-size: 13px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
     color: #666666;
     font-weight: 700;
-    padding: 0 18px;
+    padding: 0 6px;
 }
 
 /* ==========================================
