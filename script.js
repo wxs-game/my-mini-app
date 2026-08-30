@@ -430,22 +430,18 @@ async function loadUserData() {
 }
 
 /* =========================
-   ЛЕНТА КРУПНЫХ ВЫИГРЫШЕЙ (LIVE WINS)
-   Ставки хранятся в таблице public.live_bets в Supabase. Выигрышем
-   считается ставка, по которой множитель дошёл хотя бы до
-   LIVE_BET_WIN_THRESHOLD (см. resolveLiveBetWin) — только такие строки
-   попадают в эту ленту.
+   БЕГУЩАЯ СТРОКА СО СТАВКАМИ ИГРОКОВ (LIVE WINS)
+   Ставки хранятся в таблице public.live_bets в Supabase — поэтому лента
+   переживает перезаход в приложение (последние 10 ставок подгружаются
+   при старте) и видна ВСЕМ игрокам: новые строки/обновления в таблице
+   ловятся через Supabase Realtime (postgres_changes на INSERT и UPDATE),
+   так что у каждого открытого приложения лента обновляется вживую,
+   включая чужие ставки и их выигрыши.
 
-   Лента статична (не бегущая строка) и состоит из двух частей:
-   1) неподвижная карточка слева — "Выигрыш дня", самый крупный
-      выигрыш за последние 24 часа;
-   2) свайпаемый список последних до 10 выигрышей (своих и чужих),
-      самый новый — первым. Новый выигрыш подставляется в начало,
-      а самый старый (11-й) выпадает из списка.
-
-   Данные переживают перезаход в приложение (подгружаются при старте)
-   и видны ВСЕМ игрокам через Supabase Realtime (postgres_changes на
-   UPDATE — именно в момент, когда у ставки появляется win_amount).
+   Когда игрок делает ставку — сразу пишется строка с суммой ставки.
+   Если позже он выигрывает с множителем от 1.3x — та же строка
+   обновляется (UPDATE) и в ленте вместо "просто ставки" появляется
+   "ставка → выигрыш". Проигрыши и выигрыши меньше 1.3x строку не меняют.
 
    Требуется один раз выполнить в Supabase (SQL Editor):
 
@@ -469,28 +465,34 @@ async function loadUserData() {
    если ALTER PUBLICATION выше почему-то не сработает автоматически.)
 ========================= */
 const LIVE_BETS_TABLE = 'live_bets';
-const LIVE_WINS_MAX = 10;
-// От какого множителя выигрыш вообще считается "крупным" и попадает в ленту
+const LIVE_BETS_MAX = 10;
+// От какого множителя выигрыш вообще показываем в ленте как "ставка → выигрыш"
 const LIVE_BET_WIN_THRESHOLD = 1.3;
-
-let liveWinsQueue = [];   // последние до 10 крупных выигрышей, самый новый — первый
-let dailyTopWin = null;   // самый крупный выигрыш за последние 24 часа
+// Минимум записей в одном "круге" ленты — если реальных ставок мало,
+// контент дублируется до этого числа, чтобы бегущая строка не обрывалась
+// пустым просветом посреди экрана при зацикливании анимации.
+const LIVE_BETS_MIN_LOOP_ITEMS = 8;
+let liveBetsQueue = [];
 
 async function initLiveBetsFeed() {
-    const scroll = document.getElementById('liveWinsScroll');
-    if (!scroll || !window.supabase) return;
+    const track = document.getElementById('liveWinsTrack');
+    if (!track || !window.supabase) return;
 
-    await Promise.all([loadRecentWins(), loadDailyTopWin()]);
-    renderLiveWinsUI();
+    await loadLiveBetsHistory();
 
     try {
         supabase
             .channel('live_bets_changes')
             .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: LIVE_BETS_TABLE },
+                (payload) => {
+                    if (payload?.new) addLiveBetToTicker(payload.new);
+                }
+            )
+            .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: LIVE_BETS_TABLE },
                 (payload) => {
-                    const row = payload?.new;
-                    if (row && row.win_amount != null) handleNewWin(row);
+                    if (payload?.new) updateLiveBetInTicker(payload.new);
                 }
             )
             .subscribe();
@@ -499,50 +501,32 @@ async function initLiveBetsFeed() {
     }
 }
 
-// Подгружает последние 10 крупных выигрышей (своих и чужих) при открытии приложения
-async function loadRecentWins() {
+// Подгружает последние 10 ставок (своих и чужих) из БД при открытии приложения
+async function loadLiveBetsHistory() {
     try {
         const { data, error } = await supabase
             .from(LIVE_BETS_TABLE)
             .select('id, name, amount, game, win_amount, multiplier, created_at')
-            .not('win_amount', 'is', null)
             .order('created_at', { ascending: false })
-            .limit(LIVE_WINS_MAX);
+            .limit(LIVE_BETS_MAX);
 
         if (error) {
-            console.error('Ошибка загрузки последних выигрышей:', error);
+            console.error('Ошибка загрузки истории live_bets:', error);
+            renderLiveBetsTicker();
             return;
         }
-        liveWinsQueue = data || [];
-    } catch (e) {
-        console.error('Ошибка загрузки последних выигрышей:', e);
-    }
-}
 
-// Подгружает самый крупный выигрыш за последние 24 часа для неподвижной карточки
-async function loadDailyTopWin() {
-    try {
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data, error } = await supabase
-            .from(LIVE_BETS_TABLE)
-            .select('id, name, amount, game, win_amount, multiplier, created_at')
-            .not('win_amount', 'is', null)
-            .gte('created_at', since)
-            .order('win_amount', { ascending: false })
-            .limit(1);
-
-        if (error) {
-            console.error('Ошибка загрузки выигрыша дня:', error);
-            return;
-        }
-        dailyTopWin = (data && data[0]) || null;
+        liveBetsQueue = (data || []).slice().reverse();
+        renderLiveBetsTicker();
     } catch (e) {
-        console.error('Ошибка загрузки выигрыша дня:', e);
+        console.error('Ошибка загрузки истории live_bets:', e);
+        renderLiveBetsTicker();
     }
 }
 
 // Вызывается сразу после успешного списания ставки в каждой игре
-// (Мины, Кирка, Краш, Колесо) — сохраняет ставку в Supabase. Возвращает id
+// (Мины, Кирка, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
+// через Realtime увидят все игроки (включая нас самих). Возвращает id
 // созданной строки — он нужен, чтобы потом дописать в неё выигрыш.
 async function broadcastLiveBet(amount, gameLabel) {
     const tgUser = tg?.initDataUnsafe?.user;
@@ -565,12 +549,14 @@ async function broadcastLiveBet(amount, gameLabel) {
         console.error('Не удалось сохранить ставку в live_bets:', e);
         return null;
     }
+    // Realtime-подписка добавит эту запись в ленту сама (и себе, и всем
+    // остальным) — локально ничего не дублируем.
 }
 
 // Вызывается при выигрыше (Мины/Краш — на "Забрать", Кирка — когда сломалась,
-// Колесо — по итогу спина). Если множитель меньше LIVE_BET_WIN_THRESHOLD или
-// ставка не была сохранена (liveBetId нет) — в ленту выигрышей ничего не идёт.
-async function resolveLiveBetWin(liveBetId, betAmount, winAmount, gameLabel) {
+// Колесо — по итогу спина). Если множитель выигрыша меньше LIVE_BET_WIN_THRESHOLD
+// или ставка не была сохранена (liveBetId нет) — запись в ленте не трогаем.
+async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
     if (!liveBetId || !betAmount || betAmount <= 0 || !winAmount) return;
 
     const multiplier = winAmount / betAmount;
@@ -578,18 +564,10 @@ async function resolveLiveBetWin(liveBetId, betAmount, winAmount, gameLabel) {
 
     const winPatch = { win_amount: roundMoney(winAmount), multiplier: roundMoney(multiplier) };
 
-    // Показываем выигрыш в ленте у автора сразу же, не дожидаясь ответа
-    // сервера — так это гарантированно видно на своём экране, даже если
-    // запись в БД по какой-то причине задержится.
-    const nameFromUI = document.getElementById('username')?.textContent?.trim();
-    handleNewWin({
-        id: liveBetId,
-        name: nameFromUI || 'Игрок',
-        amount: roundMoney(betAmount),
-        game: gameLabel,
-        created_at: new Date().toISOString(),
-        ...winPatch
-    });
+    // Показываем стрелку "ставка → выигрыш" у автора ставки сразу же, не
+    // дожидаясь ответа сервера — так это гарантированно видно на своём
+    // экране, даже если запись в БД по какой-то причине задержится.
+    patchLiveBetLocally(liveBetId, winPatch);
 
     try {
         const { error } = await supabase
@@ -604,69 +582,84 @@ async function resolveLiveBetWin(liveBetId, betAmount, winAmount, gameLabel) {
     // при условии, что запись успешно сохранилась в БД.
 }
 
-// Новый выигрыш встаёт первым в свайпаемый список (старый последний выпадает
-// за пределы 10), и, если он крупнее текущего "выигрыша дня" — становится
-// новой неподвижной карточкой.
-function handleNewWin(row) {
-    const idx = liveWinsQueue.findIndex(w => String(w.id) === String(row.id));
-    if (idx !== -1) {
-        liveWinsQueue[idx] = row; // повторный UPDATE той же ставки — просто обновляем данные
-    } else {
-        liveWinsQueue.unshift(row);
-        if (liveWinsQueue.length > LIVE_WINS_MAX) liveWinsQueue.pop();
-    }
-
-    if (!dailyTopWin || Number(row.win_amount) > Number(dailyTopWin.win_amount)) {
-        dailyTopWin = row;
-    }
-
-    renderLiveWinsUI();
+// Точечно обновляет уже показанную запись в ленте по id, не трогая остальные
+function patchLiveBetLocally(id, patch) {
+    const idx = liveBetsQueue.findIndex(b => String(b.id) === String(id));
+    if (idx === -1) return;
+    liveBetsQueue[idx] = { ...liveBetsQueue[idx], ...patch };
+    renderLiveBetsTicker();
 }
 
-function renderLiveWinsUI() {
-    renderDailyTopWinCard();
-    renderRecentWinsScroll();
+function addLiveBetToTicker(bet) {
+    liveBetsQueue.push(bet);
+    if (liveBetsQueue.length > LIVE_BETS_MAX) {
+        liveBetsQueue.splice(0, liveBetsQueue.length - LIVE_BETS_MAX);
+    }
+    renderLiveBetsTicker();
 }
 
-// Внутренняя разметка карточки: имя (обрезается многоточием, если длинное)
-// и вторая строка "Режим • ставка → выигрыш" + иконка tether в конце
-function liveWinCardInnerHtml(win) {
-    return '<span class="live-wins-name" title="' + escapeHtml(win.name) + '">' + escapeHtml(win.name) + '</span>' +
-        '<span class="live-wins-meta">' +
-            escapeHtml(win.game || 'Игра') + ' • ' +
-            '<span class="live-wins-amount">' + Number(win.amount).toFixed(2) + ' $</span>' +
-            '<span class="live-wins-arrow">→</span>' +
-            '<span class="live-wins-amount live-wins-win">' + Number(win.win_amount).toFixed(2) + ' $</span>' +
-            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+function updateLiveBetInTicker(updatedBet) {
+    // Supabase иногда отдаёт bigint id как строку в Realtime-payload (в
+    // отличие от обычного select через REST) — сравниваем как строки,
+    // чтобы обновление всегда находило нужную запись независимо от типа.
+    const idx = liveBetsQueue.findIndex(b => String(b.id) === String(updatedBet.id));
+    if (idx === -1) return; // запись уже выпала из последних 10 — не показываем задним числом
+    liveBetsQueue[idx] = updatedBet;
+    renderLiveBetsTicker();
+}
+
+function renderLiveBetsTicker() {
+    const track = document.getElementById('liveWinsTrack');
+    if (!track) return;
+
+    if (liveBetsQueue.length === 0) {
+        track.classList.remove('live-wins-marquee');
+        track.style.animationDuration = '';
+        track.innerHTML = '<span class="live-wins-empty">Пока никто не сделал ставку — станьте первым!</span>';
+        return;
+    }
+
+    const itemHtml = (bet) => {
+        const mult = Number(bet.multiplier) || 0;
+        const hasWin = bet.win_amount != null && mult >= LIVE_BET_WIN_THRESHOLD;
+
+        const amountHtml = hasWin
+            ? '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+              '<span class="live-wins-arrow">→</span>' +
+              '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>'
+            : '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>';
+
+        return '<span class="live-wins-item">' +
+            '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
+            '<span class="live-wins-meta">' +
+                escapeHtml(bet.game || 'Игра') + ' • ' +
+                amountHtml +
+                '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+            '</span>' +
         '</span>';
-}
+    };
 
-function renderDailyTopWinCard() {
-    const pinned = document.getElementById('liveWinPinned');
-    if (!pinned) return;
-
-    if (!dailyTopWin) {
-        pinned.innerHTML =
-            '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
-            '<span class="live-wins-empty-pinned">Пока нет</span>';
-        return;
+    // Если реальных ставок меньше LIVE_BETS_MIN_LOOP_ITEMS — повторяем их
+    // по кругу до этого числа, чтобы в ленте всегда было достаточно
+    // контента и зацикливание анимации не показывало пустой разрыв.
+    let padded = liveBetsQueue;
+    if (padded.length < LIVE_BETS_MIN_LOOP_ITEMS) {
+        padded = [];
+        while (padded.length < LIVE_BETS_MIN_LOOP_ITEMS) {
+            padded = padded.concat(liveBetsQueue);
+        }
     }
 
-    pinned.innerHTML = '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' + liveWinCardInnerHtml(dailyTopWin);
-}
+    // Дублируем контент — это позволяет анимации бесшовно "зациклиться"
+    // (translateX(-50%) ровно до начала второй, идентичной, копии).
+    const itemsHtml = padded.map(itemHtml).join('');
+    track.innerHTML = itemsHtml + itemsHtml;
 
-function renderRecentWinsScroll() {
-    const scroll = document.getElementById('liveWinsScroll');
-    if (!scroll) return;
-
-    if (liveWinsQueue.length === 0) {
-        scroll.innerHTML = '<span class="live-wins-empty">Пока нет крупных выигрышей</span>';
-        return;
-    }
-
-    scroll.innerHTML = liveWinsQueue
-        .map(win => '<div class="live-win-card">' + liveWinCardInnerHtml(win) + '</div>')
-        .join('');
+    // Скорость подстраивается под количество записей, чтобы строка не
+    // "неслась" слишком быстро, когда ставок много.
+    const duration = Math.max(18, padded.length * 4);
+    track.style.animationDuration = duration + 's';
+    track.classList.add('live-wins-marquee');
 }
 
 /* =========================
@@ -1204,7 +1197,7 @@ async function cashoutMines() {
 
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
-    resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, winAmount, 'Мины');
+    resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, winAmount);
 
     endMinesGame(true);
     unlockEconomy();
@@ -1794,7 +1787,7 @@ async function cashOutCrash() {
 
     if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
-    resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount, 'Краш');
+    resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
 
     renderCrashUI();
     unlockEconomy();
@@ -2689,7 +2682,7 @@ function runMiningPhysics(pickaxe, bet, liveBetId) {
         }
 
         showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
-        resolveLiveBetWin(liveBetId, bet, totalWin, 'Кирка');
+        resolveLiveBetWin(liveBetId, bet, totalWin);
 
         isPickaxeRunning = false;
         document.getElementById('pickaxeActionBtn').disabled = false;
@@ -3359,7 +3352,7 @@ async function spinWheel() {
 
         // Для рулетки множитель считаем от ОБЩЕЙ ставки (на все цвета сразу),
         // так как именно эта сумма показана в ленте live-ставок.
-        resolveLiveBetWin(liveBetId, totalBet, totalWin, 'Колесо');
+        resolveLiveBetWin(liveBetId, totalBet, totalWin);
 
         if (result) result.classList.add('show');
 
