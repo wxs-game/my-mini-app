@@ -389,21 +389,16 @@ async function loadUserData() {
     }
 
     if (!data) {
-        const { data: newUser, error: createError } = await supabase
-            .from('wxs_game')
-            .upsert([{
-                ...profileData,
-                balance: 100.00,
-                turnover: 0,
-                max_win: 0,
-                total_win: 0,
-                bets_count: 0,
-                wins_count: 0,
-                deposits: 0,
-                withdrawals: 0
-            }], { onConflict: 'telegram_id', ignoreDuplicates: false })
-            .select()
-            .single();
+        // Создание нового игрока (и обновление ника/аватара для существующего)
+        // теперь идёт через защищённую RPC-функцию ensure_player: стартовый
+        // баланс 100.00 $ задаётся на сервере, а не тем, что пришлёт клиент —
+        // прямой INSERT/UPDATE в wxs_game с браузера запрещён на уровне БД.
+        const { data: newUser, error: createError } = await supabase.rpc('ensure_player', {
+            p_telegram_id: profileData.telegram_id,
+            p_username: profileData.username,
+            p_nickname: profileData.nickname,
+            p_photo_url: profileData.photo_url
+        });
 
         if (createError) {
             console.error('Ошибка создания записи в Supabase:', createError);
@@ -412,10 +407,13 @@ async function loadUserData() {
         }
         data = newUser;
     } else {
-        await supabase
-            .from('wxs_game')
-            .update(profileData)
-            .eq('telegram_id', tgUser.id);
+        const { data: updatedUser, error: updateError } = await supabase.rpc('ensure_player', {
+            p_telegram_id: profileData.telegram_id,
+            p_username: profileData.username,
+            p_nickname: profileData.nickname,
+            p_photo_url: profileData.photo_url
+        });
+        if (!updateError && updatedUser) data = updatedUser;
     }
 
     currentTurnover = Number(data.turnover) || 0;
@@ -475,8 +473,9 @@ const LIVE_BETS_MIN_LOOP_ITEMS = 8;
 let liveBetsQueue = [];
 
 async function initLiveBetsFeed() {
-    const track = document.getElementById('liveWinsTrack');
-    if (!track || !window.supabase) return;
+    const pinned = document.getElementById('liveWinPinned');
+    const scroll = document.getElementById('liveWinsScroll');
+    if (!pinned || !scroll || !window.supabase) return;
 
     await loadLiveBetsHistory();
 
@@ -609,57 +608,60 @@ function updateLiveBetInTicker(updatedBet) {
 }
 
 function renderLiveBetsTicker() {
-    const track = document.getElementById('liveWinsTrack');
-    if (!track) return;
+    const pinned = document.getElementById('liveWinPinned');
+    const scroll = document.getElementById('liveWinsScroll');
+    if (!pinned || !scroll) return;
 
-    if (liveBetsQueue.length === 0) {
-        track.classList.remove('live-wins-marquee');
-        track.style.animationDuration = '';
-        track.innerHTML = '<span class="live-wins-empty">Пока никто не сделал ставку — станьте первым!</span>';
+    // В этой секции (в отличие от старой бегущей строки) показываем не
+    // все подряд ставки, а только те, что доросли до выигрыша от
+    // LIVE_BET_WIN_THRESHOLD — именно так подписан пустой стейт
+    // ("Пока нет крупных выигрышей").
+    const bigWins = liveBetsQueue.filter((bet) => {
+        const mult = Number(bet.multiplier) || 0;
+        return bet.win_amount != null && mult >= LIVE_BET_WIN_THRESHOLD;
+    });
+
+    // --- Закреплённая карточка "Выигрыш дня" — крупнейший из загруженных ---
+    if (bigWins.length === 0) {
+        pinned.innerHTML =
+            '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
+            '<span class="live-wins-empty-pinned">Пока нет</span>';
+    } else {
+        const topWin = bigWins.reduce(
+            (best, b) => (Number(b.win_amount) > Number(best.win_amount) ? b : best),
+            bigWins[0]
+        );
+        pinned.innerHTML =
+            '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
+            '<span class="live-wins-name" title="' + escapeHtml(topWin.name) + '">' + escapeHtml(topWin.name) + '</span>' +
+            '<span class="live-wins-meta">' +
+                escapeHtml(topWin.game || 'Игра') + ' • ' +
+                '<span class="live-wins-amount live-wins-win">' + Number(topWin.win_amount).toFixed(2) + ' $</span>' +
+                '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+            '</span>';
+    }
+
+    // --- Свайпаемый список последних крупных выигрышей (без анимации) ---
+    if (bigWins.length === 0) {
+        scroll.innerHTML = '<span class="live-wins-empty">Пока нет крупных выигрышей</span>';
         return;
     }
 
-    const itemHtml = (bet) => {
-        const mult = Number(bet.multiplier) || 0;
-        const hasWin = bet.win_amount != null && mult >= LIVE_BET_WIN_THRESHOLD;
-
-        const amountHtml = hasWin
-            ? '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-              '<span class="live-wins-arrow">→</span>' +
-              '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>'
-            : '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>';
-
-        return '<span class="live-wins-item">' +
+    const cardHtml = (bet) => {
+        return '<div class="live-win-card">' +
             '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
             '<span class="live-wins-meta">' +
                 escapeHtml(bet.game || 'Игра') + ' • ' +
-                amountHtml +
+                '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+                '<span class="live-wins-arrow">→</span>' +
+                '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
                 '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
             '</span>' +
-        '</span>';
+        '</div>';
     };
 
-    // Если реальных ставок меньше LIVE_BETS_MIN_LOOP_ITEMS — повторяем их
-    // по кругу до этого числа, чтобы в ленте всегда было достаточно
-    // контента и зацикливание анимации не показывало пустой разрыв.
-    let padded = liveBetsQueue;
-    if (padded.length < LIVE_BETS_MIN_LOOP_ITEMS) {
-        padded = [];
-        while (padded.length < LIVE_BETS_MIN_LOOP_ITEMS) {
-            padded = padded.concat(liveBetsQueue);
-        }
-    }
-
-    // Дублируем контент — это позволяет анимации бесшовно "зациклиться"
-    // (translateX(-50%) ровно до начала второй, идентичной, копии).
-    const itemsHtml = padded.map(itemHtml).join('');
-    track.innerHTML = itemsHtml + itemsHtml;
-
-    // Скорость подстраивается под количество записей, чтобы строка не
-    // "неслась" слишком быстро, когда ставок много.
-    const duration = Math.max(18, padded.length * 4);
-    track.style.animationDuration = duration + 's';
-    track.classList.add('live-wins-marquee');
+    // Самые новые выигрыши — в начало списка.
+    scroll.innerHTML = bigWins.slice().reverse().map(cardHtml).join('');
 }
 
 /* =========================
@@ -781,55 +783,108 @@ function restoreBalanceState(snap) {
 
 let saveQueue = Promise.resolve();
 
-async function saveUserData() {
+/* =========================
+   ЗАЩИЩЁННЫЕ ДЕНЕЖНЫЕ ОПЕРАЦИИ (через Supabase RPC)
+   Баланс больше НИКОГДА не отправляется с клиента готовым числом —
+   раньше saveUserData() делал обычный .update({ balance: currentBalance,
+   ... }), а currentBalance можно было переписать прямо в консоли
+   браузера перед вызовом. Теперь клиент может только ПОПРОСИТЬ
+   сервер списать ставку / начислить выигрыш / списать на вывод —
+   place_bet/resolve_win/request_withdrawal сами атомарно проверяют
+   баланс и сами меняют цифру в Supabase (см. supabase_security_v2.sql).
+   Прямой UPDATE в wxs_game с клиентским ключом запрещён на уровне БД,
+   поэтому даже полностью переписанный script.js не даст списать
+   больше, чем реально есть на счету, или начислить себе выигрыш
+   без сервера.
+========================= */
+
+async function placeBetServer(amount, gameLabel) {
     const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) return true;
+    if (!tgUser) return { ok: true, balance: currentBalance }; // запуск вне Telegram — локальный демо-режим
 
-    currentBalance = roundMoney(currentBalance);
-    currentTurnover = roundMoney(currentTurnover);
-    currentTotalWin = roundMoney(currentTotalWin);
-    currentDeposits = roundMoney(currentDeposits);
-    currentWithdrawals = roundMoney(currentWithdrawals);
+    const runCall = () => supabase.rpc('place_bet', {
+        p_telegram_id: tgUser.id,
+        p_amount: amount,
+        p_game: gameLabel
+    });
 
-    const payload = {
-        balance: currentBalance,
-        turnover: currentTurnover,
-        max_win: currentMaxWin,
-        total_win: currentTotalWin,
-        bets_count: currentBetsCount,
-        wins_count: currentWinsCount,
-        deposits: currentDeposits,
-        withdrawals: currentWithdrawals
-    };
-
-    const runUpdate = () => supabase
-        .from('wxs_game')
-        .update(payload)
-        .eq('telegram_id', tgUser.id);
-
-    const task = saveQueue.then(runUpdate, runUpdate);
+    const task = saveQueue.then(runCall, runCall);
     saveQueue = task.then(() => {}, () => {});
 
-    let error;
     try {
-        ({ error } = await task);
+        const { data, error } = await task;
+        if (error) {
+            console.error('place_bet отклонён сервером:', error);
+            return { ok: false, error };
+        }
+        return { ok: true, balance: Number(data) };
     } catch (e) {
-        error = e;
+        console.error('place_bet: сетевая ошибка:', e);
+        return { ok: false, error: e };
     }
-
-    if (error) {
-        console.error('Ошибка сохранения в Supabase:', error);
-        return false;
-    }
-    return true;
 }
 
-async function saveUserDataWithRetry(attempts = 2) {
-    for (let i = 0; i < attempts; i++) {
-        const ok = await saveUserData();
-        if (ok) return true;
+async function resolveWinServer(winAmount, multiplier) {
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) return { ok: true, balance: currentBalance };
+
+    const runCall = () => supabase.rpc('resolve_win', {
+        p_telegram_id: tgUser.id,
+        p_win_amount: winAmount,
+        p_multiplier: multiplier ?? null
+    });
+
+    const task = saveQueue.then(runCall, runCall);
+    saveQueue = task.then(() => {}, () => {});
+
+    try {
+        const { data, error } = await task;
+        if (error) {
+            console.error('resolve_win отклонён сервером:', error);
+            return { ok: false, error };
+        }
+        return { ok: true, balance: Number(data) };
+    } catch (e) {
+        console.error('resolve_win: сетевая ошибка:', e);
+        return { ok: false, error: e };
     }
-    return false;
+}
+
+// Ретраит начисление выигрыша (как раньше saveUserDataWithRetry) —
+// используется там, где деньги уже "выиграны" и повторная попытка
+// важнее, чем быстрый отказ.
+async function resolveWinServerWithRetry(winAmount, multiplier, attempts = 2) {
+    let last = { ok: false };
+    for (let i = 0; i < attempts; i++) {
+        last = await resolveWinServer(winAmount, multiplier);
+        if (last.ok) return last;
+    }
+    return last;
+}
+
+async function requestWithdrawalServer(amount) {
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) return { ok: true, balance: currentBalance };
+
+    const runCall = () => supabase.rpc('request_withdrawal', {
+        p_telegram_id: tgUser.id,
+        p_amount: amount
+    });
+
+    const task = saveQueue.then(runCall, runCall);
+    saveQueue = task.then(() => {}, () => {});
+
+    try {
+        const { data, error } = await task;
+        if (error) {
+            console.error('request_withdrawal отклонён сервером:', error);
+            return { ok: false, error };
+        }
+        return { ok: true, balance: Number(data) };
+    } catch (e) {
+        console.error('request_withdrawal: сетевая ошибка:', e);
+        return { ok: false, error: e };
+    }
 }
 
 /* =========================
@@ -1070,19 +1125,22 @@ async function startMinesGame() {
     minesGame.isProcessing = true;
     const snapshot = snapshotBalanceState();
 
-    currentBalance = roundMoney(currentBalance - bet);
+    // Списание считает и проверяет сервер (place_bet) — локально только
+    // сразу показываем уменьшенный баланс, чтобы UI не подвисал.
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
-    setUIBalance(currentBalance);
+    setUIBalance(roundMoney(currentBalance - bet));
 
-    const debited = await saveUserData();
-    if (!debited) {
+    const debitResult = await placeBetServer(bet, 'Мины');
+    if (!debitResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         minesGame.isProcessing = false;
         unlockEconomy();
         return;
     }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
 
     minesGame.active = true;
     minesGame.bet = bet;
@@ -1179,21 +1237,22 @@ async function cashoutMines() {
     const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
     const winAmount = roundMoney(minesGame.bet * mult);
 
-    currentBalance = roundMoney(currentBalance + winAmount);
     currentTotalWin = roundMoney(currentTotalWin + winAmount);
     currentWinsCount++;
     if (mult > currentMaxWin) currentMaxWin = mult;
 
-    setUIBalance(currentBalance);
-    const credited = await saveUserDataWithRetry();
+    setUIBalance(roundMoney(currentBalance + winAmount));
+    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
 
-    if (!credited) {
+    if (!creditResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
         minesGame.isProcessing = false;
         unlockEconomy();
         return;
     }
+    currentBalance = creditResult.balance;
+    setUIBalance(currentBalance);
 
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
@@ -1732,19 +1791,20 @@ async function placeCrashBet() {
     crashGame.isProcessing = true;
     const snapshot = snapshotBalanceState();
 
-    currentBalance = roundMoney(currentBalance - bet);
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
-    setUIBalance(currentBalance);
+    setUIBalance(roundMoney(currentBalance - bet));
 
-    const debited = await saveUserData();
-    if (!debited) {
+    const debitResult = await placeBetServer(bet, 'Краш');
+    if (!debitResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         crashGame.isProcessing = false;
         unlockEconomy();
         return;
     }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
 
     crashGame.bet = bet;
     crashGame.betPlaced = true;
@@ -1766,21 +1826,22 @@ async function cashOutCrash() {
     const mult = crashGame.currentMult;
     const winAmount = roundMoney(crashGame.bet * mult);
 
-    currentBalance = roundMoney(currentBalance + winAmount);
     currentTotalWin = roundMoney(currentTotalWin + winAmount);
     currentWinsCount++;
     if (mult > currentMaxWin) currentMaxWin = mult;
 
-    setUIBalance(currentBalance);
-    const credited = await saveUserDataWithRetry();
+    setUIBalance(roundMoney(currentBalance + winAmount));
+    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
 
-    if (!credited) {
+    if (!creditResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
         crashGame.isProcessing = false;
         unlockEconomy();
         return;
     }
+    currentBalance = creditResult.balance;
+    setUIBalance(currentBalance);
 
     crashGame.cashedOut = true;
     crashGame.isProcessing = false;
@@ -2593,15 +2654,14 @@ async function startPickaxeGame() {
     if (speedBtn) speedBtn.disabled = false;
     if (skipBtn) skipBtn.disabled = false;
 
-    // Списание баланса
+    // Списание баланса — считает и проверяет сервер (place_bet)
     const snapshot = snapshotBalanceState();
-    currentBalance = roundMoney(currentBalance - bet);
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
-    setUIBalance(currentBalance);
+    setUIBalance(roundMoney(currentBalance - bet));
 
-    const debited = await saveUserData();
-    if (!debited) {
+    const debitResult = await placeBetServer(bet, 'Кирка');
+    if (!debitResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Ошибка сети при списании.");
         isPickaxeRunning = false;
@@ -2609,6 +2669,8 @@ async function startPickaxeGame() {
         unlockEconomy();
         return;
     }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
 
     resetMineWorld();
     const liveBetId = await broadcastLiveBet(bet, 'Кирка');
@@ -2673,16 +2735,29 @@ function runMiningPhysics(pickaxe, bet, liveBetId) {
         // множитель даёт, например, 1.2347x от ставки, дробные центы свыше двух
         // знаков отбрасываются, а не округляются вверх.
         const totalWin = roundMoneyDown(bet * accumulatedMultiplier);
+        let creditFailed = false;
         if (totalWin > 0) {
-            currentBalance = roundMoney(currentBalance + totalWin);
+            const winSnapshot = snapshotBalanceState();
             currentTotalWin = roundMoney(currentTotalWin + totalWin);
             currentWinsCount++;
-            setUIBalance(currentBalance);
-            await saveUserDataWithRetry();
+            setUIBalance(roundMoney(currentBalance + totalWin));
+
+            const creditResult = await resolveWinServerWithRetry(totalWin, accumulatedMultiplier);
+            if (!creditResult.ok) {
+                restoreBalanceState(winSnapshot);
+                creditFailed = true;
+            } else {
+                currentBalance = creditResult.balance;
+                setUIBalance(currentBalance);
+            }
         }
 
-        showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
-        resolveLiveBetWin(liveBetId, bet, totalWin);
+        if (creditFailed) {
+            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку, если баланс не обновится.");
+        } else {
+            showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
+            resolveLiveBetWin(liveBetId, bet, totalWin);
+        }
 
         isPickaxeRunning = false;
         document.getElementById('pickaxeActionBtn').disabled = false;
@@ -3265,13 +3340,12 @@ async function spinWheel() {
     const betsAtSpinTime = { ...colorBets };
     const snapshot = snapshotBalanceState();
 
-    currentBalance = roundMoney(currentBalance - totalBet);
     currentTurnover = roundMoney(currentTurnover + totalBet);
     currentBetsCount++;
-    setUIBalance(currentBalance);
+    setUIBalance(roundMoney(currentBalance - totalBet));
 
-    const debited = await saveUserData();
-    if (!debited) {
+    const debitResult = await placeBetServer(totalBet, 'Колесо');
+    if (!debitResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
         button.disabled = false;
@@ -3279,6 +3353,8 @@ async function spinWheel() {
         unlockEconomy();
         return;
     }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
 
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
@@ -3326,17 +3402,19 @@ async function spinWheel() {
             totalWin = roundMoney(betOnWonColor * multiplier);
             const winSnapshot = snapshotBalanceState();
 
-            currentBalance = roundMoney(currentBalance + totalWin);
             currentTotalWin = roundMoney(currentTotalWin + totalWin);
             currentWinsCount++;
             if (multiplier > currentMaxWin) currentMaxWin = multiplier;
-            setUIBalance(currentBalance);
+            setUIBalance(roundMoney(currentBalance + totalWin));
 
-            const credited = await saveUserDataWithRetry();
-            if (!credited) {
+            const creditResult = await resolveWinServerWithRetry(totalWin, multiplier);
+            if (!creditResult.ok) {
                 restoreBalanceState(winSnapshot);
                 totalWin = 0;
                 showMessage("Ошибка сети: выигрыш не был зачислен. Обратитесь в поддержку и укажите время спина.");
+            } else {
+                currentBalance = creditResult.balance;
+                setUIBalance(currentBalance);
             }
         }
 
@@ -3577,17 +3655,18 @@ async function demoBalanceAction() {
 
     const snapshot = snapshotBalanceState();
 
-    currentBalance = roundMoney(currentBalance - amount);
     currentWithdrawals = roundMoney(currentWithdrawals + amount);
-    setUIBalance(currentBalance);
+    setUIBalance(roundMoney(currentBalance - amount));
 
-    const ok = await saveUserData();
-    if (!ok) {
+    const debitResult = await requestWithdrawalServer(amount);
+    if (!debitResult.ok) {
         restoreBalanceState(snapshot);
         showMessage("Не удалось создать заявку на вывод. Попробуйте снова.");
         unlockEconomy();
         return;
     }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
 
     transactions.unshift({
         type: 'withdraw',
@@ -3612,8 +3691,14 @@ function claimBonus() {
 ========================= */
 
 // Реальных промокодов пока нет — единственное, что здесь распознаётся,
-// это секретный служебный код, открывающий админ-панель.
-const ADMIN_SECRET_CODE = 'AKIM2308$$$';
+// это служебная фраза, открывающая ПАНЕЛЬ (только UI). Настоящая проверка
+// прав теперь идёт на сервере (is_wxs_admin по telegram_id вызывающего,
+// см. supabase_security_v2.sql) — эта строка больше НЕ является секретом:
+// даже если кто-то найдёт её в исходнике и откроет панель, загрузить чужие
+// балансы или списать/начислить деньги он не сможет, если его telegram_id
+// не добавлен в таблицу wxs_admins. Раньше было наоборот: единственной
+// защитой был этот пароль, лежавший открытым текстом прямо в script.js.
+const ADMIN_PANEL_TRIGGER_PHRASE = 'AKIM2308$$$';
 
 // Кнопка "Применить" активируется (ярко-жёлтая) только когда введено
 // не менее 5 символов, иначе остаётся неактивной.
@@ -3634,7 +3719,7 @@ function applyPromoCode() {
         return;
     }
 
-    if (value === ADMIN_SECRET_CODE) {
+    if (value === ADMIN_PANEL_TRIGGER_PHRASE) {
         input.value = '';
         updatePromoButtonState();
         openAdminPanel();
@@ -3649,22 +3734,31 @@ function openAdminPanel() {
     loadAdminPlayers();
 }
 
-// Тянет всех игроков из Supabase (таблица wxs_game) и рисует карточки
-// с балансом, датой регистрации и кнопками начисления/списания.
+// Тянет всех игроков через защищённую RPC admin_list_players — сервер
+// сам проверяет по wxs_admins, что вызывающий действительно админ, и
+// только тогда отдаёт список. Раньше это был обычный select() по всей
+// таблице wxs_game: любой человек мог открыть консоль браузера, вызвать
+// loadAdminPlayers() напрямую (функция всё равно была в window для
+// кнопок) и увидеть баланс/имя каждого игрока, вообще не зная промокода.
 async function loadAdminPlayers() {
     const list = document.getElementById('adminPlayersList');
     if (!list) return;
 
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) {
+        list.innerHTML = '<p class="wheel-subtitle">Доступно только внутри Telegram.</p>';
+        return;
+    }
+
     list.innerHTML = '<p class="wheel-subtitle">Загрузка…</p>';
 
-    const { data, error } = await supabase
-        .from('wxs_game')
-        .select('*')
-        .order('id', { ascending: false });
+    const { data, error } = await supabase.rpc('admin_list_players', {
+        caller_telegram_id: tgUser.id
+    });
 
     if (error) {
         console.error('Ошибка загрузки списка игроков:', error);
-        list.innerHTML = '<p class="wheel-subtitle">Не удалось загрузить список игроков.</p>';
+        list.innerHTML = '<p class="wheel-subtitle">Нет доступа.</p>';
         return;
     }
 
@@ -3713,16 +3807,15 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-// Начисляет (sign = 1) или списывает (sign = -1) сумму с баланса конкретного
-// игрока по его telegram_id. Пишет напрямую в Supabase.
 // Начисляет (sign = 1) или списывает (sign = -1) сумму с баланса игрока.
-// ВАЖНО: баланс здесь меняется НЕ прямым UPDATE из браузера (это заблокировано
-// на уровне Supabase — см. supabase_security.sql), а вызовом защищённой
-// SQL-функции admin_adjust_balance(...), которая сама проверяет код
-// администратора внутри базы данных. Так что даже если кто-то скопирует
-// этот JS-файл целиком и попробует дёрнуть Supabase напрямую — без верного
-// кода изменить баланс не получится, потому что проверка идёт на сервере,
-// а не здесь.
+// ВАЖНО: баланс меняется НЕ прямым UPDATE из браузера (это запрещено на
+// уровне грантов Supabase — см. supabase_security_v2.sql), а вызовом
+// защищённой SQL-функции admin_adjust_balance(...), которая сама на
+// сервере проверяет, что caller_telegram_id (свой собственный Telegram
+// ID вызывающего) есть в таблице wxs_admins. Раньше вместо этой проверки
+// был статический пароль ADMIN_SECRET_CODE, лежавший открытым текстом
+// прямо в этом файле — теперь его здесь вообще нет, и подделать доступ
+// нельзя, просто скопировав script.js.
 async function adminAdjustBalance(telegramId, sign) {
     const input = document.getElementById('adminAmount_' + telegramId);
     if (!input) return;
@@ -3733,10 +3826,16 @@ async function adminAdjustBalance(telegramId, sign) {
         return;
     }
 
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) {
+        showMessage('Доступно только внутри Telegram');
+        return;
+    }
+
     const { data: newBalance, error } = await supabase.rpc('admin_adjust_balance', {
+        caller_telegram_id: tgUser.id,
         target_telegram_id: telegramId,
-        delta: sign * amount,
-        admin_code: ADMIN_SECRET_CODE
+        delta: sign * amount
     });
 
     if (error) {
@@ -3951,6 +4050,10 @@ window.blockInvalidBetKeys = blockInvalidBetKeys;
 window.applyPromoCode = applyPromoCode;
 window.loadAdminPlayers = loadAdminPlayers;
 window.adminAdjustBalance = adminAdjustBalance;
+window.openCrashFairnessModal = openCrashFairnessModal;
+window.closeCrashFairnessModal = closeCrashFairnessModal;
+window.copyCrashHash = copyCrashHash;
+window.copyCrashKey = copyCrashKey;
 
 
 
