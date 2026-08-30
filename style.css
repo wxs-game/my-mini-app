@@ -884,8 +884,17 @@ main {
 }
 
 .live-wins-meta .live-wins-amount {
-    color: #2ecc71;
+    color: #cccccc;
     font-weight: 900;
+}
+
+.live-wins-meta .live-wins-amount.live-wins-win {
+    color: #2ecc71;
+}
+
+.live-wins-arrow {
+    color: #555555;
+    font-weight: 700;
 }
 
 .live-wins-item-icon {
