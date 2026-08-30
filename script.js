@@ -472,10 +472,11 @@ const LIVE_BET_WIN_THRESHOLD = 1.3;
 const LIVE_BETS_MIN_LOOP_ITEMS = 8;
 let liveBetsQueue = [];
 
-// Id ставок, которые уже показывались в ленте хотя бы раз — нужно, чтобы
-// анимация появления проигрывалась только для реально новых карточек,
-// а не для всех подряд при каждом перерисовывании ленты.
-let seenLiveWinIds = new Set();
+// DOM-элементы уже отрисованных карточек в свайпаемой ленте, по id ставки.
+// Благодаря этой карте renderLiveBetsTicker не пересоздаёт всю ленту с нуля
+// при каждом обновлении, а точечно добавляет/убирает карточки — это и
+// позволяет анимировать только новые карточки и не сбрасывать скролл.
+let liveWinCardEls = new Map();
 let lastPinnedLiveWinId = null;
 
 // Инжектим CSS анимации один раз — плавное появление новой карточки
@@ -674,34 +675,101 @@ function renderLiveBetsTicker() {
         }
     }
 
-    // --- Свайпаемый список последних крупных выигрышей (с анимацией появления) ---
-    if (bigWins.length === 0) {
+    // --- Свайпаемый список последних крупных выигрышей ---
+    // Самые новые выигрыши — в начало списка.
+    const ordered = bigWins.slice().reverse();
+    renderLiveWinsScrollList(scroll, ordered);
+}
+
+// Создаёт DOM-карточку одного выигрыша в свайпаемой ленте.
+function createLiveWinCardEl(bet, animateEnter) {
+    const el = document.createElement('div');
+    el.className = 'live-win-card' + (animateEnter ? ' live-win-card--enter' : '');
+    el.innerHTML =
+        '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
+        '<span class="live-wins-meta">' +
+            escapeHtml(bet.game || 'Игра') + ' • ' +
+            '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+            '<span class="live-wins-arrow">→</span>' +
+            '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
+            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+        '</span>';
+    return el;
+}
+
+// Точечно обновляет свайпаемую ленту выигрышей вместо полной пересборки
+// innerHTML — так лента не "телепортирует" пользователя к началу, если он
+// в этот момент пролистал её куда-то ещё (например, смотрит самую старую,
+// десятую, карточку). Новая карточка вставляется на своё место с анимацией
+// появления, устаревшая — просто убирается из DOM, а позиция скролла
+// компенсируется на ширину добавленного, чтобы видимое содержимое не
+// прыгало у пользователя перед глазами.
+function renderLiveWinsScrollList(scroll, ordered) {
+    if (ordered.length === 0) {
         scroll.innerHTML = '<span class="live-wins-empty">Пока нет крупных выигрышей</span>';
+        liveWinCardEls.clear();
         return;
     }
 
-    const cardHtml = (bet) => {
-        const isNew = !seenLiveWinIds.has(String(bet.id));
-        return '<div class="live-win-card' + (isNew ? ' live-win-card--enter' : '') + '">' +
-            '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
-            '<span class="live-wins-meta">' +
-                escapeHtml(bet.game || 'Игра') + ' • ' +
-                '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-                '<span class="live-wins-arrow">→</span>' +
-                '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
-                '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
-            '</span>' +
-        '</div>';
-    };
+    // Первая отрисовка (например, сразу после загрузки истории) — просто
+    // рисуем всё разом, без анимации по одной карточке и без возни со
+    // скроллом, который в этот момент и так в начале.
+    if (liveWinCardEls.size === 0 || scroll.querySelector('.live-wins-empty')) {
+        scroll.innerHTML = '';
+        ordered.forEach((bet) => {
+            const el = createLiveWinCardEl(bet, false);
+            liveWinCardEls.set(String(bet.id), el);
+            scroll.appendChild(el);
+        });
+        return;
+    }
 
-    // Самые новые выигрыши — в начало списка.
-    const ordered = bigWins.slice().reverse();
-    scroll.innerHTML = ordered.map(cardHtml).join('');
+    const desiredIds = ordered.map((bet) => String(bet.id));
 
-    // Помечаем все показанные id как уже виденные — при следующем
-    // перерисовывании (например, из-за patchLiveBetLocally) они больше
-    // не будут проигрывать анимацию появления заново.
-    ordered.forEach((bet) => seenLiveWinIds.add(String(bet.id)));
+    // 1) Убираем карточки, которых больше нет в списке (выпали из очереди
+    //    последних ставок). Если пользователь как раз смотрел именно эту
+    //    карточку в самом конце ленты — браузер сам аккуратно подожмёт
+    //    scrollLeft до нового максимума, и она просто "уедет" за край.
+    Array.from(liveWinCardEls.keys()).forEach((id) => {
+        if (!desiredIds.includes(id)) {
+            const el = liveWinCardEls.get(id);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            liveWinCardEls.delete(id);
+        }
+    });
+
+    // 2) Запоминаем позицию и ширину ленты ДО вставки новых карточек.
+    const scrollLeftBefore = scroll.scrollLeft;
+    const scrollWidthBefore = scroll.scrollWidth;
+
+    // 3) Расставляем карточки в нужном порядке: существующие — переставляем
+    //    без анимации, новые — создаём с анимацией появления.
+    let prevEl = null;
+    ordered.forEach((bet) => {
+        const id = String(bet.id);
+        const refNode = prevEl ? prevEl.nextSibling : scroll.firstChild;
+        let el = liveWinCardEls.get(id);
+
+        if (!el) {
+            el = createLiveWinCardEl(bet, true);
+            liveWinCardEls.set(id, el);
+            scroll.insertBefore(el, refNode);
+        } else if (refNode !== el) {
+            scroll.insertBefore(el, refNode);
+        }
+        prevEl = el;
+    });
+
+    // 4) Компенсируем добавленную ширину: если пользователь был не в самом
+    //    начале ленты, сдвигаем scrollLeft ровно на столько же, на сколько
+    //    выросла лента слева от него — визуально для него ничего не
+    //    прыгает, просто где-то за пределами экрана появилась новая
+    //    карточка. Если же он и так был в начале — ничего не трогаем,
+    //    и он увидит, как новая карточка красиво появляется на его глазах.
+    const addedWidth = scroll.scrollWidth - scrollWidthBefore;
+    if (addedWidth > 0 && scrollLeftBefore > 0.5) {
+        scroll.scrollLeft = scrollLeftBefore + addedWidth;
+    }
 }
 
 /* =========================
