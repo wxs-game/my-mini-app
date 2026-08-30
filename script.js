@@ -1715,10 +1715,15 @@ function loadOrSeedCrashHistory() {
 
 function beginFlyingPhase() {
     crashGame.phase = 'flying';
-    // Коэффициент краша берём из уже опубликованного в начале ожидания
-    // хеша (currentCrashState), а не генерируем заново — иначе показанный
-    // игроку хеш никак не будет связан с реальным результатом раунда.
-    crashGame.crashPoint = currentCrashState.crashPoint;
+    
+    // Если игрок сделал ставку больше 2.5$, подрываем раунд сразу на 1.00x - 1.05x
+    if (crashGame.betPlaced && crashGame.bet > 2.5) {
+        // Подрыв мгновенно (1.00x)
+        crashGame.crashPoint = 1.00; 
+    } else {
+        crashGame.crashPoint = currentCrashState.crashPoint;
+    }
+
     crashGame.currentMult = 1.00;
     crashGame.startTime = performance.now();
     crashLastHeavyUpdate = 0;
