@@ -479,14 +479,23 @@ let liveBetsQueue = [];
 let liveWinCardEls = new Map();
 let lastPinnedLiveWinId = null;
 
+// Задержка между появлением карточек при самой первой отрисовке ленты
+// (когда пользователь только что открыл/вернулся в приложение) — чтобы
+// карточки "подтягивались" одна за другой, а не выскакивали все разом.
+const LIVE_WINS_STAGGER_MS = 90;
+
 // Инжектим CSS анимации один раз — плавное появление новой карточки
 // (fade + лёгкий сдвиг вверх) вместо мгновенной подмены содержимого.
+// animation-fill-mode: backwards держит карточку в "исходном" (невидимом)
+// состоянии на всё время animation-delay, иначе при пакетном появлении
+// (see LIVE_WINS_STAGGER_MS) все карточки на миг мелькнули бы полностью
+// видимыми ещё до начала своей анимации.
 (function injectLiveWinsAnimationStyles() {
     if (document.getElementById('liveWinsAnimStyles')) return;
     const style = document.createElement('style');
     style.id = 'liveWinsAnimStyles';
     style.textContent =
-        '.live-win-card--enter{animation:liveWinCardIn 420ms cubic-bezier(.22,1,.36,1);}' +
+        '.live-win-card--enter{animation:liveWinCardIn 420ms cubic-bezier(.22,1,.36,1) backwards;}' +
         '@keyframes liveWinCardIn{' +
         'from{opacity:0;transform:translateY(-10px) scale(.96);}' +
         'to{opacity:1;transform:translateY(0) scale(1);}' +
@@ -711,13 +720,14 @@ function renderLiveWinsScrollList(scroll, ordered) {
         return;
     }
 
-    // Первая отрисовка (например, сразу после загрузки истории) — просто
-    // рисуем всё разом, без анимации по одной карточке и без возни со
-    // скроллом, который в этот момент и так в начале.
+    // Первая отрисовка (например, пользователь только что открыл или
+    // вернулся в приложение) — рисуем карточки с анимацией появления
+    // по очереди, с нарастающей задержкой, а не все разом.
     if (liveWinCardEls.size === 0 || scroll.querySelector('.live-wins-empty')) {
         scroll.innerHTML = '';
-        ordered.forEach((bet) => {
-            const el = createLiveWinCardEl(bet, false);
+        ordered.forEach((bet, idx) => {
+            const el = createLiveWinCardEl(bet, true);
+            el.style.animationDelay = (idx * LIVE_WINS_STAGGER_MS) + 'ms';
             liveWinCardEls.set(String(bet.id), el);
             scroll.appendChild(el);
         });
