@@ -251,6 +251,12 @@
                 <button class="game" onclick="openCrash()">
                     <img class="game-image crash-img" src="images/rocket_game.png" alt="Краш" draggable="false">
                 </button>
+                <button class="game" onclick="openIceArena()">
+                    <div class="game-image ice-arena-tile">
+                        <span class="ice-arena-tile-icon">🧊</span>
+                        <span class="ice-arena-tile-label">Айс Арена</span>
+                    </div>
+                </button>
             </div>
         </section>
     </main>
@@ -612,6 +618,77 @@
                 <small id="txCount">3 операции</small>
             </div>
             <div class="history-list" id="historyList"></div>
+        </section>
+    </main>
+
+    <!-- ==================== АЙС АРЕНА ==================== -->
+    <main id="iceArenaPage" class="ice-arena-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="leaveIceArena()"></button>
+            <h1>Айс Арена</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card ice-arena-card">
+            <div class="ice-arena-topbar">
+                <div class="ice-arena-info-box">
+                    <small>БАНК</small>
+                    <strong id="iceBankValue">0.00 $</strong>
+                </div>
+                <div class="ice-arena-info-box">
+                    <small>ИГРОКОВ</small>
+                    <strong id="icePlayersCount">0</strong>
+                </div>
+                <div class="ice-arena-info-box ice-arena-timer-box" id="iceTimerBox">
+                    <small>СТАРТ ЧЕРЕЗ</small>
+                    <strong id="iceCountdownValue">—</strong>
+                </div>
+            </div>
+
+            <div class="ice-arena-field-wrap" id="iceFieldWrap">
+                <div class="ice-arena-field" id="iceField">
+                    <div class="ice-arena-empty-state" id="iceEmptyState">
+                        ❄️ Сделайте ставку,<br>чтобы начать раунд
+                    </div>
+
+                    <div class="ice-puck hidden" id="icePuck">
+                        <div class="ice-puck-arrow"></div>
+                    </div>
+                </div>
+
+                <div class="ice-result-overlay hidden" id="iceResultOverlay">
+                    <div class="ice-result-avatar" id="iceResultAvatar">🏒</div>
+                    <div class="ice-result-name" id="iceResultName">—</div>
+                    <div class="ice-result-chance">ШАНС НА ПОБЕДУ: <span id="iceResultChance">0%</span></div>
+                    <div class="ice-result-win" id="iceResultWin"></div>
+                    <div class="ice-result-actions">
+                        <button class="main-action-btn" onclick="restartIceArena()">Играть снова</button>
+                        <button class="pct-btn ice-result-home-btn" onclick="goHome()">На главную</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ice-arena-players-list" id="iceArenaPlayersList"></div>
+
+            <div class="ctrl-box" style="margin-top: 14px;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="iceBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="applyBetFactor(document.getElementById('iceBetInput'), 0.5)">½</button>
+                    <button class="pct-btn" onclick="applyBetFactor(document.getElementById('iceBetInput'), 2)">x2</button>
+                    <button class="pct-btn" onclick="applyBetMax(document.getElementById('iceBetInput'))">MAX</button>
+                </div>
+            </div>
+
+            <button class="mines-main-btn ice-arena-bet-btn" id="iceArenaBetBtn" onclick="placeIceArenaBet()" style="width: 100%; margin-top: 12px;">
+                СДЕЛАТЬ СТАВКУ
+            </button>
+            <p class="wheel-subtitle" style="margin-top: 8px;">Комиссия 5% берётся только с выигрыша — ставка возвращается полностью.</p>
         </section>
     </main>
 
