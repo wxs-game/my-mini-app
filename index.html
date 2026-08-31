@@ -645,6 +645,33 @@
                 </div>
             </div>
 
+<div id="iceArenaPage" class="page hidden">
+    <div class="ice-arena-card">
+        <div class="ice-arena-header">
+            <span class="ice-arena-room-id" id="iceArenaRoomId">Игра #Загрузка...</span>
+            <span class="ice-arena-badge">GLOBAL ARENA</span>
+        </div>
+
+        <div class="ice-arena-timer-wrap">
+            <div class="ice-arena-timer" id="iceArenaTimer">15</div>
+            <div class="ice-arena-sub">до начала игры</div>
+        </div>
+
+        <div class="ice-arena-pool">
+            <span>Общий банк</span>
+            <strong id="iceArenaTotalPool">0.00 $</strong>
+        </div>
+
+        <div class="ice-arena-players-list" id="iceArenaPlayersList">
+            </div>
+
+        <div class="ice-arena-controls">
+            <input type="number" id="iceArenaBetInput" class="bet-input" value="1.00" step="0.5" min="0.1">
+            <button class="action-btn" id="iceArenaBetBtn" onclick="placeIceArenaBet()">Сделать ставку</button>
+        </div>
+    </div>
+</div>
+
             <div class="ice-arena-field-wrap" id="iceFieldWrap">
                 <div class="ice-arena-field" id="iceField">
                     <div class="ice-arena-empty-state" id="iceEmptyState">
