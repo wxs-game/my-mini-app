@@ -4592,77 +4592,44 @@ function launchIceArenaPuck(winner) {
     const targetX = (targetXPct / 100) * fieldW;
     const targetY = fieldH * (0.35 + Math.random() * 0.3);
 
-    // Реальная физика: шайба стартует с высокой скоростью в случайном
-    // направлении, реально летит и рикошетит от бортов арены, трение
-    // с каждым кадром гасит скорость (как настоящее скольжение по льду).
-    // Ближе к концу анимации плавно подмешиваем "тягу" к полосе победителя,
-    // чтобы приземление было гарантированным и без резких скачков.
-    const launchAngle = Math.random() * Math.PI * 2;
-    const launchSpeed = fieldW * (3.6 + Math.random() * 1.2); // px/сек — очень быстрый, мощный бросок
-    let vx = Math.cos(launchAngle) * launchSpeed;
-    let vy = Math.sin(launchAngle) * launchSpeed;
+    // Шайба летит строго по прямой от старта до цели — направление
+    // задаётся один раз и никогда не меняется (без рикошетов и доворотов).
+    // Сильный первоначальный толчок, дальше плавное торможение (ease-out),
+    // чтобы приземление в полосе победителя было мягким и без рывка.
+    const dx = targetX - x;
+    const dy = targetY - y;
+    const dist = Math.max(1, Math.hypot(dx, dy));
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const arrowAngleDeg = Math.atan2(dirY, dirX) * 180 / Math.PI + 90;
+    if (arrow) {
+        arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + arrowAngleDeg + 'deg)';
+    }
 
-    const frictionPerFrame = 0.988; // почти не тормозит, пока не начнётся выход на цель
-    const wallRestitution = 0.92;   // почти без потерь энергии — много рикошетов от бортов
-    const totalDuration = 2500;
-    const steerStart = totalDuration * 0.4; // после этого момента шайба летит по прямой, без отскоков
+    const totalDuration = 1400;
+    const startX = x;
+    const startY = y;
+
+    function easeOutStrong(t) {
+        // Быстрый резкий старт (сильный толчок), плавное гашение к концу.
+        return 1 - Math.pow(1 - t, 3);
+    }
 
     const startTime = performance.now();
-    let lastTime = startTime;
 
     function frame(now) {
-        const dt = Math.max(1, Math.min(32, now - lastTime));
-        lastTime = now;
         const elapsed = now - startTime;
         const t = Math.min(1, elapsed / totalDuration);
+        const eased = easeOutStrong(t);
 
-        // Трение, нормализованное к прошедшему времени кадра.
-        const frictionStep = Math.pow(frictionPerFrame, dt / 16.67);
-        vx *= frictionStep;
-        vy *= frictionStep;
+        x = startX + dx * eased;
+        y = startY + dy * eased;
 
-        // До steerStart шайба свободно летает и рикошетит от бортов/углов.
-        // После — плавно "притягиваем" её к цели, и с этого момента она
-        // летит только по прямой, куда указывает стрелка (без отскоков).
-        const steering = elapsed > steerStart;
-        if (steering) {
-            const remainingSec = Math.max(0.05, (totalDuration - elapsed) / 1000);
-            const seekVx = (targetX - x) / remainingSec;
-            const seekVy = (targetY - y) / remainingSec;
-            const steerBlend = Math.min(1, (elapsed - steerStart) / (totalDuration - steerStart));
-            vx = vx * (1 - steerBlend) + seekVx * steerBlend;
-            vy = vy * (1 - steerBlend) + seekVy * steerBlend;
-        }
-
-        x += vx * (dt / 1000);
-        y += vy * (dt / 1000);
-
-        // Отскок от бортов арены (и углов, когда x и y сталкиваются в одном
-        // кадре) — только пока идёт свободный полёт. Высокая restitution даёт
-        // много энергичных рикошетов подряд, как настоящая шайба на льду.
-        if (!steering) {
-            if (x < margin) { x = margin; vx = Math.abs(vx) * wallRestitution; }
-            if (x > fieldW - margin) { x = fieldW - margin; vx = -Math.abs(vx) * wallRestitution; }
-            if (y < margin) { y = margin; vy = Math.abs(vy) * wallRestitution; }
-            if (y > fieldH - margin) { y = fieldH - margin; vy = -Math.abs(vy) * wallRestitution; }
-        } else {
-            // На прямом участке всё равно не даём шайбе улететь за поле.
-            x = Math.min(Math.max(x, margin), fieldW - margin);
-            y = Math.min(Math.max(y, margin), fieldH - margin);
-        }
-
-        const speed = Math.hypot(vx, vy);
-        const scale = 1 - Math.min(0.08, (speed / launchSpeed) * 0.06);
+        const scale = 1 - 0.06 * eased;
 
         puck.style.left = x + 'px';
         puck.style.top = y + 'px';
         puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
-
-        // Стрелка крутится вместе с шайбой — всегда смотрит по направлению движения.
-        if (arrow && speed > 4) {
-            const angleDeg = Math.atan2(vy, vx) * 180 / Math.PI + 90;
-            arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + angleDeg + 'deg)';
-        }
 
         if (t < 1) {
             requestAnimationFrame(frame);
