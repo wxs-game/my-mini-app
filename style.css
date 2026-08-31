@@ -3149,9 +3149,7 @@ body.fairness-modal-open {
        }
 
 /* ================================================================
-   АЙС АРЕНА (Ice Arena) — PvP-банк: чем больше ставка, тем выше шанс
-   забрать весь банк. Комиссия 5% берётся только с выигрыша сверх
-   собственной ставки.
+   АЙС АРЕНА (Ice Arena)
 ================================================================ */
 
 .ice-arena-tile {
@@ -3482,3 +3480,31 @@ body.fairness-modal-open {
     color: #ffc800;
     flex-shrink: 0;
 }
+
+.ice-arena-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.ice-arena-room-id {
+    font-size: 16px;
+    font-weight: 900;
+    color: #ffd700;
+    letter-spacing: 0.5px;
+}
+
+.ice-arena-badge {
+    font-size: 10px;
+    font-weight: 800;
+    background: #00d2ff;
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 6px;
+    text-transform: uppercase;
+}
+
