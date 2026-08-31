@@ -3147,3 +3147,345 @@ body.fairness-modal-open {
 .stepper-btn:active {
   transform: scale(0.9);
        }
+
+/* ================================================================
+   АЙС АРЕНА (Ice Arena) — PvP-банк: чем больше ставка, тем выше шанс
+   забрать весь банк. Комиссия 5% берётся только с выигрыша сверх
+   собственной ставки.
+================================================================ */
+
+.ice-arena-tile {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 55%),
+        linear-gradient(150deg, #1a4dff 0%, #6a2ff7 55%, #a53bff 100%);
+}
+
+.ice-arena-tile-icon {
+    font-size: 34px;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+
+.ice-arena-tile-label {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+    color: #ffffff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.ice-arena-card {
+    padding: 16px 14px 20px;
+}
+
+.ice-arena-topbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.ice-arena-info-box {
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 14px;
+    padding: 8px 6px;
+    text-align: center;
+}
+
+.ice-arena-info-box small {
+    display: block;
+    font-size: 9.5px;
+    letter-spacing: 0.4px;
+    color: #777777;
+    font-weight: 800;
+    margin-bottom: 2px;
+}
+
+.ice-arena-info-box strong {
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.ice-arena-timer-box.counting strong {
+    color: #4dd8ff;
+    text-shadow: 0 0 10px rgba(77,216,255,0.7);
+}
+
+.ice-arena-field-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.ice-arena-field {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 28px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 8%, rgba(255,255,255,0.14), transparent 45%),
+        linear-gradient(165deg, #123a8f 0%, #4b2fb8 50%, #7d2ecb 100%);
+    border: 2px solid rgba(120, 180, 255, 0.25);
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.08);
+    transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+    transform-origin: 50% 50%;
+}
+
+.ice-arena-field-wrap.zoomed .ice-arena-field {
+    transform: scale(1.55);
+}
+
+.ice-arena-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.5;
+    padding: 20px;
+    z-index: 3;
+}
+
+.ice-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 14px;
+    gap: 4px;
+    border-right: 1px solid rgba(0,0,0,0.25);
+    transition: left 0.5s ease, width 0.5s ease, opacity 0.4s ease;
+    z-index: 1;
+}
+
+.ice-band:last-child { border-right: none; }
+
+.ice-band-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid rgba(255,255,255,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.ice-band-name {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.ice-band-bet {
+    font-size: 9px;
+    font-weight: 900;
+    color: rgba(255,255,255,0.85);
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 1px 6px;
+}
+
+.ice-band.ice-band-user {
+    box-shadow: inset 0 0 0 2px rgba(255,200,0,0.7);
+}
+
+.ice-band.ice-band-winner {
+    filter: brightness(1.35) saturate(1.2);
+}
+
+.ice-puck {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #4a4a4a, #0a0a0a 70%);
+    border: 2px solid rgba(255,255,255,0.35);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.55), 0 0 18px rgba(120,190,255,0.5);
+    z-index: 5;
+    will-change: transform;
+}
+
+.ice-puck-arrow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 14px solid #4dd8ff;
+    transform: translate(-50%, -26px);
+    filter: drop-shadow(0 0 6px rgba(77,216,255,0.9));
+}
+
+.ice-puck.ice-puck-spinning .ice-puck-arrow {
+    animation: icePuckSpin 1.4s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes icePuckSpin {
+    from { transform: translate(-50%, -26px) rotate(0deg); }
+    to   { transform: translate(-50%, -26px) rotate(var(--ice-spin-deg, 1080deg)); }
+}
+
+.ice-result-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    padding: 20px;
+    background: rgba(6, 4, 20, 0.72);
+    backdrop-filter: blur(3px);
+    border-radius: 28px;
+    animation: iceResultFadeIn 0.4s ease;
+}
+
+@keyframes iceResultFadeIn {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.ice-result-avatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.15), 0 8px 24px rgba(0,0,0,0.5);
+    margin-bottom: 6px;
+}
+
+.ice-result-name {
+    font-size: 17px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.ice-result-chance {
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.7);
+    letter-spacing: 0.3px;
+}
+
+.ice-result-chance span {
+    color: #4dd8ff;
+}
+
+.ice-result-win {
+    font-size: 22px;
+    font-weight: 950;
+    color: #3dff9a;
+    text-shadow: 0 0 14px rgba(61,255,154,0.5);
+    margin: 4px 0 10px;
+}
+
+.ice-result-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 220px;
+}
+
+.ice-result-home-btn {
+    padding: 12px;
+    font-size: 13px;
+    background: rgba(255,255,255,0.08);
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.18);
+}
+
+.ice-arena-players-list {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 190px;
+    overflow-y: auto;
+}
+
+.ice-player-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 12px;
+    padding: 7px 10px;
+}
+
+.ice-player-row.ice-player-row-user {
+    border-color: rgba(255,200,0,0.5);
+}
+
+.ice-player-row-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    background: rgba(255,255,255,0.08);
+}
+
+.ice-player-row-name {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ice-player-row-chance {
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #777777;
+    margin-right: 4px;
+}
+
+.ice-player-row-bet {
+    font-size: 12.5px;
+    font-weight: 900;
+    color: #ffc800;
+    flex-shrink: 0;
+}
