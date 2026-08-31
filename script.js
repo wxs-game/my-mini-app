@@ -5246,4 +5246,795 @@ window.restartIceArena = restartIceArena;
 window.applyBetFactor = applyBetFactor;
 window.applyBetMax = applyBetMax;
 
+/* ================================================================
+   CRASH — глобальный раунд через Supabase
+
+   Один раз выполнить в Supabase → SQL Editor:
+
+   create extension if not exists pgcrypto;
+   create table if not exists public.crash_rounds (
+       id uuid primary key default gen_random_uuid(),
+       status text not null default 'betting'
+           check (status in ('betting', 'flying', 'crashed')),
+       betting_ends_at timestamptz not null,
+       started_at timestamptz,
+       crashed_at timestamptz,
+       seed text not null,
+       round_hash text not null,
+       crash_point numeric(12,2) not null,
+       reveal_key text,
+       created_at timestamptz not null default now()
+   );
+   create table if not exists public.crash_bets (
+       id bigint generated always as identity primary key,
+       round_id uuid not null references public.crash_rounds(id) on delete cascade,
+       telegram_id bigint not null,
+       name text not null,
+       avatar text,
+       amount numeric(18,2) not null check (amount >= 0.10),
+       status text not null default 'active'
+           check (status in ('active', 'cashed_out', 'lost')),
+       cashout_multiplier numeric(12,2),
+       win_amount numeric(18,2),
+       payout_done boolean not null default false,
+       created_at timestamptz not null default now(),
+       unique (round_id, telegram_id)
+   );
+   create unique index if not exists crash_one_active_round
+       on public.crash_rounds ((true))
+       where status in ('betting', 'flying');
+   alter table public.crash_rounds enable row level security;
+   alter table public.crash_bets enable row level security;
+   drop policy if exists crash_rounds_read on public.crash_rounds;
+   drop policy if exists crash_bets_read on public.crash_bets;
+   create policy crash_rounds_read on public.crash_rounds
+       for select using (true);
+   create policy crash_bets_read on public.crash_bets
+       for select using (true);
+
+   -- INSERT/UPDATE прав на таблицы клиенту не выдаём. Все переходы
+   -- выполняются атомарными SECURITY DEFINER RPC-функциями.
+   create or replace function public.get_or_create_crash_round()
+   returns public.crash_rounds language plpgsql security definer
+   set search_path = public as $$
+   declare r public.crash_rounds; v_seed text; v_hash text;
+           v_int numeric; v_point numeric;
+   begin
+       select * into r from public.crash_rounds
+       where status in ('betting', 'flying')
+       order by created_at desc limit 1;
+       if found then return r; end if;
+       v_seed := encode(gen_random_bytes(24), 'hex');
+       v_hash := encode(digest(v_seed, 'sha256'), 'hex');
+       v_int := ('x' || substr(v_hash, 1, 8))::bit(32)::bigint;
+       if mod(v_int, 33) = 0 then v_point := 1.00;
+       else v_point := least(1000.00,
+           greatest(1.00, round(100 / (1 - v_int / 4294967296.0), 2)));
+       end if;
+       insert into public.crash_rounds
+           (status, betting_ends_at, seed, round_hash, crash_point)
+       values ('betting', now() + interval '5 seconds', v_seed, v_hash, v_point)
+       returning * into r;
+       return r;
+   exception when unique_violation then
+       select * into r from public.crash_rounds
+       where status in ('betting', 'flying')
+       order by created_at desc limit 1;
+       return r;
+   end; $$;
+
+   create or replace function public.advance_crash_round(p_round_id uuid)
+   returns public.crash_rounds language plpgsql security definer
+   set search_path = public as $$
+   declare r public.crash_rounds; v_flight_seconds numeric;
+   begin
+       select * into r from public.crash_rounds where id = p_round_id for update;
+       if not found then return null; end if;
+       if r.status = 'betting' and r.betting_ends_at <= now() then
+           update public.crash_rounds set status = 'flying', started_at = now()
+           where id = r.id and status = 'betting' returning * into r;
+       elsif r.status = 'flying' and r.started_at is not null then
+           if r.crash_point <= 1.5 then
+               v_flight_seconds := 6 * power(greatest(0, (r.crash_point - 1) / 0.5), 1.0 / 3.0);
+           else
+               v_flight_seconds := 6 + ln(r.crash_point / 1.5) / (ln(2) / 10);
+           end if;
+           if r.started_at + make_interval(secs => v_flight_seconds) <= now() then
+               update public.crash_rounds
+               set status = 'crashed', crashed_at = now(), reveal_key = seed
+               where id = r.id and status = 'flying' returning * into r;
+               update public.crash_bets set status = 'lost'
+               where round_id = r.id and status = 'active';
+           end if;
+       end if;
+       return r;
+   end; $$;
+
+   create or replace function public.register_crash_bet(
+       p_round_id uuid, p_telegram_id bigint, p_name text,
+       p_avatar text, p_amount numeric
+   ) returns public.crash_bets language plpgsql security definer
+   set search_path = public as $$
+   declare b public.crash_bets;
+   begin
+       insert into public.crash_bets (round_id, telegram_id, name, avatar, amount)
+       select p_round_id, p_telegram_id, left(coalesce(p_name, 'Игрок'), 80),
+              p_avatar, round(p_amount, 2)
+       where exists (select 1 from public.crash_rounds
+           where id = p_round_id and status = 'betting' and betting_ends_at > now())
+       returning * into b;
+       if not found then raise exception 'Раунд уже начался или ставка уже существует'; end if;
+       return b;
+   end; $$;
+
+   create or replace function public.claim_crash_cashout(
+       p_round_id uuid, p_telegram_id bigint,
+       p_multiplier numeric, p_win_amount numeric
+   ) returns public.crash_bets language plpgsql security definer
+   set search_path = public as $$
+   declare b public.crash_bets;
+   begin
+       update public.crash_bets b
+       set status = 'cashed_out', cashout_multiplier = round(p_multiplier, 2),
+           win_amount = round(p_win_amount, 2), payout_done = false
+       where b.round_id = p_round_id and b.telegram_id = p_telegram_id
+         and b.status = 'active'
+         and exists (select 1 from public.crash_rounds r
+           where r.id = b.round_id and r.status = 'flying'
+             and p_multiplier >= 1 and p_multiplier <= r.crash_point
+             and r.started_at + make_interval(secs =>
+               case when r.crash_point <= 1.5
+                    then 6 * power(greatest(0, (r.crash_point - 1) / 0.5), 1.0 / 3.0)
+                    else 6 + ln(r.crash_point / 1.5) / (ln(2) / 10)
+               end) > now())
+       returning b.* into b;
+       if not found then raise exception 'Кэшаут уже выполнен или раунд завершён'; end if;
+       return b;
+   end; $$;
+
+   create or replace function public.complete_crash_payout(p_bet_id bigint)
+   returns boolean language sql security definer set search_path = public as $$
+       update public.crash_bets set payout_done = true
+       where id = p_bet_id and status = 'cashed_out' and not payout_done
+       returning true;
+   $$;
+   create or replace function public.release_crash_cashout(p_bet_id bigint)
+   returns boolean language sql security definer set search_path = public as $$
+       update public.crash_bets
+       set status = 'active', cashout_multiplier = null, win_amount = null
+       where id = p_bet_id and status = 'cashed_out' and not payout_done
+       returning true;
+   $$;
+
+   revoke all on function public.get_or_create_crash_round() from public;
+   revoke all on function public.advance_crash_round(uuid) from public;
+   revoke all on function public.register_crash_bet(uuid,bigint,text,text,numeric) from public;
+   revoke all on function public.claim_crash_cashout(uuid,bigint,numeric,numeric) from public;
+   revoke all on function public.complete_crash_payout(bigint) from public;
+   revoke all on function public.release_crash_cashout(bigint) from public;
+   grant execute on function public.get_or_create_crash_round() to anon, authenticated;
+   grant execute on function public.advance_crash_round(uuid) to anon, authenticated;
+   grant execute on function public.register_crash_bet(uuid,bigint,text,text,numeric) to anon, authenticated;
+   grant execute on function public.claim_crash_cashout(uuid,bigint,numeric,numeric) to anon, authenticated;
+   grant execute on function public.complete_crash_payout(bigint) to anon, authenticated;
+   grant execute on function public.release_crash_cashout(bigint) to anon, authenticated;
+   alter publication supabase_realtime add table public.crash_rounds;
+   alter publication supabase_realtime add table public.crash_bets;
+   ================================================================ */
+
+const CRASH_ROUNDS_TABLE = 'crash_rounds';
+const CRASH_BETS_TABLE = 'crash_bets';
+const CRASH_GLOBAL_RESULT_HOLD_MS = 3000;
+const CRASH_GLOBAL_POLL_MS = 1000;
+const CRASH_GLOBAL_GAME_LABEL = 'Краш';
+let crashGlobal = {
+    round: null, bets: [], channel: null, pollHandle: null,
+    refreshInFlight: false, lastRenderedRoundId: null, lastRenderedPhase: null
+};
+
+function crashRpcRow(data) {
+    return Array.isArray(data) ? (data[0] || null) : (data || null);
+}
+
+function crashTelegramId() {
+    return tg?.initDataUnsafe?.user?.id || null;
+}
+
+function crashPlayerName() {
+    const user = tg?.initDataUnsafe?.user;
+    return document.getElementById('username')?.textContent?.trim() ||
+        [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Игрок';
+}
+
+function crashFlightMs(point) {
+    const value = Math.max(1, Number(point) || 1);
+    if (value <= 1.5) return 6000 * Math.pow(Math.max(0, (value - 1) / 0.5), 1 / 3);
+    return 6000 + Math.log(value / 1.5) / (Math.log(2) / 10000);
+}
+
+function crashMultiplierAt(round, now = Date.now()) {
+    if (!round?.started_at) return 1;
+    const elapsed = Math.max(0, now - Date.parse(round.started_at));
+    let raw;
+    if (elapsed < CRASH_SLOW_START_MS) {
+        raw = 1 + (CRASH_SLOW_START_TARGET - 1) * Math.pow(elapsed / CRASH_SLOW_START_MS, 3);
+    } else {
+        raw = CRASH_SLOW_START_TARGET *
+            Math.exp(CRASH_GROWTH_PER_MS * (elapsed - CRASH_SLOW_START_MS));
+    }
+    return Math.min(Number(round.crash_point) || 1, Math.floor(raw * 100) / 100);
+}
+
+function crashOwnBet() {
+    const id = crashTelegramId();
+    return id == null ? null : crashGlobal.bets.find(
+        bet => String(bet.telegram_id) === String(id)
+    ) || null;
+}
+
+function ensureCrashGlobalRoomUi() {
+    if (document.getElementById('crashGlobalRoom')) return;
+    const dom = getCrashDom();
+    if (!dom.historyList?.parentElement) return;
+    const panel = document.createElement('div');
+    panel.id = 'crashGlobalRoom';
+    panel.style.cssText =
+        'margin:10px 0 0;padding:9px 11px;border-radius:12px;' +
+        'background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);' +
+        'color:rgba(255,255,255,.78);font-size:11px;line-height:1.35;';
+    dom.historyList.parentElement.insertBefore(panel, dom.historyList);
+}
+
+function renderCrashGlobalRoom() {
+    const panel = document.getElementById('crashGlobalRoom');
+    if (!panel) return;
+    const active = crashGlobal.bets.filter(bet => bet.status === 'active');
+    const total = active.reduce((sum, bet) => sum + (Number(bet.amount) || 0), 0);
+    const players = crashGlobal.bets.slice(0, 8).map(bet => {
+        const result = bet.status === 'cashed_out'
+            ? ` · забрал ${Number(bet.win_amount || 0).toFixed(2)}$`
+            : bet.status === 'lost' ? ' · проигрыш' : '';
+        return `<span style="white-space:nowrap">${escapeHtml(bet.name || 'Игрок')}${result}</span>`;
+    }).join(' · ');
+    panel.innerHTML =
+        `<div style="font-weight:800;color:#fff">Общая комната · ${active.length} ставок · ${total.toFixed(2)}$</div>` +
+        (players ? `<div style="margin-top:4px;opacity:.72">${players}</div>` : '');
+}
+
+async function loadCrashGlobalHistory() {
+    const { data, error } = await supabase
+        .from(CRASH_ROUNDS_TABLE)
+        .select('crash_point, crashed_at, created_at')
+        .eq('status', 'crashed')
+        .order('crashed_at', { ascending: false })
+        .limit(CRASH_HISTORY_MAX);
+    if (error) {
+        console.error('Ошибка загрузки истории crash_rounds:', error);
+        return;
+    }
+    crashHistory = (data || [])
+        .map(row => Number(row.crash_point))
+        .filter(point => Number.isFinite(point));
+    lastCrashPoint = crashHistory.length ? crashHistory[0] : null;
+    renderCrashHistory();
+}
+
+async function getCrashGlobalRound() {
+    const { data, error } = await supabase
+        .from(CRASH_ROUNDS_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (error) {
+        console.error('Ошибка загрузки общего Crash-раунда:', error);
+        return null;
+    }
+    return data || null;
+}
+
+async function getCrashGlobalBets(roundId) {
+    if (!roundId) return [];
+    const { data, error } = await supabase
+        .from(CRASH_BETS_TABLE)
+        .select('*')
+        .eq('round_id', roundId)
+        .order('created_at', { ascending: true });
+    if (error) {
+        console.error('Ошибка загрузки ставок общего Crash-раунда:', error);
+        return [];
+    }
+    return data || [];
+}
+
+function setCrashFairnessFromRound(round) {
+    currentCrashState = {
+        salt: round?.status === 'crashed' ? (round.reveal_key || round.seed || '') : '',
+        hash: round?.round_hash || '',
+        crashPoint: Number(round?.crash_point) || 1,
+        isFinished: round?.status === 'crashed'
+    };
+    const hashInput = document.getElementById('crashRoundHashInput');
+    if (hashInput) hashInput.value = currentCrashState.hash;
+    if (round?.status !== 'crashed') hideCrashRoundKey();
+    else revealCrashRoundKey();
+}
+
+function applyCrashGlobalRound(round, bets) {
+    if (!round) return;
+    const previousId = crashGlobal.round?.id;
+    const previousStatus = crashGlobal.round?.status;
+    crashGlobal.round = round;
+    crashGlobal.bets = bets || [];
+    setCrashFairnessFromRound(round);
+
+    const own = crashOwnBet();
+    crashGame.roundId = round.id;
+    crashGame.bet = Number(own?.amount) || 0;
+    crashGame.betPlaced = !!own;
+    crashGame.cashedOut = own?.status === 'cashed_out';
+    crashGame.crashPoint = Number(round.crash_point) || 1;
+    crashGame.currentMult = round.status === 'flying'
+        ? crashMultiplierAt(round)
+        : round.status === 'crashed' ? crashGame.crashPoint : 1;
+    crashGame.phase = round.status === 'flying'
+        ? 'flying' : round.status === 'crashed' ? 'crashed' : 'waiting';
+    crashGame.startTime = round.started_at ? Date.parse(round.started_at) : 0;
+    crashGame.phaseEndsAt = round.betting_ends_at ? Date.parse(round.betting_ends_at) : 0;
+
+    renderCrashGlobalRoom();
+    if (previousId !== round.id || previousStatus !== round.status) {
+        crashGlobal.lastRenderedRoundId = round.id;
+        crashGlobal.lastRenderedPhase = round.status;
+        if (round.status === 'flying') beginFlyingPhase(round);
+        else if (round.status === 'crashed') endCrashRound(round);
+        else beginWaitingPhase(round);
+    }
+    renderCrashUI();
+}
+
+async function advanceCrashGlobalRound(round) {
+    if (!round?.id) return round;
+    const { data, error } = await supabase.rpc('advance_crash_round', {
+        p_round_id: round.id
+    });
+    if (error) {
+        console.error('Не удалось атомарно продвинуть Crash-раунд:', error);
+        return round;
+    }
+    return crashRpcRow(data) || round;
+}
+
+async function refreshCrashGlobalState() {
+    if (crashGlobal.refreshInFlight) return;
+    crashGlobal.refreshInFlight = true;
+    try {
+        let round = await getCrashGlobalRound();
+        if (!round) {
+            const { data, error } = await supabase.rpc('get_or_create_crash_round');
+            if (error) throw error;
+            round = crashRpcRow(data);
+        }
+
+        if (round?.status === 'betting' &&
+            Date.parse(round.betting_ends_at) <= Date.now()) {
+            round = await advanceCrashGlobalRound(round);
+        } else if (round?.status === 'flying' &&
+            Date.parse(round.started_at) + crashFlightMs(round.crash_point) <= Date.now()) {
+            round = await advanceCrashGlobalRound(round);
+        } else if (round?.status === 'crashed') {
+            const endedAt = Date.parse(round.crashed_at || round.created_at);
+            if (Number.isFinite(endedAt) &&
+                Date.now() - endedAt >= CRASH_GLOBAL_RESULT_HOLD_MS) {
+                const { data, error } = await supabase.rpc('get_or_create_crash_round');
+                if (!error) round = crashRpcRow(data) || round;
+                else console.error('Не удалось создать следующий Crash-раунд:', error);
+            }
+        }
+
+        if (round) {
+            const bets = await getCrashGlobalBets(round.id);
+            applyCrashGlobalRound(round, bets);
+            if (round.status === 'crashed') await loadCrashGlobalHistory();
+        }
+    } catch (error) {
+        console.error('Ошибка синхронизации общего Crash-раунда:', error);
+    } finally {
+        crashGlobal.refreshInFlight = false;
+    }
+}
+
+function subscribeCrashGlobal() {
+    if (crashGlobal.channel) return;
+    try {
+        crashGlobal.channel = supabase
+            .channel('crash_global_room')
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: CRASH_ROUNDS_TABLE
+            }, () => refreshCrashGlobalState())
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: CRASH_BETS_TABLE
+            }, () => refreshCrashGlobalState())
+            .subscribe((status) => {
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    console.warn('Realtime Crash недоступен, работает polling-подстраховка.');
+                }
+            });
+    } catch (error) {
+        console.error('Не удалось подписаться на realtime Crash:', error);
+    }
+}
+
+function startCrashEngine() {
+    if (crashLoopStarted) return;
+    crashLoopStarted = true;
+    ensureCrashGlobalRoomUi();
+    renderCrashHistory();
+    subscribeCrashGlobal();
+    loadCrashGlobalHistory();
+    refreshCrashGlobalState();
+    clearInterval(crashGlobal.pollHandle);
+    crashGlobal.pollHandle = setInterval(refreshCrashGlobalState, CRASH_GLOBAL_POLL_MS);
+}
+
+function initCrashPage() {
+    ensureCrashGlobalRoomUi();
+    renderCrashHistory();
+    renderCrashUI();
+    initCrashRocketAnim();
+    initCrashExplosionAnim();
+    syncCrashStageDims();
+    requestAnimationFrame(syncCrashStageDims);
+}
+
+function beginWaitingPhase(round = crashGlobal.round) {
+    if (!round) return;
+    crashGame.phase = 'waiting';
+    crashGame.currentMult = 1;
+    crashGame.phaseEndsAt = Date.parse(round.betting_ends_at) || Date.now();
+    crashGame.crashPoint = Number(round.crash_point) || 1;
+    crashGame.startTime = 0;
+    renderCrashUI();
+}
+
+function beginFlyingPhase(round = crashGlobal.round) {
+    if (!round) return;
+    crashGame.phase = 'flying';
+    crashGame.crashPoint = Number(round.crash_point) || 1;
+    crashGame.startTime = Date.parse(round.started_at) || Date.now();
+    crashGame.currentMult = crashMultiplierAt(round);
+    crashLastHeavyUpdate = 0;
+    syncCrashStageDims();
+    crashTrailPoints = [];
+    const dom = getCrashDom();
+    if (dom.trailLine) {
+        dom.trailLine.setAttribute('d', '');
+        dom.trailLine.classList.remove('crash-trail-crashed');
+        dom.trailLine.style.opacity = '1';
+    }
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-trail-crashed');
+        dom.trailDot.style.opacity = '0';
+    }
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = '1.00x';
+        dom.topLeftMult.classList.remove('crashed');
+        dom.topLeftMult.style.display = 'block';
+    }
+    if (dom.countdownEl) dom.countdownEl.style.display = 'none';
+    if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+    if (dom.betInput) dom.betInput.disabled = true;
+    cancelAnimationFrame(crashAnimHandle);
+    tickCrash();
+}
+
+function tickCrash() {
+    if (crashGlobal.round?.status !== 'flying') return;
+    const now = Date.now();
+    crashGame.currentMult = crashMultiplierAt(crashGlobal.round, now);
+    const heavy = now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS;
+    if (heavy) crashLastHeavyUpdate = now;
+    renderCrashUI(heavy);
+    if (Date.parse(crashGlobal.round.started_at) +
+        crashFlightMs(crashGlobal.round.crash_point) <= now) {
+        refreshCrashGlobalState();
+    }
+    crashAnimHandle = requestAnimationFrame(tickCrash);
+}
+
+function endCrashRound(round = crashGlobal.round) {
+    if (!round) return;
+    cancelAnimationFrame(crashAnimHandle);
+    crashGame.phase = 'crashed';
+    crashGame.crashPoint = Number(round.crash_point) || 1;
+    crashGame.currentMult = crashGame.crashPoint;
+    lastCrashPoint = crashGame.crashPoint;
+    setCrashFairnessFromRound(round);
+    renderCrashHistory();
+
+    const dom = getCrashDom();
+    if (crashRocketAnim) crashRocketAnim.pause();
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
+    if (dom.trailLine) dom.trailLine.classList.add('crash-trail-crashed');
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-dot-live');
+        dom.trailDot.classList.add('crash-trail-crashed');
+        dom.trailDot.style.opacity = '1';
+    }
+    if (dom.explosionEl) {
+        dom.explosionEl.style.opacity = '1';
+        dom.explosionEl.style.display = 'block';
+        if (crashExplosionAnim) {
+            const endFrame = Math.max(
+                1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION)
+            );
+            if (crashExplosionTotalFrames) {
+                crashExplosionAnim.playSegments([0, endFrame], true);
+            } else {
+                crashExplosionAnim.goToAndPlay(0, true);
+            }
+        }
+    }
+    if (dom.multEl) dom.multEl.style.color = '#e74c3c';
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        dom.topLeftMult.classList.add('crashed');
+        dom.topLeftMult.style.display = 'block';
+    }
+    if (dom.actionBtn) {
+        dom.actionBtn.textContent = crashGame.cashedOut
+            ? 'Выигрыш забран ✓' : 'Раунд завершён';
+        dom.actionBtn.disabled = true;
+    }
+    explosionShake(dom.stageEl, 500, 20);
+}
+
+function renderCrashHistory() {
+    const dom = getCrashDom();
+    if (!dom.historyList) return;
+    dom.historyList.innerHTML = crashHistory.map(point => {
+        const color = point < 1.5 ? '#e74c3c' : point >= 2 ? '#2ecc71' : '#f1c40f';
+        return `<span style="display:inline-block;background:rgba(255,255,255,.06);` +
+            `border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px 8px;` +
+            `font-size:11px;font-weight:800;color:${color};">${Number(point).toFixed(2)}x</span>`;
+    }).join('');
+}
+
+function renderCrashUI(heavy = true) {
+    const dom = getCrashDom();
+    if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
+    const round = crashGlobal.round;
+
+    if (crashGame.phase === 'waiting' || !round) {
+        const secLeft = round
+            ? Math.max(0, Math.ceil((crashGame.phaseEndsAt - Date.now()) / 1000)) : 0;
+        dom.statusEl.textContent = lastCrashPoint !== null
+            ? `Прошлый раунд: ${lastCrashPoint.toFixed(2)}x · Старт через ${secLeft}с`
+            : `Старт через ${secLeft}с`;
+        dom.multEl.textContent = '1.00x';
+        dom.multEl.style.color = '#fff';
+        if (dom.countdownEl) {
+            dom.countdownEl.textContent = String(secLeft);
+            dom.countdownEl.className = 'crash-countdown ' +
+                (secLeft === 5 ? 'cc-green' : secLeft >= 3 ? 'cc-yellow' : 'cc-red');
+            dom.countdownEl.style.display = secLeft > 0 && secLeft <= 5 ? 'flex' : 'none';
+        }
+        if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = secLeft > 0 ? '0' : '1';
+        if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+        if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced;
+        dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : 'Сделать ставку';
+        dom.actionBtn.disabled = crashGame.betPlaced;
+        return;
+    }
+
+    if (crashGame.phase === 'crashed') {
+        dom.statusEl.textContent =
+            `Краш на ${crashGame.crashPoint.toFixed(2)}x · следующий раунд скоро`;
+        dom.multEl.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        dom.multEl.style.color = '#e74c3c';
+        return;
+    }
+
+    const currentM = crashGame.currentMult;
+    const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
+    const stageW = crashStageW;
+    const stageH = crashStageH;
+    const centerX = (stageW - 200) / 2 - 16;
+    const centerY = 16 - (stageH - 200) / 2;
+    dom.multEl.textContent = currentM.toFixed(2) + 'x';
+    dom.multEl.style.color = '#fff';
+    dom.statusEl.textContent = 'Раунд идёт · общая комната';
+    if (dom.rocketEl) {
+        dom.rocketEl.style.transform =
+            `translate3d(${centerX}px,${centerY}px,0) rotate(${45 - 90 * trailProgress}deg)`;
+    }
+
+    if (heavy) {
+        if (dom.topLeftMult) dom.topLeftMult.textContent = currentM.toFixed(2) + 'x';
+        const sx = stageW * .05;
+        const sy = stageH * .95;
+        const ex = stageW * .95;
+        const ey = stageH * .05;
+        const hx = sx + (ex - sx) * trailProgress;
+        const hy = sy + (ey - sy) * trailProgress;
+        if (dom.trailLine) {
+            const dx = hx - sx;
+            const dy = hy - sy;
+            const len = Math.hypot(dx, dy) || 1;
+            const bow = .25 * len;
+            dom.trailLine.setAttribute('d',
+                `M ${sx},${sy} Q ${(sx + hx) / 2 - dy / len * bow},` +
+                `${(sy + hy) / 2 + dx / len * bow} ${hx},${hy}`);
+        }
+        if (dom.trailDot) {
+            dom.trailDot.setAttribute('cx', hx);
+            dom.trailDot.setAttribute('cy', hy);
+            dom.trailDot.style.opacity = '1';
+            dom.trailDot.classList.add('crash-dot-live');
+        }
+    }
+
+    if (crashGame.betPlaced && !crashGame.cashedOut) {
+        dom.actionBtn.textContent = `Забрать ${(crashGame.bet * currentM).toFixed(2)}$`;
+        dom.actionBtn.disabled = false;
+    } else {
+        dom.actionBtn.textContent = crashGame.cashedOut
+            ? 'Выигрыш забран ✓' : 'Ждите следующего раунда';
+        dom.actionBtn.disabled = true;
+    }
+}
+
+async function placeCrashBet() {
+    if (crashGame.phase !== 'waiting' || crashGame.betPlaced || crashGame.isProcessing) return;
+    const round = crashGlobal.round;
+    const telegramId = crashTelegramId();
+    if (!round || round.status !== 'betting' || !telegramId) {
+        showMessage('Раунд уже начался или профиль ещё загружается.');
+        return;
+    }
+    if (!lockEconomy()) return;
+
+    const dom = getCrashDom();
+    const bet = roundMoney(parseFloat(dom.betInput?.value));
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage('Минимальная ставка — 0.10 $!');
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage('Недостаточно средств!');
+        unlockEconomy();
+        return;
+    }
+
+    crashGame.isProcessing = true;
+    const snapshot = snapshotBalanceState();
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debitResult = await placeBetServer(bet, CRASH_GLOBAL_GAME_LABEL);
+    if (!debitResult.ok) {
+        restoreBalanceState(snapshot);
+        showMessage('Не удалось списать ставку. Проверьте соединение и попробуйте снова.');
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
+
+    const user = tg?.initDataUnsafe?.user;
+    const { data, error } = await supabase.rpc('register_crash_bet', {
+        p_round_id: round.id,
+        p_telegram_id: telegramId,
+        p_name: crashPlayerName(),
+        p_avatar: user?.photo_url || null,
+        p_amount: bet
+    });
+    if (error || !crashRpcRow(data)) {
+        // place_bet уже успел списать деньги, поэтому при гонке за
+        // последним слотом возвращаем сумму через тот же серверный RPC.
+        const refundResult = await resolveWinServerWithRetry(bet, 1);
+        if (refundResult.ok) {
+            currentBalance = refundResult.balance;
+            setUIBalance(currentBalance);
+        } else {
+            restoreBalanceState(snapshot);
+        }
+        showMessage('Раунд уже начался. Ставка не принята; обновите приложение.');
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+
+    const savedBet = crashRpcRow(data);
+    crashGlobal.bets.push(savedBet);
+    crashGame.bet = bet;
+    crashGame.betPlaced = true;
+    crashGame.cashedOut = false;
+    crashGame.liveBetId = await broadcastLiveBet(bet, CRASH_GLOBAL_GAME_LABEL);
+    crashGame.isProcessing = false;
+    unlockEconomy();
+    renderCrashGlobalRoom();
+    renderCrashUI();
+}
+
+async function cashOutCrash() {
+    const round = crashGlobal.round;
+    const telegramId = crashTelegramId();
+    const own = crashOwnBet();
+    if (crashGame.phase !== 'flying' || !round || !own ||
+        own.status !== 'active' || crashGame.isProcessing || !telegramId) return;
+    if (!lockEconomy()) return;
+
+    crashGame.isProcessing = true;
+    const mult = Math.min(crashMultiplierAt(round), Number(round.crash_point) || 1);
+    const winAmount = roundMoney(crashGame.bet * mult);
+    const { data, error } = await supabase.rpc('claim_crash_cashout', {
+        p_round_id: round.id,
+        p_telegram_id: telegramId,
+        p_multiplier: mult,
+        p_win_amount: winAmount
+    });
+    if (error || !crashRpcRow(data)) {
+        showMessage('Кэшаут не успел выполниться — раунд уже завершён.');
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        refreshCrashGlobalState();
+        return;
+    }
+
+    const claimed = crashRpcRow(data);
+    const snapshot = snapshotBalanceState();
+    currentTotalWin = roundMoney(currentTotalWin + winAmount);
+    currentWinsCount++;
+    if (mult > currentMaxWin) currentMaxWin = mult;
+    setUIBalance(roundMoney(currentBalance + winAmount));
+
+    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
+    if (!creditResult.ok) {
+        await supabase.rpc('release_crash_cashout', { p_bet_id: claimed.id });
+        restoreBalanceState(snapshot);
+        showMessage('Не удалось зачислить выигрыш. Нажмите «Забрать» ещё раз.');
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        refreshCrashGlobalState();
+        return;
+    }
+    currentBalance = creditResult.balance;
+    setUIBalance(currentBalance);
+    await supabase.rpc('complete_crash_payout', { p_bet_id: claimed.id });
+
+    const index = crashGlobal.bets.findIndex(
+        bet => String(bet.id) === String(claimed.id)
+    );
+    if (index >= 0) crashGlobal.bets[index] = claimed;
+    crashGame.cashedOut = true;
+    crashGame.isProcessing = false;
+    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+    resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
+    renderCrashGlobalRoom();
+    renderCrashUI();
+    unlockEconomy();
+}
+
+function handleCrashAction() {
+    if (crashGame.isProcessing) return;
+    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) placeCrashBet();
+    else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
+        cashOutCrash();
+    }
+}
+
+function adjustCrashBet(factor) {
+    if (!crashGame.betPlaced) applyBetFactor(getCrashDom().betInput, factor);
+}
+
+function setCrashMaxBet() {
+    if (!crashGame.betPlaced) applyBetMax(getCrashDom().betInput);
+}
+
 })();
