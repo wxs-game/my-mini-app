@@ -5099,6 +5099,19 @@ function launchIceArenaPuck(winner) {
                 puck.style.left = x + 'px';
                 puck.style.top = y + 'px';
 
+                // Вычисляем позицию победителя в процентах для зума
+                const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+                let cursor = 0;
+                let targetXPct = 50;
+                for (const p of iceArena.players) {
+                    const w = total > 0 ? (p.bet / total) * 100 : 0;
+                    if (p.id === winner.id) {
+                        targetXPct = cursor + w / 2;
+                        break;
+                    }
+                    cursor += w;
+                }
+
                 // Вибрация и тряска экрана в кульминационный момент
                 if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
 
@@ -5118,10 +5131,8 @@ function launchIceArenaPuck(winner) {
                     }, 50);
                 }
 
-                // Зум на место остановки шайбы (в процентах от размеров поля)
-                const puckXPct = (x / fieldW) * 100;
-                const puckYPct = (y / fieldH) * 100;
-                zoomIceArenaField(puckXPct, puckYPct, winner);
+                // Увеличиваем сегмент победителя
+                zoomIceArenaField(targetXPct, winner);
                 return;
             }
 
@@ -5132,14 +5143,12 @@ function launchIceArenaPuck(winner) {
     requestAnimationFrame(frame);
 }
 
-function zoomIceArenaField(puckX, puckY, winner) {
+function zoomIceArenaField(targetXPct, winner) {
     const fieldWrap = document.getElementById('iceFieldWrap');
     const field = document.getElementById('iceField');
 
     if (field) {
-        // Устанавливаем точку трансформации в координаты остановки шайбы
-        field.style.transformOrigin = puckX + '% ' + puckY + '%';
-        // Подсвечиваем сегмент победителя (можно оставить как визуальный бонус)
+        field.style.transformOrigin = targetXPct + '% 50%';
         field.querySelectorAll('.ice-band').forEach(band => {
             if (band.dataset.playerId === winner.id) {
                 band.classList.add('ice-band-winner');
