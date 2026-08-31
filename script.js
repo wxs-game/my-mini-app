@@ -4200,7 +4200,8 @@ let iceArena = {
     botTimeouts: [],
     myBet: 0,
     winner: null,
-    isProcessing: false
+    isProcessing: false,
+    botsScheduled: false
 };
 
 function openIceArena() {
@@ -4232,10 +4233,12 @@ function resetIceArenaRound() {
     iceArena.myBet = 0;
     iceArena.winner = null;
     iceArena.isProcessing = false;
+    iceArena.botsScheduled = false;
 
     const field = document.getElementById('iceField');
     const empty = document.getElementById('iceEmptyState');
     const puck = document.getElementById('icePuck');
+    const puckArrow = puck?.querySelector('.ice-puck-arrow');
     const overlay = document.getElementById('iceResultOverlay');
     const fieldWrap = document.getElementById('iceFieldWrap');
     const timerBox = document.getElementById('iceTimerBox');
@@ -4255,6 +4258,7 @@ function resetIceArenaRound() {
         puck.style.top = '';
         puck.style.transform = '';
     }
+    if (puckArrow) puckArrow.style.transform = '';
     if (overlay) overlay.classList.add('hidden');
     if (fieldWrap) fieldWrap.classList.remove('zoomed');
     if (timerBox) timerBox.classList.remove('counting');
@@ -4277,13 +4281,16 @@ function escapeIceName(name) {
     return div.innerHTML;
 }
 
+function getMyIceArenaAvatar() {
+    // Берём тот же аватар, что уже отрисован в шапке приложения (реальное
+    // фото из Telegram, если оно загрузилось, иначе — заглушка-эмодзи).
+    const avatarHTML = document.getElementById('avatar')?.innerHTML?.trim();
+    return (avatarHTML && avatarHTML.includes('<img')) ? avatarHTML : '🧑';
+}
+
 async function placeIceArenaBet() {
     if (iceArena.phase !== 'betting' && iceArena.phase !== 'countdown') return;
     if (iceArena.isProcessing) return;
-    if (iceArena.players.some(p => p.isUser)) {
-        showMessage('Вы уже сделали ставку в этом раунде');
-        return;
-    }
     if (!lockEconomy()) return;
 
     const input = document.getElementById('iceBetInput');
@@ -4318,23 +4325,32 @@ async function placeIceArenaBet() {
     currentBalance = debitResult.balance;
     setUIBalance(currentBalance);
 
-    const myName = document.getElementById('username')?.textContent?.trim() || 'Вы';
-    iceArena.myBet = bet;
-    iceArena.players.push({
-        id: 'user',
-        name: myName,
-        avatar: '🧑',
-        bet: bet,
-        color: ICE_ARENA_COLORS[0],
-        isUser: true,
-        isBot: false
-    });
+    // Ставку можно добавлять неограниченное количество раз за раунд —
+    // если пользователь уже в игре, просто увеличиваем его текущую ставку.
+    const isFirstBet = !iceArena.players.some(p => p.isUser);
+    let userPlayer = iceArena.players.find(p => p.isUser);
+    if (userPlayer) {
+        userPlayer.bet = roundMoney(userPlayer.bet + bet);
+    } else {
+        const myName = document.getElementById('username')?.textContent?.trim() || 'Вы';
+        userPlayer = {
+            id: 'user',
+            name: myName,
+            avatar: getMyIceArenaAvatar(),
+            bet: bet,
+            color: ICE_ARENA_COLORS[0],
+            isUser: true,
+            isBot: false
+        };
+        iceArena.players.push(userPlayer);
+    }
+    iceArena.myBet = userPlayer.bet;
 
     if (window.tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 
-    if (input) { input.value = ''; input.disabled = true; }
+    if (input) { input.value = ''; }
     const betBtn = document.getElementById('iceArenaBetBtn');
-    if (betBtn) { betBtn.disabled = true; betBtn.textContent = 'Ставка принята ✓'; }
+    if (betBtn) { betBtn.textContent = 'ДОБАВИТЬ СТАВКУ'; }
 
     renderIceArenaField();
     renderIceArenaPlayersList();
@@ -4343,7 +4359,10 @@ async function placeIceArenaBet() {
     iceArena.isProcessing = false;
     unlockEconomy();
 
-    scheduleIceArenaBots();
+    if (isFirstBet && !iceArena.botsScheduled) {
+        iceArena.botsScheduled = true;
+        scheduleIceArenaBots();
+    }
     startIceArenaCountdown();
 }
 
@@ -4537,6 +4556,7 @@ function beginIceArenaSpin() {
 function launchIceArenaPuck(winner) {
     const field = document.getElementById('iceField');
     const puck = document.getElementById('icePuck');
+    const arrow = puck ? puck.querySelector('.ice-puck-arrow') : null;
 
     if (!field || !puck) {
         finishIceArenaRound(winner);
@@ -4561,34 +4581,83 @@ function launchIceArenaPuck(winner) {
     const rect = field.getBoundingClientRect();
     const fieldW = rect.width;
     const fieldH = rect.height;
-    const startX = fieldW / 2;
-    const startY = fieldH / 2;
+
+    const puckRadius = (puck.offsetWidth || 24) / 2;
+    const margin = puckRadius + 3;
+    const arrowOffset = puckRadius + 6; // должно совпадать с translateY стрелки в CSS
+
+    let x = fieldW / 2;
+    let y = fieldH / 2;
+
     const targetX = (targetXPct / 100) * fieldW;
     const targetY = fieldH * (0.35 + Math.random() * 0.3);
 
-    const duration = 2400;
+    // Реальная физика: шайба стартует с высокой скоростью в случайном
+    // направлении, реально летит и рикошетит от бортов арены, трение
+    // с каждым кадром гасит скорость (как настоящее скольжение по льду).
+    // Ближе к концу анимации плавно подмешиваем "тягу" к полосе победителя,
+    // чтобы приземление было гарантированным и без резких скачков.
+    const launchAngle = Math.random() * Math.PI * 2;
+    const launchSpeed = fieldW * (2.4 + Math.random() * 0.8); // px/сек — быстрый, сильный бросок
+    let vx = Math.cos(launchAngle) * launchSpeed;
+    let vy = Math.sin(launchAngle) * launchSpeed;
+
+    const frictionPerFrame = 0.972; // за кадр ~16.7мс — заметное, но не мгновенное торможение
+    const totalDuration = 2500;
+    const steerStart = totalDuration * 0.5;
+
     const startTime = performance.now();
-    const bounces = 3 + Math.floor(Math.random() * 2);
+    let lastTime = startTime;
 
     function frame(now) {
-        const t = Math.min(1, (now - startTime) / duration);
-        const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic — плавное торможение шайбы
+        const dt = Math.max(1, Math.min(32, now - lastTime));
+        lastTime = now;
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / totalDuration);
 
-        const curX = startX + (targetX - startX) * eased;
-        // Затухающее вертикальное "подпрыгивание" шайбы об борта поля.
-        const wobble = Math.sin(t * Math.PI * bounces) * (1 - t) * (fieldH * 0.16);
-        const curY = startY + (targetY - startY) * eased + wobble;
-        const scale = 1 - eased * 0.08;
+        // Трение, нормализованное к прошедшему времени кадра.
+        const frictionStep = Math.pow(frictionPerFrame, dt / 16.67);
+        vx *= frictionStep;
+        vy *= frictionStep;
 
-        puck.style.left = curX + 'px';
-        puck.style.top = curY + 'px';
+        // Плавно "притягиваем" шайбу к цели во второй половине полёта.
+        if (elapsed > steerStart) {
+            const remainingSec = Math.max(0.05, (totalDuration - elapsed) / 1000);
+            const seekVx = (targetX - x) / remainingSec;
+            const seekVy = (targetY - y) / remainingSec;
+            const steerBlend = Math.min(1, (elapsed - steerStart) / (totalDuration - steerStart));
+            vx = vx * (1 - steerBlend) + seekVx * steerBlend;
+            vy = vy * (1 - steerBlend) + seekVy * steerBlend;
+        }
+
+        x += vx * (dt / 1000);
+        y += vy * (dt / 1000);
+
+        // Отскок от бортов арены с потерей энергии — как настоящий удар шайбы о борт.
+        if (x < margin) { x = margin; vx = Math.abs(vx) * 0.55; }
+        if (x > fieldW - margin) { x = fieldW - margin; vx = -Math.abs(vx) * 0.55; }
+        if (y < margin) { y = margin; vy = Math.abs(vy) * 0.55; }
+        if (y > fieldH - margin) { y = fieldH - margin; vy = -Math.abs(vy) * 0.55; }
+
+        const speed = Math.hypot(vx, vy);
+        const scale = 1 - Math.min(0.08, (speed / launchSpeed) * 0.06);
+
+        puck.style.left = x + 'px';
+        puck.style.top = y + 'px';
         puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+
+        // Стрелка крутится вместе с шайбой — всегда смотрит по направлению движения.
+        if (arrow && speed > 4) {
+            const angleDeg = Math.atan2(vy, vx) * 180 / Math.PI + 90;
+            arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + angleDeg + 'deg)';
+        }
 
         if (t < 1) {
             requestAnimationFrame(frame);
         } else {
             puck.style.left = targetX + 'px';
             puck.style.top = targetY + 'px';
+            puck.style.transform = 'translate(-50%, -50%) scale(1)';
             zoomIceArenaField(targetXPct, winner);
         }
     }
@@ -4628,7 +4697,7 @@ async function finishIceArenaRound(winner) {
     const chanceEl = document.getElementById('iceResultChance');
     const winEl = document.getElementById('iceResultWin');
 
-    if (avatarEl) avatarEl.textContent = winner.avatar;
+    if (avatarEl) avatarEl.innerHTML = winner.avatar;
     if (nameEl) nameEl.textContent = winner.name + (winner.isUser ? ' (Вы)' : '');
     if (chanceEl) chanceEl.textContent = chance + '%';
 
