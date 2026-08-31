@@ -1,10 +1,11 @@
 <!DOCTYPE html>
+<!-- WXS Ice Arena GLOBAL LOBBY — index.html | пакет WXS_IceArena_GLOBAL -->
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#090909">
-    <title>WXS Game</title>
+    <title>WXS Game · Ice Arena GLOBAL</title>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://telegram.org/js/telegram-widget.js?22"></script>
@@ -16,7 +17,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 
-    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="style.css?v=ice-global-1">
 
     <!-- Шрифт для большого таймера обратного отсчёта в Краше -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -621,7 +622,7 @@
         </section>
     </main>
 
-    <!-- ==================== АЙС АРЕНА ==================== -->
+    <!-- ==================== АЙС АРЕНА (GLOBAL LOBBY) ==================== -->
     <main id="iceArenaPage" class="ice-arena-page hidden">
         <div class="page-header" style="margin-top: 10px;">
             <button class="back-button" aria-label="Назад" onclick="leaveIceArena()"></button>
@@ -648,7 +649,7 @@
             <div class="ice-arena-field-wrap" id="iceFieldWrap">
                 <div class="ice-arena-field" id="iceField">
                     <div class="ice-arena-empty-state" id="iceEmptyState">
-                        ❄️ Сделайте ставку,<br>чтобы начать раунд
+                        ❄️ Общее лобби<br>Сделайте ставку — соперники подключатся сюда же
                     </div>
 
                     <div class="ice-puck hidden" id="icePuck">
@@ -687,7 +688,7 @@
             <button class="mines-main-btn ice-arena-bet-btn" id="iceArenaBetBtn" onclick="placeIceArenaBet()" style="width: 100%; margin-top: 12px;">
                 СДЕЛАТЬ СТАВКУ
             </button>
-            <p class="wheel-subtitle" style="margin-top: 8px;">Комиссия 5% берётся только с выигрыша — ставка возвращается полностью.</p>
+            <p class="wheel-subtitle" style="margin-top: 8px;">Глобальное лобби: все игроки мира в одном раунде. Комиссия 5% только с выигрыша — ставка возвращается полностью.</p>
         </section>
     </main>
 
@@ -864,6 +865,6 @@
 <script src="animations/explosion-data-part7.js"></script>
 <script src="animations/explosion-data-part8.js"></script>
 <!-- Исполняемый скрипт логики приложения -->
-<script src="script.js?v=3"></script>
+<script src="script.js?v=ice-global-1"></script>
 </body>
 </html>

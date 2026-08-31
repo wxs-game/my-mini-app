@@ -1,3 +1,6 @@
+/* WXS Ice Arena GLOBAL LOBBY — style.css
+   Пакет: WXS_IceArena_GLOBAL
+========================================== */
 /* ==========================================
    СБРОС И БАЗОВЫЕ НАСТРОЙКИ (RESET & BASE)
 ========================================== */
@@ -3218,6 +3221,11 @@ body.fairness-modal-open {
 .ice-arena-timer-box.counting strong {
     color: #4dd8ff;
     text-shadow: 0 0 10px rgba(77,216,255,0.7);
+}
+
+.ice-arena-timer-box.waiting strong {
+    color: #ffb703;
+    font-size: 13px;
 }
 
 .ice-arena-field-wrap {
