@@ -1715,15 +1715,10 @@ function loadOrSeedCrashHistory() {
 
 function beginFlyingPhase() {
     crashGame.phase = 'flying';
-    
-    // Если игрок сделал ставку больше 2.5$, подрываем раунд сразу на 1.00x - 1.05x
-    if (crashGame.betPlaced && crashGame.bet > 2.5) {
-        // Подрыв мгновенно (1.00x)
-        crashGame.crashPoint = 1.00; 
-    } else {
-        crashGame.crashPoint = currentCrashState.crashPoint;
-    }
-
+    // Коэффициент краша берём из уже опубликованного в начале ожидания
+    // хеша (currentCrashState), а не генерируем заново — иначе показанный
+    // игроку хеш никак не будет связан с реальным результатом раунда.
+    crashGame.crashPoint = currentCrashState.crashPoint;
     crashGame.currentMult = 1.00;
     crashGame.startTime = performance.now();
     crashLastHeavyUpdate = 0;
@@ -3126,7 +3121,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "pickaxePage", "adminPage"];
+    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "pickaxePage", "adminPage", "iceArenaPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4181,3 +4176,486 @@ window.copyCrashKey = copyCrashKey;
 
 
 })();
+
+/* ================================================================
+   АЙС АРЕНА (Ice Arena)
+   PvP-банк: все игроки скидываются ставками в общий банк, шанс
+   забрать весь банк пропорционален размеру ставки. Комиссия 5%
+   берётся только с чужих денег (банк минус собственная ставка) —
+   свою ставку победитель получает обратно полностью.
+   Против пользователя играют локальные боты (имитация соперников).
+================================================================ */
+
+const ICE_ARENA_COLORS = ['#ff5470', '#ffb703', '#3dff9a', '#4dd8ff', '#a463f2', '#ff8fab'];
+const ICE_ARENA_BOT_NAMES = ['Frostie', 'Nord', 'Buran', 'Yeti89', 'Snegur', 'Polar_K', 'IceFox', 'Metelitsa', 'Boreal', 'Kholod'];
+const ICE_ARENA_BOT_AVATARS = ['🐧', '🦊', '🐺', '🐻', '🦉', '🐋', '🦭', '🐨'];
+const ICE_ARENA_ROUND_SECONDS = 15;
+const ICE_ARENA_COMMISSION = 0.05;
+const ICE_ARENA_MAX_PLAYERS = 6;
+
+let iceArena = {
+    phase: 'idle',      // idle | betting | countdown | spinning | result
+    players: [],        // { id, name, avatar, bet, color, isUser, isBot }
+    countdownValue: ICE_ARENA_ROUND_SECONDS,
+    countdownInterval: null,
+    botTimeouts: [],
+    myBet: 0,
+    winner: null,
+    isProcessing: false
+};
+
+function openIceArena() {
+    showPage('iceArenaPage');
+    updateNav('games');
+    resetIceArenaRound();
+}
+
+function leaveIceArena() {
+    clearIceArenaTimers();
+    goHome();
+}
+
+function clearIceArenaTimers() {
+    if (iceArena.countdownInterval) {
+        clearInterval(iceArena.countdownInterval);
+        iceArena.countdownInterval = null;
+    }
+    iceArena.botTimeouts.forEach(t => clearTimeout(t));
+    iceArena.botTimeouts = [];
+}
+
+function resetIceArenaRound() {
+    clearIceArenaTimers();
+
+    iceArena.phase = 'betting';
+    iceArena.players = [];
+    iceArena.countdownValue = ICE_ARENA_ROUND_SECONDS;
+    iceArena.myBet = 0;
+    iceArena.winner = null;
+    iceArena.isProcessing = false;
+
+    const field = document.getElementById('iceField');
+    const empty = document.getElementById('iceEmptyState');
+    const puck = document.getElementById('icePuck');
+    const overlay = document.getElementById('iceResultOverlay');
+    const fieldWrap = document.getElementById('iceFieldWrap');
+    const timerBox = document.getElementById('iceTimerBox');
+    const betBtn = document.getElementById('iceArenaBetBtn');
+    const betInput = document.getElementById('iceBetInput');
+    const countdownEl = document.getElementById('iceCountdownValue');
+
+    if (field) {
+        field.querySelectorAll('.ice-band').forEach(b => b.remove());
+        field.style.transformOrigin = '50% 50%';
+    }
+    if (empty) empty.classList.remove('hidden');
+    if (puck) {
+        puck.classList.add('hidden');
+        puck.classList.remove('ice-puck-spinning');
+        puck.style.left = '';
+        puck.style.top = '';
+        puck.style.transform = '';
+    }
+    if (overlay) overlay.classList.add('hidden');
+    if (fieldWrap) fieldWrap.classList.remove('zoomed');
+    if (timerBox) timerBox.classList.remove('counting');
+    if (countdownEl) countdownEl.textContent = '—';
+    if (betBtn) { betBtn.disabled = false; betBtn.textContent = 'СДЕЛАТЬ СТАВКУ'; }
+    if (betInput) { betInput.disabled = false; betInput.value = ''; }
+
+    renderIceArenaField();
+    renderIceArenaPlayersList();
+    updateIceArenaTopbar();
+}
+
+function restartIceArena() {
+    resetIceArenaRound();
+}
+
+function escapeIceName(name) {
+    const div = document.createElement('div');
+    div.textContent = name;
+    return div.innerHTML;
+}
+
+async function placeIceArenaBet() {
+    if (iceArena.phase !== 'betting' && iceArena.phase !== 'countdown') return;
+    if (iceArena.isProcessing) return;
+    if (iceArena.players.some(p => p.isUser)) {
+        showMessage('Вы уже сделали ставку в этом раунде');
+        return;
+    }
+    if (!lockEconomy()) return;
+
+    const input = document.getElementById('iceBetInput');
+    const bet = roundMoney(parseFloat(input?.value));
+
+    if (!bet || isNaN(bet) || bet < MIN_BET) {
+        showMessage('Минимальная ставка — 0.10 $!');
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage('Недостаточно средств!');
+        unlockEconomy();
+        return;
+    }
+
+    iceArena.isProcessing = true;
+    const snapshot = snapshotBalanceState();
+
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debitResult = await placeBetServer(bet, 'Айс Арена');
+    if (!debitResult.ok) {
+        restoreBalanceState(snapshot);
+        showMessage('Не удалось списать ставку. Проверьте соединение и попробуйте снова.');
+        iceArena.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
+
+    const myName = document.getElementById('username')?.textContent?.trim() || 'Вы';
+    iceArena.myBet = bet;
+    iceArena.players.push({
+        id: 'user',
+        name: myName,
+        avatar: '🧑',
+        bet: bet,
+        color: ICE_ARENA_COLORS[0],
+        isUser: true,
+        isBot: false
+    });
+
+    if (window.tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+    if (input) { input.value = ''; input.disabled = true; }
+    const betBtn = document.getElementById('iceArenaBetBtn');
+    if (betBtn) { betBtn.disabled = true; betBtn.textContent = 'Ставка принята ✓'; }
+
+    renderIceArenaField();
+    renderIceArenaPlayersList();
+    updateIceArenaTopbar();
+
+    iceArena.isProcessing = false;
+    unlockEconomy();
+
+    scheduleIceArenaBots();
+    startIceArenaCountdown();
+}
+
+function scheduleIceArenaBots() {
+    const slotsLeft = ICE_ARENA_MAX_PLAYERS - iceArena.players.length;
+    const botCount = Math.max(1, Math.min(slotsLeft, 1 + Math.floor(Math.random() * 3)));
+    const usedNames = new Set(iceArena.players.map(p => p.name));
+
+    for (let i = 0; i < botCount; i++) {
+        const delay = 500 + Math.random() * 3500 + i * 600;
+        const t = setTimeout(() => addIceArenaBot(usedNames), delay);
+        iceArena.botTimeouts.push(t);
+    }
+}
+
+function addIceArenaBot(usedNames) {
+    if (iceArena.phase !== 'countdown' && iceArena.phase !== 'betting') return;
+    if (iceArena.players.length >= ICE_ARENA_MAX_PLAYERS) return;
+
+    let name;
+    let attempts = 0;
+    do {
+        name = ICE_ARENA_BOT_NAMES[Math.floor(Math.random() * ICE_ARENA_BOT_NAMES.length)];
+        attempts++;
+    } while (usedNames.has(name) && attempts < 10);
+    usedNames.add(name);
+
+    const avatar = ICE_ARENA_BOT_AVATARS[Math.floor(Math.random() * ICE_ARENA_BOT_AVATARS.length)];
+    const baseBet = iceArena.myBet || MIN_BET;
+    const bet = roundMoney(Math.max(MIN_BET, baseBet * (0.4 + Math.random() * 2.2)));
+    const colorIndex = iceArena.players.length % ICE_ARENA_COLORS.length;
+
+    iceArena.players.push({
+        id: 'bot_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        name,
+        avatar,
+        bet,
+        color: ICE_ARENA_COLORS[colorIndex],
+        isUser: false,
+        isBot: true
+    });
+
+    renderIceArenaField();
+    renderIceArenaPlayersList();
+    updateIceArenaTopbar();
+}
+
+function startIceArenaCountdown() {
+    if (iceArena.countdownInterval) return;
+
+    iceArena.phase = 'countdown';
+    iceArena.countdownValue = ICE_ARENA_ROUND_SECONDS;
+
+    const timerBox = document.getElementById('iceTimerBox');
+    const countdownEl = document.getElementById('iceCountdownValue');
+    if (timerBox) timerBox.classList.add('counting');
+    if (countdownEl) countdownEl.textContent = iceArena.countdownValue + 'с';
+
+    iceArena.countdownInterval = setInterval(() => {
+        iceArena.countdownValue--;
+        if (countdownEl) countdownEl.textContent = Math.max(0, iceArena.countdownValue) + 'с';
+        if (iceArena.countdownValue <= 0) {
+            clearInterval(iceArena.countdownInterval);
+            iceArena.countdownInterval = null;
+            beginIceArenaSpin();
+        }
+    }, 1000);
+}
+
+function renderIceArenaField() {
+    const field = document.getElementById('iceField');
+    const empty = document.getElementById('iceEmptyState');
+    const puck = document.getElementById('icePuck');
+    if (!field) return;
+
+    field.querySelectorAll('.ice-band').forEach(b => b.remove());
+
+    if (!iceArena.players.length) {
+        if (empty) empty.classList.remove('hidden');
+        return;
+    }
+    if (empty) empty.classList.add('hidden');
+
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    let cursor = 0;
+
+    iceArena.players.forEach((p) => {
+        const widthPct = (p.bet / total) * 100;
+        const chancePct = ((p.bet / total) * 100).toFixed(1);
+
+        const band = document.createElement('div');
+        band.className = 'ice-band' + (p.isUser ? ' ice-band-user' : '');
+        band.dataset.playerId = p.id;
+        band.style.left = cursor + '%';
+        band.style.width = widthPct + '%';
+        band.style.background = `linear-gradient(180deg, ${p.color}dd 0%, ${p.color}55 100%)`;
+
+        band.innerHTML =
+            '<div class="ice-band-avatar">' + p.avatar + '</div>' +
+            '<div class="ice-band-name">' + escapeIceName(p.name) + '</div>' +
+            '<div class="ice-band-bet">' + p.bet.toFixed(2) + '$ · ' + chancePct + '%</div>';
+
+        if (puck) {
+            field.insertBefore(band, puck);
+        } else {
+            field.appendChild(band);
+        }
+        cursor += widthPct;
+    });
+}
+
+function renderIceArenaPlayersList() {
+    const list = document.getElementById('iceArenaPlayersList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    const sorted = [...iceArena.players].sort((a, b) => b.bet - a.bet);
+
+    sorted.forEach(p => {
+        const chance = total > 0 ? ((p.bet / total) * 100).toFixed(1) : '0.0';
+        const row = document.createElement('div');
+        row.className = 'ice-player-row' + (p.isUser ? ' ice-player-row-user' : '');
+        row.innerHTML =
+            '<div class="ice-player-row-avatar" style="background:' + p.color + '33;">' + p.avatar + '</div>' +
+            '<div class="ice-player-row-name">' + escapeIceName(p.name) + (p.isUser ? ' (Вы)' : '') + '</div>' +
+            '<div class="ice-player-row-chance">' + chance + '%</div>' +
+            '<div class="ice-player-row-bet">' + p.bet.toFixed(2) + '$</div>';
+        list.appendChild(row);
+    });
+}
+
+function updateIceArenaTopbar() {
+    const bankEl = document.getElementById('iceBankValue');
+    const countEl = document.getElementById('icePlayersCount');
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    if (bankEl) bankEl.textContent = total.toFixed(2) + ' $';
+    if (countEl) countEl.textContent = iceArena.players.length;
+}
+
+function pickIceArenaWinner() {
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    let r = Math.random() * total;
+    for (const p of iceArena.players) {
+        if (r < p.bet) return p;
+        r -= p.bet;
+    }
+    return iceArena.players[iceArena.players.length - 1];
+}
+
+function beginIceArenaSpin() {
+    if (!iceArena.players.length) {
+        // Раунд закончился, но ставок так никто и не сделал — просто сбрасываем.
+        resetIceArenaRound();
+        return;
+    }
+
+    iceArena.phase = 'spinning';
+    clearIceArenaTimers(); // больше боты не подключаются
+
+    const timerBox = document.getElementById('iceTimerBox');
+    const countdownEl = document.getElementById('iceCountdownValue');
+    if (timerBox) timerBox.classList.remove('counting');
+    if (countdownEl) countdownEl.textContent = '🎲';
+
+    const winner = pickIceArenaWinner();
+    iceArena.winner = winner;
+
+    const puck = document.getElementById('icePuck');
+    if (puck) {
+        puck.classList.remove('hidden');
+        puck.style.left = '50%';
+        puck.style.top = '50%';
+        puck.style.transform = 'translate(-50%, -50%)';
+
+        const spinDeg = 900 + Math.random() * 900;
+        puck.style.setProperty('--ice-spin-deg', spinDeg + 'deg');
+        // Перезапуск CSS-анимации вращения (снятие и добавление класса)
+        puck.classList.remove('ice-puck-spinning');
+        void puck.offsetWidth;
+        puck.classList.add('ice-puck-spinning');
+    }
+
+    if (window.tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+
+    setTimeout(() => {
+        launchIceArenaPuck(winner);
+    }, 1500);
+}
+
+function launchIceArenaPuck(winner) {
+    const field = document.getElementById('iceField');
+    const puck = document.getElementById('icePuck');
+
+    if (!field || !puck) {
+        finishIceArenaRound(winner);
+        return;
+    }
+
+    puck.classList.remove('ice-puck-spinning');
+
+    // Целевая X-координата (в %) — центр полосы победителя.
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    let cursor = 0;
+    let targetXPct = 50;
+    for (const p of iceArena.players) {
+        const w = (p.bet / total) * 100;
+        if (p.id === winner.id) {
+            targetXPct = cursor + w / 2;
+            break;
+        }
+        cursor += w;
+    }
+
+    const rect = field.getBoundingClientRect();
+    const fieldW = rect.width;
+    const fieldH = rect.height;
+    const startX = fieldW / 2;
+    const startY = fieldH / 2;
+    const targetX = (targetXPct / 100) * fieldW;
+    const targetY = fieldH * (0.35 + Math.random() * 0.3);
+
+    const duration = 2400;
+    const startTime = performance.now();
+    const bounces = 3 + Math.floor(Math.random() * 2);
+
+    function frame(now) {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic — плавное торможение шайбы
+
+        const curX = startX + (targetX - startX) * eased;
+        // Затухающее вертикальное "подпрыгивание" шайбы об борта поля.
+        const wobble = Math.sin(t * Math.PI * bounces) * (1 - t) * (fieldH * 0.16);
+        const curY = startY + (targetY - startY) * eased + wobble;
+        const scale = 1 - eased * 0.08;
+
+        puck.style.left = curX + 'px';
+        puck.style.top = curY + 'px';
+        puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+
+        if (t < 1) {
+            requestAnimationFrame(frame);
+        } else {
+            puck.style.left = targetX + 'px';
+            puck.style.top = targetY + 'px';
+            zoomIceArenaField(targetXPct, winner);
+        }
+    }
+    requestAnimationFrame(frame);
+}
+
+function zoomIceArenaField(targetXPct, winner) {
+    const fieldWrap = document.getElementById('iceFieldWrap');
+    const field = document.getElementById('iceField');
+
+    if (field) {
+        field.style.transformOrigin = targetXPct + '% 50%';
+        field.querySelectorAll('.ice-band').forEach(band => {
+            if (band.dataset.playerId === winner.id) {
+                band.classList.add('ice-band-winner');
+            }
+        });
+    }
+    if (fieldWrap) fieldWrap.classList.add('zoomed');
+
+    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+
+    setTimeout(() => {
+        finishIceArenaRound(winner);
+    }, 900);
+}
+
+async function finishIceArenaRound(winner) {
+    iceArena.phase = 'result';
+
+    const total = roundMoney(iceArena.players.reduce((s, p) => s + p.bet, 0));
+    const chance = total > 0 ? ((winner.bet / total) * 100).toFixed(1) : '0.0';
+
+    const overlay = document.getElementById('iceResultOverlay');
+    const avatarEl = document.getElementById('iceResultAvatar');
+    const nameEl = document.getElementById('iceResultName');
+    const chanceEl = document.getElementById('iceResultChance');
+    const winEl = document.getElementById('iceResultWin');
+
+    if (avatarEl) avatarEl.textContent = winner.avatar;
+    if (nameEl) nameEl.textContent = winner.name + (winner.isUser ? ' (Вы)' : '');
+    if (chanceEl) chanceEl.textContent = chance + '%';
+
+    if (winner.isUser) {
+        // Комиссия 5% берётся только с чужих денег в банке — своя ставка
+        // возвращается победителю полностью, без вычета.
+        const profit = roundMoney(total - winner.bet);
+        const commission = roundMoney(profit * ICE_ARENA_COMMISSION);
+        const payout = roundMoney(total - commission);
+
+        if (winEl) winEl.textContent = 'Выигрыш: +' + payout.toFixed(2) + ' $';
+
+        currentTotalWin = roundMoney(currentTotalWin + payout);
+        currentWinsCount++;
+        setUIBalance(roundMoney(currentBalance + payout));
+
+        const creditResult = await resolveWinServerWithRetry(payout, null);
+        if (creditResult.ok) {
+            currentBalance = creditResult.balance;
+            setUIBalance(currentBalance);
+        } else {
+            showMessage('Не удалось зачислить выигрыш. Откройте баланс ещё раз — сервер попробует снова.');
+        }
+    } else {
+        if (winEl) winEl.textContent = 'Победил ' + winner.name + ' · банк ' + total.toFixed(2) + ' $';
+    }
+
+    if (overlay) overlay.classList.remove('hidden');
+}
