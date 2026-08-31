@@ -4586,50 +4586,124 @@ function launchIceArenaPuck(winner) {
     const margin = puckRadius + 3;
     const arrowOffset = puckRadius + 6; // должно совпадать с translateY стрелки в CSS
 
+    const minX = margin, maxX = fieldW - margin;
+    const minY = margin, maxY = fieldH - margin;
+
     let x = fieldW / 2;
     let y = fieldH / 2;
 
     const targetX = (targetXPct / 100) * fieldW;
     const targetY = fieldH * (0.35 + Math.random() * 0.3);
 
-    // Шайба летит строго по прямой от старта до цели — направление
-    // задаётся один раз и никогда не меняется (без рикошетов и доворотов).
-    // Сильный первоначальный толчок, дальше плавное торможение (ease-out),
-    // чтобы приземление в полосе победителя было мягким и без рывка.
-    const dx = targetX - x;
-    const dy = targetY - y;
-    const dist = Math.max(1, Math.hypot(dx, dy));
-    const dirX = dx / dist;
-    const dirY = dy / dist;
-    const arrowAngleDeg = Math.atan2(dirY, dirX) * 180 / Math.PI + 90;
-    if (arrow) {
-        arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + arrowAngleDeg + 'deg)';
+    function setArrowAngle(dirX, dirY) {
+        if (!arrow) return;
+        const ang = Math.atan2(dirY, dirX) * 180 / Math.PI + 90;
+        arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + ang + 'deg)';
     }
 
-    const totalDuration = 1400;
-    const startX = x;
-    const startY = y;
+    function pulsePuckBounce() {
+        // Мелкая вибрация шайбы в момент удара о борт.
+        puck.classList.remove('ice-puck-shake');
+        void puck.offsetWidth;
+        puck.classList.add('ice-puck-shake');
+        if (window.tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    }
+
+    // ---- Фаза 1: хаотичный полёт на огромной скорости с рикошетами ----
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 2000 + Math.random() * 900; // px/сек — огромная стартовая скорость
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+
+    const bounceTarget = 2 + Math.floor(Math.random() * 2); // 2 или 3 отскока
+    let bounceCount = 0;
+
+    // Случайный резкий стоп посреди полёта — эффект неожиданности.
+    const stopPlanned = Math.random() < 0.55;
+    const stopAtBounce = stopPlanned ? 1 + Math.floor(Math.random() * Math.max(1, bounceTarget - 1)) : -1;
+    let stopUntil = 0;
+
+    setArrowAngle(vx, vy);
+
+    let phase = 'bounce';
+    let homeStartX = x, homeStartY = y, homeStartTime = 0;
+    const homeDuration = 480 + Math.random() * 220;
+    const launchStart = performance.now();
+    let lastTime = launchStart;
 
     function easeOutStrong(t) {
-        // Быстрый резкий старт (сильный толчок), плавное гашение к концу.
         return 1 - Math.pow(1 - t, 3);
     }
 
-    const startTime = performance.now();
-
     function frame(now) {
-        const elapsed = now - startTime;
-        const t = Math.min(1, elapsed / totalDuration);
+        const dt = Math.min(0.04, (now - lastTime) / 1000);
+        lastTime = now;
+
+        // Страховка: если по каким-то причинам фаза отскоков затянулась,
+        // принудительно переходим к финальному наведению на цель.
+        if (phase === 'bounce' && now - launchStart > 3000) {
+            phase = 'home';
+            homeStartX = x; homeStartY = y; homeStartTime = now;
+        }
+
+        if (phase === 'stop') {
+            puck.style.left = x + 'px';
+            puck.style.top = y + 'px';
+            if (now < stopUntil) {
+                requestAnimationFrame(frame);
+                return;
+            }
+            phase = 'bounce';
+        }
+
+        if (phase === 'bounce') {
+            x += vx * dt;
+            y += vy * dt;
+
+            let bounced = false;
+            if (x < minX) { x = minX; vx = -vx; bounced = true; }
+            else if (x > maxX) { x = maxX; vx = -vx; bounced = true; }
+            if (y < minY) { y = minY; vy = -vy; bounced = true; }
+            else if (y > maxY) { y = maxY; vy = -vy; bounced = true; }
+
+            if (bounced) {
+                bounceCount++;
+                vx *= 0.85; // небольшая потеря скорости на каждом отскоке
+                vy *= 0.85;
+                pulsePuckBounce();
+                setArrowAngle(vx, vy);
+
+                if (bounceCount >= bounceTarget) {
+                    phase = 'home';
+                    homeStartX = x; homeStartY = y; homeStartTime = now;
+                } else if (stopPlanned && bounceCount === stopAtBounce) {
+                    phase = 'stop';
+                    stopUntil = now + 150 + Math.random() * 220;
+                    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
+                }
+            } else {
+                setArrowAngle(vx, vy);
+            }
+
+            puck.style.left = x + 'px';
+            puck.style.top = y + 'px';
+            requestAnimationFrame(frame);
+            return;
+        }
+
+        // ---- Фаза 2: плавное наведение и мягкая посадка в полосу победителя ----
+        const elapsed = now - homeStartTime;
+        const t = Math.min(1, elapsed / homeDuration);
         const eased = easeOutStrong(t);
 
-        x = startX + dx * eased;
-        y = startY + dy * eased;
-
+        x = homeStartX + (targetX - homeStartX) * eased;
+        y = homeStartY + (targetY - homeStartY) * eased;
         const scale = 1 - 0.06 * eased;
 
         puck.style.left = x + 'px';
         puck.style.top = y + 'px';
         puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+        setArrowAngle(targetX - homeStartX, targetY - homeStartY);
 
         if (t < 1) {
             requestAnimationFrame(frame);

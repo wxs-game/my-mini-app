@@ -3333,6 +3333,19 @@ body.fairness-modal-open {
     will-change: transform;
 }
 
+.ice-puck.ice-puck-shake {
+    animation: icePuckShake 0.16s ease-in-out;
+}
+
+@keyframes icePuckShake {
+    0%   { box-shadow: 0 6px 14px rgba(0,0,0,0.55), 0 0 18px rgba(120,190,255,0.5); }
+    20%  { transform: translate(calc(-50% + 2px), calc(-50% - 2px)); }
+    40%  { transform: translate(calc(-50% - 3px), calc(-50% + 1px)); }
+    60%  { transform: translate(calc(-50% + 2px), calc(-50% + 2px)); }
+    80%  { transform: translate(calc(-50% - 1px), calc(-50% - 1px)); }
+    100% { transform: translate(-50%, -50%); box-shadow: 0 6px 22px rgba(0,0,0,0.6), 0 0 26px rgba(120,190,255,0.85); }
+}
+
 .ice-puck-arrow {
     position: absolute;
     top: 50%;
