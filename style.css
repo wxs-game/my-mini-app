@@ -3322,8 +3322,8 @@ body.fairness-modal-open {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 40px;
-    height: 40px;
+    width: 24px;
+    height: 24px;
     transform: translate(-50%, -50%);
     border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, #4a4a4a, #0a0a0a 70%);
@@ -3339,11 +3339,12 @@ body.fairness-modal-open {
     left: 50%;
     width: 0;
     height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 14px solid #4dd8ff;
-    transform: translate(-50%, -26px);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 10px solid #4dd8ff;
+    transform: translate(-50%, -18px);
     filter: drop-shadow(0 0 6px rgba(77,216,255,0.9));
+    will-change: transform;
 }
 
 .ice-puck.ice-puck-spinning .ice-puck-arrow {
@@ -3351,8 +3352,8 @@ body.fairness-modal-open {
 }
 
 @keyframes icePuckSpin {
-    from { transform: translate(-50%, -26px) rotate(0deg); }
-    to   { transform: translate(-50%, -26px) rotate(var(--ice-spin-deg, 1080deg)); }
+    from { transform: translate(-50%, -18px) rotate(0deg); }
+    to   { transform: translate(-50%, -18px) rotate(var(--ice-spin-deg, 1080deg)); }
 }
 
 .ice-result-overlay {
@@ -3421,14 +3422,6 @@ body.fairness-modal-open {
     gap: 8px;
     width: 100%;
     max-width: 220px;
-}
-
-.ice-result-home-btn {
-    padding: 12px;
-    font-size: 13px;
-    background: rgba(255,255,255,0.08);
-    color: #ffffff;
-    border: 1px solid rgba(255,255,255,0.18);
 }
 
 .ice-arena-players-list {
