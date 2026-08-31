@@ -467,6 +467,7 @@ async function loadUserData() {
 ========================= */
 const LIVE_BETS_TABLE = 'live_bets';
 const LIVE_BETS_MAX = 10;
+const ICE_ARENA_LIVE_GAME = 'Айс Арена';
 // От какого множителя выигрыш вообще показываем в ленте как "ставка → выигрыш"
 const LIVE_BET_WIN_THRESHOLD = 1.3;
 // Минимум записей в одном "круге" ленты — если реальных ставок мало,
@@ -589,13 +590,14 @@ async function broadcastLiveBet(amount, gameLabel) {
 // Вызывается при выигрыше (Мины/Краш — на "Забрать", Кирка — когда сломалась,
 // Колесо — по итогу спина). Если множитель выигрыша меньше LIVE_BET_WIN_THRESHOLD
 // или ставка не была сохранена (liveBetId нет) — запись в ленте не трогаем.
-async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
+async function resolveLiveBetWin(liveBetId, betAmount, winAmount, opts) {
     if (!liveBetId || !betAmount || betAmount <= 0 || !winAmount) return;
 
     const multiplier = winAmount / betAmount;
-    if (multiplier < LIVE_BET_WIN_THRESHOLD) return;
+    if (!opts?.force && multiplier < LIVE_BET_WIN_THRESHOLD) return;
 
     const winPatch = { win_amount: roundMoney(winAmount), multiplier: roundMoney(multiplier) };
+
 
     // Показываем стрелку "ставка → выигрыш" у автора ставки сразу же, не
     // дожидаясь ответа сервера — так это гарантированно видно на своём
@@ -641,7 +643,38 @@ function updateLiveBetInTicker(updatedBet) {
     renderLiveBetsTicker();
 }
 
-function renderLiveBetsTicker() {
+function isIceArenaLiveBet(bet) {
+    return (bet?.game || '') === ICE_ARENA_LIVE_GAME;
+}
+
+function isLiveTickerWin(bet) {
+    const mult = Number(bet.multiplier) || 0;
+    if (bet.win_amount == null) return false;
+    if (isIceArenaLiveBet(bet)) return true;
+    return mult >= LIVE_BET_WIN_THRESHOLD;
+}
+
+function isLiveTickerItem(bet) {
+    return isLiveTickerWin(bet) || isIceArenaLiveBet(bet);
+}
+
+function liveBetCardFingerprint(bet) {
+    return [bet.amount, bet.win_amount, bet.multiplier, bet.game].join('|');
+}
+
+function liveWinCardMetaHtml(bet) {
+    const game = escapeHtml(bet.game || 'Игра');
+    if (isLiveTickerWin(bet)) {
+        return game + ' • ' +
+            '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+            '<span class="live-wins-arrow">→</span>' +
+            '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
+            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">';
+    }
+    return game + ' • ' +
+        '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
+        '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">';
+}
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
     if (!pinned || !scroll) return;
@@ -650,10 +683,8 @@ function renderLiveBetsTicker() {
     // все подряд ставки, а только те, что доросли до выигрыша от
     // LIVE_BET_WIN_THRESHOLD — именно так подписан пустой стейт
     // ("Пока нет крупных выигрышей").
-    const bigWins = liveBetsQueue.filter((bet) => {
-        const mult = Number(bet.multiplier) || 0;
-        return bet.win_amount != null && mult >= LIVE_BET_WIN_THRESHOLD;
-    });
+    const tickerItems = liveBetsQueue.filter(isLiveTickerItem);
+    const bigWins = liveBetsQueue.filter(isLiveTickerWin);
 
     // --- Закреплённая карточка "Выигрыш дня" — крупнейший из загруженных ---
     if (bigWins.length === 0) {
@@ -4959,47 +4990,49 @@ function launchIceArenaPuck(winner) {
     const field = document.getElementById('iceField');
     const puck = document.getElementById('icePuck');
     const arrow = puck ? puck.querySelector('.ice-puck-arrow') : null;
+
     if (!field || !puck) {
         finishIceArenaRound(winner);
         return;
     }
 
+    puck.classList.remove('ice-puck-spinning');
+
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    let cursor = 0;
+    let targetXPct = 50;
+    for (const p of iceArena.players) {
+        const w = total > 0 ? (p.bet / total) * 100 : 0;
+        if (p.id === winner.id) {
+            targetXPct = cursor + w / 2;
+            break;
+        }
+        cursor += w;
+    }
+
     const rect = field.getBoundingClientRect();
     const fieldW = rect.width;
     const fieldH = rect.height;
+
     const puckRadius = (puck.offsetWidth || 24) / 2;
     const margin = puckRadius + 3;
     const arrowOffset = puckRadius + 6;
 
-    // Случайная стартовая позиция (с отступом от краёв)
-    const startX = margin + Math.random() * (fieldW - 2 * margin);
-    const startY = margin + Math.random() * (fieldH - 2 * margin);
+    const minX = margin, maxX = fieldW - margin;
+    const minY = margin, maxY = fieldH - margin;
 
-    // Случайное направление и скорость
-    let angle = Math.random() * 2 * Math.PI;
-    let speed = 300 + Math.random() * 500; // 300–800 px/сек
-    let vx = Math.cos(angle) * speed;
-    let vy = Math.sin(angle) * speed;
+    let x = fieldW / 2;
+    let y = fieldH / 2;
 
-    let x = startX;
-    let y = startY;
-    puck.style.left = x + 'px';
-    puck.style.top = y + 'px';
+    const targetX = (targetXPct / 100) * fieldW;
+    const targetY = fieldH * (0.35 + Math.random() * 0.3);
 
-    // Установка угла стрелки (указывает направление движения)
-    function setArrowAngle(vx, vy) {
+    function setArrowAngle(dirX, dirY) {
         if (!arrow) return;
-        const ang = Math.atan2(vy, vx) * 180 / Math.PI + 90;
+        const ang = Math.atan2(dirY, dirX) * 180 / Math.PI + 90;
         arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + ang + 'deg)';
     }
-    setArrowAngle(vx, vy);
 
-    let bounceCount = 0;
-    const maxBounces = 5 + Math.floor(Math.random() * 4); // 5–8 отскоков
-    let decelerating = false;
-    let lastTime = performance.now();
-
-    // Короткая вибрация при отскоке
     function pulsePuckBounce() {
         puck.classList.remove('ice-puck-shake');
         void puck.offsetWidth;
@@ -5007,32 +5040,73 @@ function launchIceArenaPuck(winner) {
         if (window.tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
     }
 
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 2000 + Math.random() * 900;
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+
+    const bounceTarget = 2 + Math.floor(Math.random() * 2);
+    let bounceCount = 0;
+
+    const stopPlanned = Math.random() < 0.55;
+    const stopAtBounce = stopPlanned ? 1 + Math.floor(Math.random() * Math.max(1, bounceTarget - 1)) : -1;
+    let stopUntil = 0;
+
+    setArrowAngle(vx, vy);
+
+    let phase = 'bounce';
+    let homeStartX = x, homeStartY = y, homeStartTime = 0;
+    const homeDuration = 480 + Math.random() * 220;
+    const launchStart = performance.now();
+    let lastTime = launchStart;
+
+    function easeOutStrong(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+
     function frame(now) {
         const dt = Math.min(0.04, (now - lastTime) / 1000);
         lastTime = now;
 
-        if (!decelerating) {
-            // Фаза активного движения с отскоками
+        if (phase === 'bounce' && now - launchStart > 3000) {
+            phase = 'home';
+            homeStartX = x; homeStartY = y; homeStartTime = now;
+        }
+
+        if (phase === 'stop') {
+            puck.style.left = x + 'px';
+            puck.style.top = y + 'px';
+            if (now < stopUntil) {
+                requestAnimationFrame(frame);
+                return;
+            }
+            phase = 'bounce';
+        }
+
+        if (phase === 'bounce') {
             x += vx * dt;
             y += vy * dt;
 
             let bounced = false;
-            if (x < margin) { x = margin; vx = -vx; bounced = true; }
-            else if (x > fieldW - margin) { x = fieldW - margin; vx = -vx; bounced = true; }
-            if (y < margin) { y = margin; vy = -vy; bounced = true; }
-            else if (y > fieldH - margin) { y = fieldH - margin; vy = -vy; bounced = true; }
+            if (x < minX) { x = minX; vx = -vx; bounced = true; }
+            else if (x > maxX) { x = maxX; vx = -vx; bounced = true; }
+            if (y < minY) { y = minY; vy = -vy; bounced = true; }
+            else if (y > maxY) { y = maxY; vy = -vy; bounced = true; }
 
             if (bounced) {
                 bounceCount++;
-                // Затухание скорости при ударе о борт
-                const damping = 0.92 + Math.random() * 0.03;
-                vx *= damping;
-                vy *= damping;
+                vx *= 0.85;
+                vy *= 0.85;
                 pulsePuckBounce();
                 setArrowAngle(vx, vy);
 
-                if (bounceCount >= maxBounces) {
-                    decelerating = true;
+                if (bounceCount >= bounceTarget) {
+                    phase = 'home';
+                    homeStartX = x; homeStartY = y; homeStartTime = now;
+                } else if (stopPlanned && bounceCount === stopAtBounce) {
+                    phase = 'stop';
+                    stopUntil = now + 150 + Math.random() * 220;
+                    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
                 }
             } else {
                 setArrowAngle(vx, vy);
@@ -5041,74 +5115,31 @@ function launchIceArenaPuck(winner) {
             puck.style.left = x + 'px';
             puck.style.top = y + 'px';
             requestAnimationFrame(frame);
-        } else {
-            // Фаза замедления – шайба плавно останавливается
-            const decelFactor = 0.98;
-            vx *= decelFactor;
-            vy *= decelFactor;
-            x += vx * dt;
-            y += vy * dt;
+            return;
+        }
 
-            let bounced = false;
-            if (x < margin) { x = margin; vx = -vx * 0.9; bounced = true; }
-            else if (x > fieldW - margin) { x = fieldW - margin; vx = -vx * 0.9; bounced = true; }
-            if (y < margin) { y = margin; vy = -vy * 0.9; bounced = true; }
-            else if (y > fieldH - margin) { y = fieldH - margin; vy = -vy * 0.9; bounced = true; }
-            if (bounced) {
-                pulsePuckBounce();
-                setArrowAngle(vx, vy);
-            }
+        const elapsed = now - homeStartTime;
+        const t = Math.min(1, elapsed / homeDuration);
+        const eased = easeOutStrong(t);
 
-            puck.style.left = x + 'px';
-            puck.style.top = y + 'px';
+        x = homeStartX + (targetX - homeStartX) * eased;
+        y = homeStartY + (targetY - homeStartY) * eased;
+        const scale = 1 - 0.06 * eased;
 
-            const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-            if (currentSpeed < 5) {
-                // Шайба остановилась – показываем кульминацию
-                puck.style.left = x + 'px';
-                puck.style.top = y + 'px';
+        puck.style.left = x + 'px';
+        puck.style.top = y + 'px';
+        puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+        setArrowAngle(targetX - homeStartX, targetY - homeStartY);
 
-                // Вычисляем позицию победителя в процентах для зума
-                const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
-                let cursor = 0;
-                let targetXPct = 50;
-                for (const p of iceArena.players) {
-                    const w = total > 0 ? (p.bet / total) * 100 : 0;
-                    if (p.id === winner.id) {
-                        targetXPct = cursor + w / 2;
-                        break;
-                    }
-                    cursor += w;
-                }
-
-                // Вибрация и тряска экрана в кульминационный момент
-                if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-
-                const fieldWrap = document.getElementById('iceFieldWrap');
-                if (fieldWrap) {
-                    let shakeCount = 0;
-                    const shakeInterval = setInterval(() => {
-                        if (shakeCount > 10) {
-                            clearInterval(shakeInterval);
-                            fieldWrap.style.transform = '';
-                            return;
-                        }
-                        const dx = (Math.random() - 0.5) * 4;
-                        const dy = (Math.random() - 0.5) * 4;
-                        fieldWrap.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
-                        shakeCount++;
-                    }, 50);
-                }
-
-                // Увеличиваем сегмент победителя
-                zoomIceArenaField(targetXPct, winner);
-                return;
-            }
-
+        if (t < 1) {
             requestAnimationFrame(frame);
+        } else {
+            puck.style.left = targetX + 'px';
+            puck.style.top = targetY + 'px';
+            puck.style.transform = 'translate(-50%, -50%) scale(1)';
+            zoomIceArenaField(targetXPct, winner);
         }
     }
-
     requestAnimationFrame(frame);
 }
 
@@ -5200,11 +5231,7 @@ async function finishIceArenaRound(winner) {
         ? roundMoney(Number(round.payout))
         : roundMoney(total - roundMoney((total - winner.bet) * ICE_ARENA_COMMISSION));
 
-    if (winner.isUser) {
-        if (winEl) winEl.textContent = 'Выигрыш: +' + payout.toFixed(2) + ' $';
-    } else {
-        if (winEl) winEl.textContent = 'Победил ' + winner.name + ' · банк ' + total.toFixed(2) + ' $';
-    }
+    if (winEl) winEl.textContent = 'Выигрыш: +' + payout.toFixed(2) + ' $';
 
     if (overlay) overlay.classList.remove('hidden');
     updateIceArenaBetControls();
