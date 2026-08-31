@@ -4175,7 +4175,6 @@ window.copyCrashKey = copyCrashKey;
 
 
 
-})();
 
 /* ================================================================
    АЙС АРЕНА (Ice Arena)
@@ -4659,3 +4658,12 @@ async function finishIceArenaRound(winner) {
 
     if (overlay) overlay.classList.remove('hidden');
 }
+
+window.openIceArena = openIceArena;
+window.leaveIceArena = leaveIceArena;
+window.placeIceArenaBet = placeIceArenaBet;
+window.restartIceArena = restartIceArena;
+window.applyBetFactor = applyBetFactor;
+window.applyBetMax = applyBetMax;
+
+})();
