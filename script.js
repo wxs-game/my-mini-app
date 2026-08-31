@@ -4598,13 +4598,14 @@ function launchIceArenaPuck(winner) {
     // Ближе к концу анимации плавно подмешиваем "тягу" к полосе победителя,
     // чтобы приземление было гарантированным и без резких скачков.
     const launchAngle = Math.random() * Math.PI * 2;
-    const launchSpeed = fieldW * (2.4 + Math.random() * 0.8); // px/сек — быстрый, сильный бросок
+    const launchSpeed = fieldW * (3.6 + Math.random() * 1.2); // px/сек — очень быстрый, мощный бросок
     let vx = Math.cos(launchAngle) * launchSpeed;
     let vy = Math.sin(launchAngle) * launchSpeed;
 
-    const frictionPerFrame = 0.972; // за кадр ~16.7мс — заметное, но не мгновенное торможение
+    const frictionPerFrame = 0.988; // почти не тормозит, пока не начнётся выход на цель
+    const wallRestitution = 0.92;   // почти без потерь энергии — много рикошетов от бортов
     const totalDuration = 2500;
-    const steerStart = totalDuration * 0.5;
+    const steerStart = totalDuration * 0.4; // после этого момента шайба летит по прямой, без отскоков
 
     const startTime = performance.now();
     let lastTime = startTime;
@@ -4620,8 +4621,11 @@ function launchIceArenaPuck(winner) {
         vx *= frictionStep;
         vy *= frictionStep;
 
-        // Плавно "притягиваем" шайбу к цели во второй половине полёта.
-        if (elapsed > steerStart) {
+        // До steerStart шайба свободно летает и рикошетит от бортов/углов.
+        // После — плавно "притягиваем" её к цели, и с этого момента она
+        // летит только по прямой, куда указывает стрелка (без отскоков).
+        const steering = elapsed > steerStart;
+        if (steering) {
             const remainingSec = Math.max(0.05, (totalDuration - elapsed) / 1000);
             const seekVx = (targetX - x) / remainingSec;
             const seekVy = (targetY - y) / remainingSec;
@@ -4633,11 +4637,19 @@ function launchIceArenaPuck(winner) {
         x += vx * (dt / 1000);
         y += vy * (dt / 1000);
 
-        // Отскок от бортов арены с потерей энергии — как настоящий удар шайбы о борт.
-        if (x < margin) { x = margin; vx = Math.abs(vx) * 0.55; }
-        if (x > fieldW - margin) { x = fieldW - margin; vx = -Math.abs(vx) * 0.55; }
-        if (y < margin) { y = margin; vy = Math.abs(vy) * 0.55; }
-        if (y > fieldH - margin) { y = fieldH - margin; vy = -Math.abs(vy) * 0.55; }
+        // Отскок от бортов арены (и углов, когда x и y сталкиваются в одном
+        // кадре) — только пока идёт свободный полёт. Высокая restitution даёт
+        // много энергичных рикошетов подряд, как настоящая шайба на льду.
+        if (!steering) {
+            if (x < margin) { x = margin; vx = Math.abs(vx) * wallRestitution; }
+            if (x > fieldW - margin) { x = fieldW - margin; vx = -Math.abs(vx) * wallRestitution; }
+            if (y < margin) { y = margin; vy = Math.abs(vy) * wallRestitution; }
+            if (y > fieldH - margin) { y = fieldH - margin; vy = -Math.abs(vy) * wallRestitution; }
+        } else {
+            // На прямом участке всё равно не даём шайбе улететь за поле.
+            x = Math.min(Math.max(x, margin), fieldW - margin);
+            y = Math.min(Math.max(y, margin), fieldH - margin);
+        }
 
         const speed = Math.hypot(vx, vy);
         const scale = 1 - Math.min(0.08, (speed / launchSpeed) * 0.06);
