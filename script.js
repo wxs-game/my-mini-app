@@ -4813,4 +4813,4 @@ window.leaveIceArena = leaveIceArena;
 window.placeIceArenaBet = placeIceArenaBet;
 window.restartIceArena = resetIceArenaRoundUI;
 
-}
+})();
