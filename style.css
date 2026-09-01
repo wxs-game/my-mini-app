@@ -1939,177 +1939,6 @@ body.fairness-modal-open {
 }
 
 /* ==========================================
-   ДЕМО: ЭКРАН "SHARE MESSAGE" (приглашение друзей)
-========================================== */
-.share-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    background: #0d0d0f;
-    animation: fadeIn 0.2s ease;
-}
-
-.share-modal-overlay.hidden {
-    display: none;
-}
-
-.share-modal-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 16px 18px;
-    padding-top: max(16px, env(safe-area-inset-top));
-    color: #b8b8bd;
-    font-size: 15px;
-    border-bottom: 1px solid #1c1c1f;
-    flex-shrink: 0;
-}
-
-.share-modal-close {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: #1c1c1f;
-    color: #ffffff;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.share-modal-close:active {
-    transform: scale(0.92);
-}
-
-.share-modal-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 18px 10px;
-}
-
-.share-modal-title {
-    font-size: 26px;
-    font-weight: 700;
-    margin-bottom: 18px;
-}
-
-.share-preview-card {
-    background: #16161a;
-    border: 1px solid #232328;
-    border-radius: 22px;
-    padding: 16px 14px 14px;
-}
-
-.share-preview-badge-wrap {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 14px;
-}
-
-.share-preview-badge {
-    background: #26262c;
-    color: #c9c9ce;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 7px 16px;
-    border-radius: 30px;
-}
-
-.share-preview-bubble {
-    background: #1c1c20;
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid #26262c;
-}
-
-.share-preview-via {
-    font-size: 12.5px;
-    color: #7d9ec9;
-    padding: 10px 12px 6px;
-}
-
-.share-preview-image-wrap {
-    width: 100%;
-    aspect-ratio: 1.7 / 1;
-    background: #0c0c0e;
-    overflow: hidden;
-}
-
-.share-preview-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.share-preview-text-wrap {
-    padding: 12px 12px 8px;
-    position: relative;
-}
-
-.share-preview-text {
-    font-size: 14.5px;
-    line-height: 1.45;
-    color: #ffffff;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.share-preview-time {
-    display: block;
-    text-align: right;
-    font-size: 11px;
-    color: #7a7a80;
-    margin-top: 6px;
-}
-
-.share-preview-inline-btn {
-    width: 100%;
-    background: #24242b;
-    color: #6fa8ff;
-    font-size: 14.5px;
-    font-weight: 600;
-    padding: 13px;
-    border-top: 1px solid #2a2a31;
-    letter-spacing: 0.3px;
-}
-
-.share-preview-inline-btn:active {
-    background: #2a2a32;
-}
-
-.share-modal-note {
-    color: #6f6f75;
-    font-size: 13px;
-    line-height: 1.4;
-    margin-top: 16px;
-    padding: 0 4px;
-}
-
-.share-modal-footer {
-    flex-shrink: 0;
-    padding: 12px 18px;
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-}
-
-.share-with-btn {
-    width: 100%;
-    background: linear-gradient(135deg, #ffc800, #ff9000);
-    color: #000000;
-    font-size: 16px;
-    font-weight: 800;
-    padding: 15px;
-    border-radius: 18px;
-    box-shadow: 0 6px 20px rgba(255, 150, 0, 0.25);
-}
-
-.share-with-btn:active {
-    transform: scale(0.97);
-}
-
-/* ==========================================
    ИГРА КИРКА
 ========================================== */
 .pickaxe-roulette {
@@ -3681,4 +3510,360 @@ body.fairness-modal-open {
     font-weight: 900;
     color: #ffc800;
     flex-shrink: 0;
+}
+
+/* ================================================================
+   SHARE MESSAGE — тестовая копия нативного окна Telegram
+   (savePreparedInlineMessage / tg.shareMessage preview)
+================================================================== */
+
+.share-test-field {
+    margin-bottom: 14px;
+}
+
+.share-test-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    color: #888888;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.share-test-textarea {
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.4;
+}
+
+.share-msg-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: #000000;
+    display: flex;
+    flex-direction: column;
+    animation: shareMsgFadeIn 0.2s ease;
+}
+
+@keyframes shareMsgFadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.share-msg-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 18px 10px 18px;
+    flex-shrink: 0;
+}
+
+.share-msg-close {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.share-msg-close-x {
+    font-size: 15px;
+}
+
+.share-msg-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    color: #ffffff;
+    font-size: 18px;
+}
+
+.share-msg-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 18px 18px 18px;
+}
+
+.share-msg-title {
+    font-size: 30px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 8px 0 20px 0;
+    font-style: italic;
+}
+
+.share-preview-pill-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.share-preview-pill {
+    background: rgba(120, 140, 160, 0.35);
+    color: #dbe8f2;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 16px;
+}
+
+.share-bubble-frame {
+    background: rgba(40, 42, 46, 0.92);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+
+.share-bubble-via {
+    padding: 12px 14px 8px 14px;
+    color: #8ab4d6;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.share-bubble-image-wrap {
+    width: 100%;
+    background: #111;
+}
+
+.share-bubble-image-wrap.hidden {
+    display: none;
+}
+
+.share-bubble-image {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+}
+
+.share-bubble-text-wrap {
+    padding: 14px;
+    position: relative;
+}
+
+.share-bubble-text {
+    color: #ffffff;
+    font-size: 15px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-right: 46px;
+}
+
+.share-bubble-text a {
+    color: #6ab7ff;
+    text-decoration: underline;
+}
+
+.share-bubble-time {
+    position: absolute;
+    right: 14px;
+    bottom: 10px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+}
+
+.share-inline-btn {
+    display: block;
+    width: 100%;
+    background: rgba(20, 40, 70, 0.55);
+    color: #6ab7ff;
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 13px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+}
+
+.share-inline-btn.hidden {
+    display: none;
+}
+
+.share-inline-btn:active {
+    background: rgba(20, 40, 70, 0.85);
+}
+
+.share-hint-text {
+    color: #7a7a7a;
+    font-size: 13px;
+    line-height: 1.45;
+    margin-top: 16px;
+    padding: 0 2px;
+}
+
+.share-with-btn {
+    flex-shrink: 0;
+    margin: 10px 18px calc(18px + env(safe-area-inset-bottom, 0px)) 18px;
+    background: #a9c8d6;
+    color: #0a0a0a;
+    border: none;
+    border-radius: 24px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.share-with-btn:active {
+    background: #93b7c6;
+}
+
+/* ---- Выбор чата (bottom sheet со списком) ---- */
+
+.share-contacts-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100001;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.share-contacts-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+.share-contacts-sheet {
+    position: relative;
+    z-index: 2;
+    background: #141414;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px 24px 0 0;
+    padding: 8px 18px calc(18px + env(safe-area-inset-bottom, 0px)) 18px;
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUpModal 0.22s cubic-bezier(0.1,0.9,0.2,1);
+}
+
+.share-contacts-drag-handle-area {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 12px 0;
+    cursor: pointer;
+}
+
+.share-contacts-drag-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.2);
+}
+
+.share-contacts-title {
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 800;
+    text-align: center;
+    margin: 0 0 14px 0;
+}
+
+.share-contacts-search {
+    width: 100%;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.share-contacts-list {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 120px;
+}
+
+.share-contact-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 4px;
+    cursor: pointer;
+    border-radius: 12px;
+}
+
+.share-contact-item:active {
+    background: rgba(255,255,255,0.05);
+}
+
+.share-contact-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6a8dff, #a06aff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.share-contact-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.share-contact-name {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-contact-sub {
+    color: #888888;
+    font-size: 12.5px;
+}
+
+.share-contact-check {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.25);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: transparent;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.share-contact-item.selected .share-contact-check {
+    background: #4fa8e8;
+    border-color: #4fa8e8;
+    color: #ffffff;
+}
+
+.share-contacts-send-btn {
+    flex-shrink: 0;
+    margin-top: 12px;
+    background: #4fa8e8;
+    color: #ffffff;
+    border: none;
+    border-radius: 16px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.share-contacts-send-btn.hidden {
+    display: none;
 }
