@@ -2779,69 +2779,6 @@ function openBonus() {
     updateNav("bonus");
 }
 
-/* =========================
-   ДЕМО: "SHARE MESSAGE" — приглашение друга
-   Замените значения в shareDemoConfig на свои: картинку, текст,
-   текст на кнопке и ссылку, которая откроется по нажатию.
-========================= */
-const shareDemoConfig = {
-    botUsername: "YOUR_BOT",                 // имя вашего бота без @
-    imageUrl: "img/share-preview.jpg",       // ваша картинка для превью
-    text: "🎁 Хочешь бесплатный бонус?\n\nПерейди по ссылке и забери подарок!", // ваш текст сообщения
-    linkUrl: "https://t.me/YOUR_BOT?start=ref_123", // реферальная ссылка
-    buttonText: "ЗАБРАТЬ БОНУС"              // текст на инлайн-кнопке
-};
-
-function openShareDemo() {
-    const overlay = document.getElementById("shareModalOverlay");
-    if (!overlay) return;
-
-    document.getElementById("shareViaLabel").textContent = `via @${shareDemoConfig.botUsername}`;
-    document.getElementById("shareModalImage").src = shareDemoConfig.imageUrl;
-    document.getElementById("shareModalText").textContent = shareDemoConfig.text;
-    document.getElementById("shareModalBtnText").textContent = shareDemoConfig.buttonText;
-
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    document.getElementById("shareModalTime").textContent = `${hh}:${mm}`;
-
-    overlay.classList.remove("hidden");
-}
-
-function closeShareDemo() {
-    const overlay = document.getElementById("shareModalOverlay");
-    if (overlay) overlay.classList.add("hidden");
-}
-
-function handleShareInlineButton() {
-    // Нажатие на инлайн-кнопку внутри превью сообщения — в реальном
-    // сообщении Telegram она вела бы по ссылке. В демо просто откроем её.
-    if (tg?.openLink) {
-        tg.openLink(shareDemoConfig.linkUrl);
-    } else {
-        window.open(shareDemoConfig.linkUrl, "_blank");
-    }
-}
-
-function confirmShareDemo() {
-    // "Share with..." — открывает нативный выбор чата в Telegram, куда
-    // отправится сообщение со ссылкой. Реальный кастомный превью с
-    // картинкой формируется на стороне бота (через Bot API), это демо
-    // ограничивается стандартным share-диалогом Telegram.
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareDemoConfig.linkUrl)}&text=${encodeURIComponent(shareDemoConfig.text)}`;
-
-    if (tg?.openTelegramLink) {
-        tg.openTelegramLink(shareUrl);
-    } else if (tg?.openLink) {
-        tg.openLink(shareUrl);
-    } else {
-        window.open(shareUrl, "_blank");
-    }
-
-    closeShareDemo();
-}
-
 function updateNav(active) {
     const navItems = document.querySelectorAll(".nav-item");
     navItems.forEach(item => item.classList.remove("active"));
@@ -5934,3 +5871,174 @@ function setCrashMaxBet() {
 }
 
 })();
+
+/* ================================================================
+   SHARE MESSAGE — тестовая копия нативного окна Telegram
+   (savePreparedInlineMessage / tg.shareMessage).
+
+   РЕАЛЬНАЯ СХЕМА (когда будет бэкенд):
+   1) Бэкенд вызывает Bot API savePreparedInlineMessage с текстом,
+      картинкой (через media) и inline-клавиатурой -> получает msg_id.
+   2) Клиент вызывает tg.shareMessage(msg_id, callback) -> Telegram
+      сам рисует нативный экран выбора чата (тот, что на скриншоте) и
+      сам отправляет сообщение выбранному пользователю.
+
+   Ниже — только визуальная копия для теста верстки: текст, картинка
+   и инлайн-кнопка берутся из полей на странице "Бонусы", список
+   контактов — мок (для реального списка чатов нужен tg.shareMessage,
+   т.к. мини-аппы не имеют доступа к списку контактов пользователя).
+================================================================== */
+
+let shareMsgDraft = null;
+let shareContactsSelected = new Set();
+
+const SHARE_MOCK_CONTACTS = [
+    { id: 'c1', name: 'Алексей Петров', sub: '@alexpetrov' },
+    { id: 'c2', name: 'Мария Иванова', sub: '@maria_i' },
+    { id: 'c3', name: 'Игровой чат «WXS Ice Arena»', sub: '128 участников' },
+    { id: 'c4', name: 'Дмитрий Соколов', sub: '@dsokolov' },
+    { id: 'c5', name: 'Избранное', sub: 'Saved Messages' },
+    { id: 'c6', name: 'Ольга Кузнецова', sub: '@olga_k' }
+];
+
+function escapeHtmlShare(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+// Экранирует текст и оборачивает http(s)-ссылки в <a>, как в реальном
+// превью Telegram.
+function autolinkShareText(str) {
+    const escaped = escapeHtmlShare(str);
+    return escaped.replace(/(https?:\/\/[^\s<]+)/g, function (url) {
+        return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
+    });
+}
+
+function openShareMessageTest() {
+    const botName = (document.getElementById('shareTestBotName').value || 'EDGE_GIFT_BOT').trim();
+    const text = document.getElementById('shareTestText').value || '';
+    const imageUrl = (document.getElementById('shareTestImage').value || '').trim();
+    const btnText = (document.getElementById('shareTestBtnText').value || '').trim();
+    const btnUrl = (document.getElementById('shareTestBtnUrl').value || '').trim();
+
+    if (!text.trim() && !imageUrl) {
+        showMessage('Заполните хотя бы текст сообщения или картинку');
+        return;
+    }
+
+    openShareMessageModal({ botName, text, imageUrl, btnText, btnUrl });
+}
+
+function openShareMessageModal(draft) {
+    shareMsgDraft = draft;
+
+    document.getElementById('shareBubbleVia').textContent = 'via @' + draft.botName.replace(/^@/, '');
+    document.getElementById('shareBubbleText').innerHTML = autolinkShareText(draft.text || '');
+
+    const now = new Date();
+    document.getElementById('shareBubbleTime').textContent =
+        now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+    const imgWrap = document.getElementById('shareBubbleImageWrap');
+    const imgEl = document.getElementById('shareBubbleImage');
+    if (draft.imageUrl) {
+        imgEl.src = draft.imageUrl;
+        imgWrap.classList.remove('hidden');
+    } else {
+        imgEl.src = '';
+        imgWrap.classList.add('hidden');
+    }
+
+    const inlineBtn = document.getElementById('shareInlineBtn');
+    if (draft.btnText) {
+        inlineBtn.textContent = draft.btnText;
+        inlineBtn.classList.remove('hidden');
+    } else {
+        inlineBtn.classList.add('hidden');
+    }
+
+    document.getElementById('shareHintText').textContent =
+        draft.botName.replace(/^@/, '') + ' offers you to send this message to a chat you select.';
+
+    document.getElementById('shareMessageModal').classList.remove('hidden');
+    document.body.classList.add('fairness-modal-open');
+}
+
+function closeShareMessageModal() {
+    document.getElementById('shareMessageModal').classList.add('hidden');
+    document.body.classList.remove('fairness-modal-open');
+}
+
+function handleShareInlineBtnClick() {
+    if (!shareMsgDraft || !shareMsgDraft.btnUrl) return;
+    if (tg?.openLink) {
+        tg.openLink(shareMsgDraft.btnUrl);
+    } else {
+        window.open(shareMsgDraft.btnUrl, '_blank');
+    }
+}
+
+function renderShareContacts(filter) {
+    const list = document.getElementById('shareContactsList');
+    const q = (filter || '').trim().toLowerCase();
+    const items = SHARE_MOCK_CONTACTS.filter(c =>
+        !q || c.name.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q)
+    );
+
+    list.innerHTML = items.map(c => {
+        const initial = c.name.trim().charAt(0).toUpperCase();
+        const selected = shareContactsSelected.has(c.id) ? ' selected' : '';
+        return (
+            '<div class="share-contact-item' + selected + '" onclick="toggleShareContact(\'' + c.id + '\')">' +
+                '<div class="share-contact-avatar">' + initial + '</div>' +
+                '<div class="share-contact-info">' +
+                    '<div class="share-contact-name">' + escapeHtmlShare(c.name) + '</div>' +
+                    '<div class="share-contact-sub">' + escapeHtmlShare(c.sub) + '</div>' +
+                '</div>' +
+                '<div class="share-contact-check">✓</div>' +
+            '</div>'
+        );
+    }).join('');
+}
+
+function openShareContactsPicker() {
+    shareContactsSelected = new Set();
+    renderShareContacts('');
+    document.getElementById('shareContactsSendBtn').classList.add('hidden');
+    document.getElementById('shareContactsModal').classList.remove('hidden');
+}
+
+function closeShareContactsPicker() {
+    document.getElementById('shareContactsModal').classList.add('hidden');
+}
+
+function filterShareContacts(value) {
+    renderShareContacts(value);
+}
+
+function toggleShareContact(id) {
+    if (shareContactsSelected.has(id)) {
+        shareContactsSelected.delete(id);
+    } else {
+        shareContactsSelected.add(id);
+    }
+    renderShareContacts(document.querySelector('.share-contacts-search')?.value || '');
+    document.getElementById('shareContactsSendBtn').classList.toggle('hidden', shareContactsSelected.size === 0);
+}
+
+function sendSharedMessage() {
+    const names = SHARE_MOCK_CONTACTS
+        .filter(c => shareContactsSelected.has(c.id))
+        .map(c => c.name)
+        .join(', ');
+
+    closeShareContactsPicker();
+    closeShareMessageModal();
+
+    // ТЕСТОВЫЙ режим: реальная отправка появится, когда бэкенд будет
+    // вызывать savePreparedInlineMessage и клиент — tg.shareMessage().
+    showMessage('Тест: сообщение "отправлено" — ' + (names || 'без получателя'));
+}
