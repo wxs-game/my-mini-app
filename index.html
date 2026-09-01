@@ -114,6 +114,38 @@
             color: #ff4d4d;
             text-shadow: 0 0 8px rgba(255,77,77,0.9), 0 0 24px rgba(255,43,43,0.6);
         }
+
+        .crash-reconnect-badge {
+            position: absolute;
+            left: 50%;
+            bottom: 14px;
+            transform: translateX(-50%);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.14);
+            font-size: 12px;
+            font-weight: 700;
+            color: #ffd700;
+            z-index: 9;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .crash-reconnect-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255,215,0,0.25);
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            display: inline-block;
+            animation: crashReconnectSpin 0.8s linear infinite;
+        }
+        @keyframes crashReconnectSpin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 
@@ -484,6 +516,15 @@
                 </div>
                 <div id="crashMultTopLeft" class="crash-mult-topleft">1.00x</div>
                 <div id="crashCountdown" class="crash-countdown"></div>
+
+                <!-- Индикатор переподключения. Появляется, когда игрок
+                     вернулся в приложение после того, как оно было
+                     свёрнуто/неактивно, и скрывается сразу же, как
+                     только состояние раунда подтянулось к реальному. -->
+                <div id="crashReconnectBadge" class="crash-reconnect-badge">
+                    <span class="crash-reconnect-spinner"></span>
+                    <span>Переподключение…</span>
+                </div>
 
                 <!-- Круглая кнопка с "#" внизу справа на экране игры Crash -->
                 <button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность" onclick="openCrashFairnessModal()">
