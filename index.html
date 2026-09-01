@@ -846,53 +846,96 @@
             <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
         </section>
 
-        <!-- ДЕМО: приглашение друзей / шэринг сообщения -->
-        <section class="wheel-card" style="margin-top: 14px;">
-            <h2>Пригласи друга</h2>
-            <p class="wheel-subtitle">Отправь другу сообщение с приглашением и бонусом</p>
-            <div style="font-size: 60px; margin: 20px 0;">📨</div>
-            <button class="main-action-btn" onclick="openShareDemo()">Отправить (демо)</button>
+        <!-- ================================================================
+             ТЕСТОВЫЙ БЛОК: Share Message (savePreparedInlineMessage /
+             tg.shareMessage). Пока нет бэкенд-вызова savePreparedInlineMessage —
+             ниже своя копия нативного экрана Telegram для проверки верстки.
+             Текст/картинку/кнопку вводит сам пользователь.
+        ================================================================== -->
+        <section class="wheel-card" style="text-align: left;">
+            <h2 style="text-align:center;">Тест: Share Message</h2>
+            <p class="wheel-subtitle" style="text-align:center;">Заполни поля и нажми «Отправить», чтобы открыть окно шаринга</p>
+
+            <div class="share-test-field">
+                <label>Имя бота (via @...)</label>
+                <input type="text" id="shareTestBotName" class="promo-input" placeholder="EDGE_GIFT_BOT" style="width:100%;">
+            </div>
+
+            <div class="share-test-field">
+                <label>Текст сообщения</label>
+                <textarea id="shareTestText" class="promo-input share-test-textarea" placeholder="Введите текст сообщения…" rows="4"></textarea>
+            </div>
+
+            <div class="share-test-field">
+                <label>Ссылка на картинку (URL)</label>
+                <input type="text" id="shareTestImage" class="promo-input" placeholder="https://…jpg" style="width:100%;">
+            </div>
+
+            <div class="share-test-field">
+                <label>Текст инлайн-кнопки</label>
+                <input type="text" id="shareTestBtnText" class="promo-input" placeholder="ОТКРЫТЬ КЕЙС" style="width:100%;">
+            </div>
+
+            <div class="share-test-field">
+                <label>Ссылка инлайн-кнопки (URL)</label>
+                <input type="text" id="shareTestBtnUrl" class="promo-input" placeholder="https://t.me/…" style="width:100%;">
+            </div>
+
+            <button class="main-action-btn" style="width:100%; margin-top: 6px;" onclick="openShareMessageTest()">Отправить</button>
         </section>
     </main>
 
-    <!-- ==================== ДЕМО: ЭКРАН "SHARE MESSAGE" ==================== -->
-    <div class="share-modal-overlay hidden" id="shareModalOverlay">
-        <div class="share-modal-header">
-            <button class="share-modal-close" aria-label="Закрыть" onclick="closeShareDemo()">✕</button>
-            <span>Close</span>
+    <!-- ==================== SHARE MESSAGE: копия нативного окна Telegram ==================== -->
+    <div id="shareMessageModal" class="share-msg-modal hidden">
+        <div class="share-msg-topbar">
+            <button class="share-msg-close" onclick="closeShareMessageModal()">
+                <span class="share-msg-close-x">✕</span> Close
+            </button>
+            <div class="share-msg-topbar-right">
+                <span class="share-msg-chevron">︿</span>
+                <span class="share-msg-kebab">⋮</span>
+            </div>
         </div>
 
-        <div class="share-modal-body">
-            <h1 class="share-modal-title">Share Message</h1>
+        <div class="share-msg-body">
+            <h1 class="share-msg-title">Share Message</h1>
 
-            <div class="share-preview-card">
-                <div class="share-preview-badge-wrap">
-                    <span class="share-preview-badge">Message preview</span>
-                </div>
-
-                <div class="share-preview-bubble">
-                    <div class="share-preview-via" id="shareViaLabel">via @YOUR_BOT</div>
-
-                    <div class="share-preview-image-wrap">
-                        <img id="shareModalImage" class="share-preview-image" src="" alt="">
-                    </div>
-
-                    <div class="share-preview-text-wrap">
-                        <p class="share-preview-text" id="shareModalText"></p>
-                        <span class="share-preview-time" id="shareModalTime">12:00</span>
-                    </div>
-
-                    <button class="share-preview-inline-btn" id="shareModalBtn" onclick="handleShareInlineButton()">
-                        <span id="shareModalBtnText">ОТКРЫТЬ</span>
-                    </button>
-                </div>
+            <div class="share-preview-pill-wrap">
+                <span class="share-preview-pill">Message preview</span>
             </div>
 
-            <p class="share-modal-note">Приложение предложит отправить это сообщение в выбранный чат.</p>
+            <div class="share-bubble-frame">
+                <div class="share-bubble-via" id="shareBubbleVia">via @EDGE_GIFT_BOT</div>
+
+                <div class="share-bubble-image-wrap" id="shareBubbleImageWrap">
+                    <img id="shareBubbleImage" class="share-bubble-image" src="" alt="">
+                </div>
+
+                <div class="share-bubble-text-wrap">
+                    <div class="share-bubble-text" id="shareBubbleText"></div>
+                    <div class="share-bubble-time" id="shareBubbleTime"></div>
+                </div>
+
+                <button class="share-inline-btn" id="shareInlineBtn" onclick="handleShareInlineBtnClick()"></button>
+            </div>
+
+            <p class="share-hint-text" id="shareHintText">EDGE GIFT offers you to send this message to a chat you select.</p>
         </div>
 
-        <div class="share-modal-footer">
-            <button class="share-with-btn" onclick="confirmShareDemo()">Share with…</button>
+        <button class="share-with-btn" onclick="openShareContactsPicker()">Share with…</button>
+    </div>
+
+    <!-- ==================== SHARE MESSAGE: выбор чата (нативный список контактов) ==================== -->
+    <div id="shareContactsModal" class="share-contacts-modal hidden">
+        <div class="share-contacts-backdrop" onclick="closeShareContactsPicker()"></div>
+        <div class="share-contacts-sheet">
+            <div class="share-contacts-drag-handle-area" onclick="closeShareContactsPicker()">
+                <div class="share-contacts-drag-handle"></div>
+            </div>
+            <h3 class="share-contacts-title">Share with…</h3>
+            <input type="text" class="promo-input share-contacts-search" placeholder="Поиск" oninput="filterShareContacts(this.value)">
+            <div class="share-contacts-list" id="shareContactsList"></div>
+            <button class="share-contacts-send-btn hidden" id="shareContactsSendBtn" onclick="sendSharedMessage()">Отправить</button>
         </div>
     </div>
 
