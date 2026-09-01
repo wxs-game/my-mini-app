@@ -1253,6 +1253,14 @@ main {
     transform: scale(0.96);
 }
 
+.mines-main-btn:disabled {
+    background: #6b6b6b;
+    color: rgba(255, 255, 255, 0.7);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+
 .pickaxe-run-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
