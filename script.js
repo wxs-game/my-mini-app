@@ -3877,17 +3877,20 @@ function getTelegramUserId() {
 
 async function requestPreparedMessageId() {
     const userId = getTelegramUserId();
-    const { data, error } = await supabase.rpc('create_prepared_share_message', {
-        p_user_id: userId
+    const { data, error } = await supabase.functions.invoke('create-prepared-share-message', {
+        body: { user_id: userId }
     });
 
     if (error) {
         throw new Error(error.message || 'Не удалось сохранить заготовку');
     }
+    if (data && data.error) {
+        throw new Error(data.error);
+    }
 
-    const preparedId = typeof data === 'string' ? data : (data && data.id);
+    const preparedId = data && data.prepared_message_id;
     if (!preparedId) {
-        throw new Error('Supabase не вернул id заготовки');
+        throw new Error('Сервер не вернул id заготовки');
     }
 
     return preparedId;
@@ -3926,11 +3929,7 @@ async function sharePreparedInvite() {
         });
     } catch (err) {
         const text = String(err && err.message ? err.message : err);
-        if (/Could not find the function|schema cache|create_prepared_share_message/i.test(text)) {
-            showMessage('Выполните share_prepared_message.sql в Supabase SQL Editor и вставьте токен в таблицу app_secrets.');
-        } else {
-            showMessage(text);
-        }
+        showMessage(text);
     } finally {
         if (btn) {
             btn.disabled = false;
