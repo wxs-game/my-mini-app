@@ -1464,7 +1464,9 @@ let crashGame = {
     cashedOut: false,
     startTime: 0,
     phaseEndsAt: 0,
-    isProcessing: false
+    isProcessing: false,
+    betQueued: false,  // ставка поставлена заранее (во время полёта/паузы) и ждёт начала приёма ставок
+    queuedBet: null     // сумма отложенной ставки
 };
 
 let crashAnimHandle = null;
@@ -5251,6 +5253,18 @@ function beginWaitingPhase(round = crashGlobal.round) {
     // поверх сцены до следующего запуска.
     resetCrashVisuals();
 
+    // Если ставка была поставлена заранее (во время полёта или во время
+    // паузы предыдущего раунда) — автоматически регистрируем её сейчас,
+    // как только открылся приём ставок на новый раунд.
+    if (crashGame.betQueued && !crashGame.betPlaced) {
+        const queuedAmount = crashGame.queuedBet;
+        crashGame.betQueued = false;
+        crashGame.queuedBet = null;
+        const dom = getCrashDom();
+        if (dom.betInput && queuedAmount) dom.betInput.value = queuedAmount;
+        placeCrashBet();
+    }
+
     renderCrashUI();
 }
 
@@ -5326,7 +5340,10 @@ function beginFlyingPhase(round = crashGlobal.round) {
     if (dom.countdownEl) dom.countdownEl.style.display = 'none';
     if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
     if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
-    if (dom.betInput) dom.betInput.disabled = true;
+    // Разрешаем набрать сумму для ставки на следующий раунд, пока свою
+    // ставку в текущем полёте игрок не поставил и не поставил в очередь —
+    // финальное состояние (disabled/enabled) выставит renderCrashUI().
+    if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced || crashGame.betQueued;
     cancelAnimationFrame(crashAnimHandle);
     tickCrash();
 }
@@ -5385,11 +5402,9 @@ function endCrashRound(round = crashGlobal.round) {
         dom.topLeftMult.classList.add('crashed');
         dom.topLeftMult.style.display = 'block';
     }
-    if (dom.actionBtn) {
-        dom.actionBtn.textContent = crashGame.cashedOut
-            ? 'Выигрыш забран ✓' : 'Раунд завершён';
-        dom.actionBtn.disabled = true;
-    }
+    // Текст/состояние кнопки ставки (включая «Ставка принята» для заранее
+    // поставленной ставки) выставляет renderCrashUI(), вызываемый сразу
+    // после этой функции из applyCrashGlobalRound().
     explosionShake(dom.stageEl, 500, 20);
 }
 
@@ -5425,9 +5440,12 @@ function renderCrashUI(heavy = true) {
         }
         if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = secLeft > 0 ? '0' : '1';
         if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
-        if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced;
-        dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : 'Сделать ставку';
-        dom.actionBtn.disabled = crashGame.betPlaced;
+        // pending — ставка уже принята (в этом раунде) либо ещё обрабатывается
+        // (например, только что была автоматически поставлена из очереди).
+        const pending = crashGame.betPlaced || crashGame.isProcessing;
+        if (dom.betInput) dom.betInput.disabled = pending;
+        dom.actionBtn.textContent = pending ? 'Ставка принята' : 'Сделать ставку';
+        dom.actionBtn.disabled = pending;
         return;
     }
 
@@ -5436,6 +5454,20 @@ function renderCrashUI(heavy = true) {
             `Краш на ${crashGame.crashPoint.toFixed(2)}x · следующий раунд скоро`;
         dom.multEl.textContent = crashGame.crashPoint.toFixed(2) + 'x';
         dom.multEl.style.color = '#e74c3c';
+        // Пауза между раундами: разрешаем поставить на следующий раунд заранее.
+        if (dom.actionBtn) {
+            if (crashGame.cashedOut) {
+                dom.actionBtn.textContent = 'Выигрыш забран ✓';
+                dom.actionBtn.disabled = true;
+            } else if (crashGame.betQueued) {
+                dom.actionBtn.textContent = 'Ставка принята';
+                dom.actionBtn.disabled = true;
+            } else {
+                dom.actionBtn.textContent = 'Сделать ставку';
+                dom.actionBtn.disabled = false;
+            }
+        }
+        if (dom.betInput) dom.betInput.disabled = crashGame.betQueued;
         return;
     }
 
@@ -5478,6 +5510,8 @@ function renderCrashUI(heavy = true) {
         }
     }
 
+    if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced || crashGame.betQueued;
+
     if (crashGame.betPlaced && !crashGame.cashedOut && !crashRoundSettling) {
         dom.actionBtn.textContent = `Забрать ${(crashGame.bet * currentM).toFixed(2)}$`;
         dom.actionBtn.disabled = false;
@@ -5486,10 +5520,19 @@ function renderCrashUI(heavy = true) {
         // подтверждения от сервера, кэшаут временно недоступен.
         dom.actionBtn.textContent = 'Раунд завершается…';
         dom.actionBtn.disabled = true;
-    } else {
-        dom.actionBtn.textContent = crashGame.cashedOut
-            ? 'Выигрыш забран ✓' : 'Ждите следующего раунда';
+    } else if (crashGame.cashedOut) {
+        dom.actionBtn.textContent = 'Выигрыш забран ✓';
         dom.actionBtn.disabled = true;
+    } else if (crashGame.betQueued) {
+        // Ставка ещё не поставлена в этом раунде, но уже поставлена
+        // "в очередь" — она будет автоматически сделана на старте
+        // следующего раунда.
+        dom.actionBtn.textContent = 'Ставка принята';
+        dom.actionBtn.disabled = true;
+    } else {
+        // Своей ставки в этом раунде нет — можно поставить на следующий.
+        dom.actionBtn.textContent = 'Сделать ставку';
+        dom.actionBtn.disabled = false;
     }
 }
 
@@ -5630,20 +5673,49 @@ async function cashOutCrash() {
     unlockEconomy();
 }
 
+// Ставит "в очередь" ставку на следующий раунд — используется, когда
+// игрок нажимает "Сделать ставку" пока идёт полёт текущего раунда или
+// пока раунд на паузе (только что завершился). Деньги не списываются
+// сразу — реальная ставка (placeCrashBet) уйдёт на сервер автоматически,
+// как только откроется приём ставок на новый раунд (см. beginWaitingPhase).
+function queueCrashBet() {
+    if (crashGame.betQueued || crashGame.betPlaced || crashGame.isProcessing) return;
+    const dom = getCrashDom();
+    const bet = roundMoney(parseFloat(dom.betInput?.value));
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage('Минимальная ставка — 0.10 $!');
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage('Недостаточно средств!');
+        return;
+    }
+    crashGame.betQueued = true;
+    crashGame.queuedBet = bet;
+    if (dom.betInput) dom.betInput.disabled = true;
+    renderCrashUI();
+}
+
 function handleCrashAction() {
     if (crashGame.isProcessing) return;
-    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) placeCrashBet();
-    else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
+    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) {
+        placeCrashBet();
+    } else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
         cashOutCrash();
+    } else if (
+        (crashGame.phase === 'flying' || crashGame.phase === 'crashed') &&
+        !crashGame.betPlaced && !crashGame.betQueued && !crashGame.cashedOut
+    ) {
+        queueCrashBet();
     }
 }
 
 function adjustCrashBet(factor) {
-    if (!crashGame.betPlaced) applyBetFactor(getCrashDom().betInput, factor);
+    if (!crashGame.betPlaced && !crashGame.betQueued) applyBetFactor(getCrashDom().betInput, factor);
 }
 
 function setCrashMaxBet() {
-    if (!crashGame.betPlaced) applyBetMax(getCrashDom().betInput);
+    if (!crashGame.betPlaced && !crashGame.betQueued) applyBetMax(getCrashDom().betInput);
 }
 
 })();
