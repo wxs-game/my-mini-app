@@ -845,7 +845,56 @@
             <div style="font-size: 60px; margin: 20px 0;">🎁</div>
             <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
         </section>
+
+        <!-- ДЕМО: приглашение друзей / шэринг сообщения -->
+        <section class="wheel-card" style="margin-top: 14px;">
+            <h2>Пригласи друга</h2>
+            <p class="wheel-subtitle">Отправь другу сообщение с приглашением и бонусом</p>
+            <div style="font-size: 60px; margin: 20px 0;">📨</div>
+            <button class="main-action-btn" onclick="openShareDemo()">Отправить (демо)</button>
+        </section>
     </main>
+
+    <!-- ==================== ДЕМО: ЭКРАН "SHARE MESSAGE" ==================== -->
+    <div class="share-modal-overlay hidden" id="shareModalOverlay">
+        <div class="share-modal-header">
+            <button class="share-modal-close" aria-label="Закрыть" onclick="closeShareDemo()">✕</button>
+            <span>Close</span>
+        </div>
+
+        <div class="share-modal-body">
+            <h1 class="share-modal-title">Share Message</h1>
+
+            <div class="share-preview-card">
+                <div class="share-preview-badge-wrap">
+                    <span class="share-preview-badge">Message preview</span>
+                </div>
+
+                <div class="share-preview-bubble">
+                    <div class="share-preview-via" id="shareViaLabel">via @YOUR_BOT</div>
+
+                    <div class="share-preview-image-wrap">
+                        <img id="shareModalImage" class="share-preview-image" src="" alt="">
+                    </div>
+
+                    <div class="share-preview-text-wrap">
+                        <p class="share-preview-text" id="shareModalText"></p>
+                        <span class="share-preview-time" id="shareModalTime">12:00</span>
+                    </div>
+
+                    <button class="share-preview-inline-btn" id="shareModalBtn" onclick="handleShareInlineButton()">
+                        <span id="shareModalBtnText">ОТКРЫТЬ</span>
+                    </button>
+                </div>
+            </div>
+
+            <p class="share-modal-note">Приложение предложит отправить это сообщение в выбранный чат.</p>
+        </div>
+
+        <div class="share-modal-footer">
+            <button class="share-with-btn" onclick="confirmShareDemo()">Share with…</button>
+        </div>
+    </div>
 
     <!-- ================================================================
          СЛУЖЕБНАЯ АДМИН-ПАНЕЛЬ. Открывается только по секретному коду,
