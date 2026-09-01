@@ -5765,7 +5765,17 @@ async function cashOutCrash() {
         p_win_amount: winAmount
     });
     if (error || !crashRpcRow(data)) {
-        showMessage('Кэшаут не успел выполниться — раунд уже завершён.');
+        // ВРЕМЕННО (для диагностики): раньше здесь всегда показывался
+        // один и тот же текст "раунд уже завершён", независимо от
+        // реальной причины отказа на сервере (claim_crash_cashout может
+        // кинуть исключение по РАЗНЫМ причинам — не только из-за
+        // истёкшего времени полёта, но и, например, если ставка уже была
+        // кэшаучена раньше). Показываем настоящий текст ошибки Postgres,
+        // чтобы понять истинную причину — потом можно вернуть обратно
+        // человекочитаемое сообщение.
+        console.error('claim_crash_cashout failed:', error, data);
+        showMessage('Кэшаут не выполнен: ' +
+            (error?.message || error?.hint || error?.details || 'неизвестная ошибка сервера'));
         crashGame.isProcessing = false;
         unlockEconomy();
         refreshCrashGlobalState();
