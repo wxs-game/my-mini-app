@@ -2779,6 +2779,69 @@ function openBonus() {
     updateNav("bonus");
 }
 
+/* =========================
+   ДЕМО: "SHARE MESSAGE" — приглашение друга
+   Замените значения в shareDemoConfig на свои: картинку, текст,
+   текст на кнопке и ссылку, которая откроется по нажатию.
+========================= */
+const shareDemoConfig = {
+    botUsername: "YOUR_BOT",                 // имя вашего бота без @
+    imageUrl: "img/share-preview.jpg",       // ваша картинка для превью
+    text: "🎁 Хочешь бесплатный бонус?\n\nПерейди по ссылке и забери подарок!", // ваш текст сообщения
+    linkUrl: "https://t.me/YOUR_BOT?start=ref_123", // реферальная ссылка
+    buttonText: "ЗАБРАТЬ БОНУС"              // текст на инлайн-кнопке
+};
+
+function openShareDemo() {
+    const overlay = document.getElementById("shareModalOverlay");
+    if (!overlay) return;
+
+    document.getElementById("shareViaLabel").textContent = `via @${shareDemoConfig.botUsername}`;
+    document.getElementById("shareModalImage").src = shareDemoConfig.imageUrl;
+    document.getElementById("shareModalText").textContent = shareDemoConfig.text;
+    document.getElementById("shareModalBtnText").textContent = shareDemoConfig.buttonText;
+
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    document.getElementById("shareModalTime").textContent = `${hh}:${mm}`;
+
+    overlay.classList.remove("hidden");
+}
+
+function closeShareDemo() {
+    const overlay = document.getElementById("shareModalOverlay");
+    if (overlay) overlay.classList.add("hidden");
+}
+
+function handleShareInlineButton() {
+    // Нажатие на инлайн-кнопку внутри превью сообщения — в реальном
+    // сообщении Telegram она вела бы по ссылке. В демо просто откроем её.
+    if (tg?.openLink) {
+        tg.openLink(shareDemoConfig.linkUrl);
+    } else {
+        window.open(shareDemoConfig.linkUrl, "_blank");
+    }
+}
+
+function confirmShareDemo() {
+    // "Share with..." — открывает нативный выбор чата в Telegram, куда
+    // отправится сообщение со ссылкой. Реальный кастомный превью с
+    // картинкой формируется на стороне бота (через Bot API), это демо
+    // ограничивается стандартным share-диалогом Telegram.
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareDemoConfig.linkUrl)}&text=${encodeURIComponent(shareDemoConfig.text)}`;
+
+    if (tg?.openTelegramLink) {
+        tg.openTelegramLink(shareUrl);
+    } else if (tg?.openLink) {
+        tg.openLink(shareUrl);
+    } else {
+        window.open(shareUrl, "_blank");
+    }
+
+    closeShareDemo();
+}
+
 function updateNav(active) {
     const navItems = document.querySelectorAll(".nav-item");
     navItems.forEach(item => item.classList.remove("active"));
