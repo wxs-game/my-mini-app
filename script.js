@@ -1484,6 +1484,7 @@ let crashRocketAnim = null; // экземпляр Lottie-анимации рак
 let crashExplosionAnim = null; // экземпляр Lottie-анимации взрыва
 let crashExplosionTotalFrames = 0; // общее число кадров анимации взрыва (берётся из её JSON)
 let crashExplosionHideTimeout = null; // таймер плавного скрытия взрыва после проигрывания нужной части
+let crashExplosionShownRoundId = null; // id раунда, для которого взрыв уже был показан (анти-дубль)
 
 // "Тяжёлые" визуальные обновления (SVG-след со стековыми drop-shadow,
 // текст с text-shadow) обновляем не чаще ~30 раз/сек вместо 60 — глазом
@@ -1552,7 +1553,7 @@ function initCrashRocketAnim() {
         container: dom.rocketEl,
         renderer: 'canvas',
         loop: true,
-        autoplay: true,
+        autoplay: false,
         animationData: animationData,
         rendererSettings: {
             clearCanvas: true,
@@ -1613,6 +1614,45 @@ function hideExplosionSmoothly() {
     crashExplosionHideTimeout = setTimeout(() => {
         if (dom.explosionEl) dom.explosionEl.style.display = 'none';
     }, EXPLOSION_FADE_MS);
+}
+
+// Показывает анимацию взрыва для раунда — но только если страница "Краш"
+// сейчас реально открыта (видна пользователю). Раунд-инженер (startCrashEngine)
+// крутится в фоне с момента запуска приложения независимо от того, какая
+// страница сейчас открыта, поэтому если просто проигрывать взрыв ровно в
+// момент, когда статус раунда меняется на "crashed", он почти всегда будет
+// проигрываться "в пустоту" — за скрытой (display:none) страницей — и
+// успевать полностью доиграть и спрятаться (hideExplosionSmoothly) ещё
+// до того, как игрок вообще откроет вкладку "Краш". Поэтому вызываем эту
+// функцию не только из endCrashRound(), но и при каждом обновлении
+// состояния раунда (applyCrashGlobalRound) и при открытии страницы
+// (initCrashPage) — а флаг crashExplosionShownRoundId гарантирует, что
+// для одного и того же раунда взрыв реально проигрывается только один раз.
+function tryShowCrashExplosion(round) {
+    if (!round || round.status !== 'crashed') return;
+    if (!isCrashPageOpen()) return;
+    if (crashExplosionShownRoundId === round.id) return;
+    crashExplosionShownRoundId = round.id;
+
+    const dom = getCrashDom();
+    if (!dom.explosionEl) return;
+    dom.explosionEl.style.opacity = '1';
+    dom.explosionEl.style.display = 'block';
+    // На случай отложенного показа (страница была закрыта в момент краша,
+    // а теперь открылась) — убедимся, что ракета точно скрыта.
+    if (crashRocketAnim) crashRocketAnim.pause();
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
+    if (crashExplosionAnim) {
+        const endFrame = Math.max(
+            1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION)
+        );
+        if (crashExplosionTotalFrames) {
+            crashExplosionAnim.playSegments([0, endFrame], true);
+        } else {
+            crashExplosionAnim.goToAndPlay(0, true);
+        }
+    }
+    explosionShake(dom.stageEl, 500, 20);
 }
 
 function openCrash() {
@@ -5142,6 +5182,12 @@ function applyCrashGlobalRound(round, bets) {
         else if (round.status === 'crashed') endCrashRound(round);
         else beginWaitingPhase(round);
     }
+    // Догоняющий показ взрыва: если раунд уже "crashed", но страница
+    // "Краш" в момент самого краша была закрыта (или крашнулся раунд ещё
+    // до первого открытия вкладки), tryShowCrashExplosion() сама
+    // проверит, что не показывала взрыв для этого round.id, и покажет
+    // его сейчас, раз страница уже открыта.
+    tryShowCrashExplosion(round);
     renderCrashUI();
 }
 
@@ -5237,6 +5283,11 @@ function initCrashPage() {
     initCrashExplosionAnim();
     syncCrashStageDims();
     requestAnimationFrame(syncCrashStageDims);
+    // Догоняющий показ взрыва при заходе на страницу (см. комментарий в
+    // tryShowCrashExplosion): важно вызывать это ПОСЛЕ initCrashExplosionAnim(),
+    // иначе при самом первом открытии страницы crashExplosionAnim ещё не
+    // создан и взрыв просто не покажется.
+    tryShowCrashExplosion(crashGlobal.round);
 }
 
 function beginWaitingPhase(round = crashGlobal.round) {
@@ -5281,7 +5332,10 @@ function resetCrashVisuals() {
         dom.explosionEl.style.transform = '';
     }
     if (crashExplosionAnim) crashExplosionAnim.goToAndStop(0, true);
-    if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
+    // Ракета должна "лететь" (проигрывать анимацию пламени) только во
+    // время реального полёта — здесь просто ставим её в состояние покоя
+    // на первом кадре. Запуск анимации — отдельно, в beginFlyingPhase().
+    if (crashRocketAnim) crashRocketAnim.goToAndStop(0, true);
     if (dom.rocketEl) {
         dom.rocketEl.style.opacity = '1';
         // Важно: во время полёта ракета не "летит" по сцене — она всегда
@@ -5321,6 +5375,10 @@ function beginFlyingPhase(round = crashGlobal.round) {
     // первый, который приложение увидело после возврата (пауза была
     // пропущена), взрыв с прошлого краша не должен оставаться висеть.
     resetCrashVisuals();
+    // Запускаем анимацию пламени ракеты именно сейчас — только на время
+    // реального полёта (во время паузы/отсчёта ракета должна стоять
+    // на месте без анимации, см. resetCrashVisuals()).
+    if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
 
     const dom = getCrashDom();
     if (dom.trailLine) {
@@ -5382,20 +5440,14 @@ function endCrashRound(round = crashGlobal.round) {
         dom.trailDot.classList.add('crash-trail-crashed');
         dom.trailDot.style.opacity = '1';
     }
-    if (dom.explosionEl) {
-        dom.explosionEl.style.opacity = '1';
-        dom.explosionEl.style.display = 'block';
-        if (crashExplosionAnim) {
-            const endFrame = Math.max(
-                1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION)
-            );
-            if (crashExplosionTotalFrames) {
-                crashExplosionAnim.playSegments([0, endFrame], true);
-            } else {
-                crashExplosionAnim.goToAndPlay(0, true);
-            }
-        }
-    }
+    // Взрыв (и скрытие ракеты) запускаем через tryShowCrashExplosion() —
+    // она сама решает, показывать ли анимацию прямо сейчас (только если
+    // страница "Краш" реально открыта) или отложить показ до момента,
+    // когда игрок на неё зайдёт (см. вызовы в applyCrashGlobalRound()
+    // и initCrashPage()). Без этой развязки анимация почти всегда играла
+    // "в пустоту" за скрытой страницей, пока раунд-инженер крутится в
+    // фоне с самого запуска приложения.
+    tryShowCrashExplosion(round);
     if (dom.multEl) dom.multEl.style.color = '#e74c3c';
     if (dom.topLeftMult) {
         dom.topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
@@ -5405,7 +5457,6 @@ function endCrashRound(round = crashGlobal.round) {
     // Текст/состояние кнопки ставки (включая «Ставка принята» для заранее
     // поставленной ставки) выставляет renderCrashUI(), вызываемый сразу
     // после этой функции из applyCrashGlobalRound().
-    explosionShake(dom.stageEl, 500, 20);
 }
 
 function renderCrashHistory() {
