@@ -675,6 +675,7 @@ function liveWinCardMetaHtml(bet) {
         '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
         '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">';
 }
+function renderLiveBetsTicker() {
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
     if (!pinned || !scroll) return;
