@@ -131,7 +131,7 @@ function calculateCrashPoint(seed, salt) {
     // 3% преимущество заведения (House Edge)
     if (intVal % 33 === 0) return 1.00;
 
-    let crash = Math.max(1.00, parseFloat((100 / (1 - (intVal / 4294967296))).toFixed(2)));
+    let crash = Math.max(1.00, parseFloat((1 / (1 - (intVal / 4294967296))).toFixed(2)));
     return Math.min(crash, 1000.00);
 }
 
