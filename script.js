@@ -1521,7 +1521,8 @@ function getCrashDom() {
             trailLine: document.getElementById('crashTrailLine'),
             trailDot: document.getElementById('crashTrailDot'),
             topLeftMult: document.getElementById('crashMultTopLeft'),
-            historyList: document.getElementById('crashHistoryList')
+            historyList: document.getElementById('crashHistoryList'),
+            reconnectBadge: document.getElementById('crashReconnectBadge')
         };
     }
     return crashDomCache;
@@ -5479,7 +5480,7 @@ function ensureCrashGlobalRoomUi() {
     const panel = document.createElement('div');
     panel.id = 'crashGlobalRoom';
     panel.style.cssText =
-        'margin:10px 0 0;padding:9px 11px;border-radius:12px;' +
+        'margin:10px 0 12px;padding:9px 11px;border-radius:12px;' +
         'background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);' +
         'color:rgba(255,255,255,.78);font-size:11px;line-height:1.35;';
     dom.historyList.parentElement.insertBefore(panel, dom.historyList);
@@ -5497,9 +5498,74 @@ function renderCrashGlobalRoom() {
         return `<span style="white-space:nowrap">${escapeHtml(bet.name || 'Игрок')}${result}</span>`;
     }).join(' · ');
     panel.innerHTML =
-        `<div style="font-weight:800;color:#fff">Общая комната · ${active.length} ставок · ${total.toFixed(2)}$</div>` +
+        `<div style="font-weight:800;color:#fff">Всего ${active.length} ставок ● ${total.toFixed(2)}$</div>` +
         (players ? `<div style="margin-top:4px;opacity:.72">${players}</div>` : '');
 }
+
+// ==========================================
+// ПЕРЕПОДКЛЮЧЕНИЕ ПОСЛЕ ВОЗВРАТА В ПРИЛОЖЕНИЕ
+// Если игрок свернул приложение (или ушёл с телефона) и вернулся —
+// вместо того чтобы просто "доиграть" по устаревшим данным, показываем
+// внизу под ракетой бейдж "Переподключение…" и тихо подтягиваем
+// актуальное состояние раунда. Как только оно применится (через
+// applyCrashGlobalRound → renderCrashUI), бейдж прячем — игрок увидит
+// раунд таким, какой он есть по-настоящему прямо сейчас.
+// ==========================================
+let crashWasHidden = false;
+
+function isCrashPageOpen() {
+    const el = document.getElementById('crashPage');
+    return !!el && !el.classList.contains('hidden');
+}
+
+function showCrashReconnectBadge() {
+    const dom = getCrashDom();
+    if (dom.reconnectBadge) dom.reconnectBadge.style.display = 'flex';
+}
+
+function hideCrashReconnectBadge() {
+    const dom = getCrashDom();
+    if (dom.reconnectBadge) dom.reconnectBadge.style.display = 'none';
+}
+
+async function resyncCrashAfterReturn() {
+    if (!crashLoopStarted || !isCrashPageOpen()) return;
+    showCrashReconnectBadge();
+    try {
+        await refreshCrashGlobalState();
+        await loadCrashGlobalHistory();
+    } catch (error) {
+        console.error('Не удалось переподключиться к Crash после возврата:', error);
+    } finally {
+        hideCrashReconnectBadge();
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        crashWasHidden = true;
+    } else if (document.visibilityState === 'visible' && crashWasHidden) {
+        crashWasHidden = false;
+        resyncCrashAfterReturn();
+    }
+});
+
+// Подстраховка: в некоторых WebView (в т.ч. иногда в Telegram)
+// visibilitychange срабатывает не всегда надёжно — pageshow/focus
+// дублируют триггер, но resyncCrashAfterReturn ничего не сделает,
+// если crashWasHidden уже false, так что двойного вызова не будет.
+window.addEventListener('pageshow', () => {
+    if (crashWasHidden) {
+        crashWasHidden = false;
+        resyncCrashAfterReturn();
+    }
+});
+window.addEventListener('focus', () => {
+    if (crashWasHidden) {
+        crashWasHidden = false;
+        resyncCrashAfterReturn();
+    }
+});
 
 async function loadCrashGlobalHistory() {
     const { data, error } = await supabase
@@ -5694,7 +5760,43 @@ function beginWaitingPhase(round = crashGlobal.round) {
     crashGame.phaseEndsAt = Date.parse(round.betting_ends_at) || Date.now();
     crashGame.crashPoint = Number(round.crash_point) || 1;
     crashGame.startTime = 0;
+
+    // Полный сброс ракеты/взрыва перед новым раундом. Без этого блока
+    // ракета оставалась скрытой (opacity 0) с прошлого краша и
+    // "никуда не улетала" во время паузы, а взрыв мог зависнуть
+    // поверх сцены до следующего запуска.
+    resetCrashVisuals();
+
     renderCrashUI();
+}
+
+// Приводит ракету и взрыв в исходное состояние — вызывается и в начале
+// паузы, и в начале полёта (на случай, если фаза "пауза" была
+// пропущена, например, после возврата в приложение через долгое время).
+function resetCrashVisuals() {
+    const dom = getCrashDom();
+    clearTimeout(crashExplosionHideTimeout);
+    if (dom.explosionEl) {
+        dom.explosionEl.style.opacity = '0';
+        dom.explosionEl.style.display = 'none';
+        dom.explosionEl.style.transform = '';
+    }
+    if (crashExplosionAnim) crashExplosionAnim.goToAndStop(0, true);
+    if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
+    if (dom.rocketEl) {
+        dom.rocketEl.style.opacity = '1';
+        dom.rocketEl.style.transform = 'translate3d(0px,0px,0) rotate(45deg)';
+    }
+    if (dom.trailLine) {
+        dom.trailLine.setAttribute('d', '');
+        dom.trailLine.classList.remove('crash-trail-crashed');
+        dom.trailLine.style.opacity = '1';
+    }
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-dot-live', 'crash-trail-crashed');
+        dom.trailDot.style.opacity = '0';
+    }
+    if (dom.topLeftMult) dom.topLeftMult.style.display = 'none';
 }
 
 function beginFlyingPhase(round = crashGlobal.round) {
@@ -5706,6 +5808,12 @@ function beginFlyingPhase(round = crashGlobal.round) {
     crashLastHeavyUpdate = 0;
     syncCrashStageDims();
     crashTrailPoints = [];
+
+    // Та же защита, что и в beginWaitingPhase: если этот раунд —
+    // первый, который приложение увидело после возврата (пауза была
+    // пропущена), взрыв с прошлого краша не должен оставаться висеть.
+    resetCrashVisuals();
+
     const dom = getCrashDom();
     if (dom.trailLine) {
         dom.trailLine.setAttribute('d', '');
