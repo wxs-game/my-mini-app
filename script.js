@@ -131,7 +131,7 @@ function calculateCrashPoint(seed, salt) {
     // 3% преимущество заведения (House Edge)
     if (intVal % 33 === 0) return 1.00;
 
-    let crash = Math.max(1.00, parseFloat((1 / (1 - (intVal / 4294967296))).toFixed(2)));
+    let crash = Math.max(1.00, parseFloat((100 / (1 - (intVal / 4294967296))).toFixed(2)));
     return Math.min(crash, 1000.00);
 }
 
@@ -675,8 +675,6 @@ function liveWinCardMetaHtml(bet) {
         '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
         '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">';
 }
-
-function renderLiveBetsTicker() {
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
     if (!pinned || !scroll) return;
@@ -1447,7 +1445,16 @@ function endMinesGame(isWin) {
     КРАШ (РАКЕТА)
 ========================= */
 
+// Пауза между раундами (в это же время принимаются ставки на следующий раунд)
+const CRASH_WAIT_MS = 5000;
+
+// Хранение ленты прошлых коэффициентов — переживает перезаход в приложение.
+const CRASH_HISTORY_STORAGE_KEY = 'wxsCrashHistory';
+const CRASH_HISTORY_TS_STORAGE_KEY = 'wxsCrashHistoryTs';
 const CRASH_HISTORY_MAX = 25; // сколько прошедших раундов видно в ленте
+// Средняя длительность одного раунда (пауза + полёт) — используется только
+// чтобы прикинуть, сколько раундов "прошло в фоне", пока приложение было закрыто.
+const CRASH_AVG_ROUND_MS = 12000;
 
 // Скорость роста коэффициента: x2 за 10 секунд полёта (исходный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
@@ -1464,19 +1471,12 @@ let crashGame = {
     cashedOut: false,
     startTime: 0,
     phaseEndsAt: 0,
-    isProcessing: false,
-    betQueued: false,  // ставка поставлена заранее (во время полёта/паузы) и ждёт начала приёма ставок
-    queuedBet: null     // сумма отложенной ставки
+    isProcessing: false
 };
 
 let crashAnimHandle = null;
+let crashTimerHandle = null;
 let crashLoopStarted = false;
-// Локально мы узнаём о конце полёта раньше сервера (по формуле времени),
-// но статус раунда в БД меняется отдельным запросом (advance_crash_round),
-// который может занять доли секунды. Пока идёт это уточнение, кэшаут
-// временно блокируем — иначе игрок успевает нажать «Забрать» в это окно,
-// запрос уходит на уже фактически завершённый раунд, и сервер его отклоняет.
-let crashRoundSettling = false;
 let crashHistory = [];      // последние коэффициенты, самый новый — первый
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
 let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
@@ -1484,7 +1484,6 @@ let crashRocketAnim = null; // экземпляр Lottie-анимации рак
 let crashExplosionAnim = null; // экземпляр Lottie-анимации взрыва
 let crashExplosionTotalFrames = 0; // общее число кадров анимации взрыва (берётся из её JSON)
 let crashExplosionHideTimeout = null; // таймер плавного скрытия взрыва после проигрывания нужной части
-let crashExplosionShownRoundId = null; // id раунда, для которого взрыв уже был показан (анти-дубль)
 
 // "Тяжёлые" визуальные обновления (SVG-след со стековыми drop-shadow,
 // текст с text-shadow) обновляем не чаще ~30 раз/сек вместо 60 — глазом
@@ -1520,8 +1519,7 @@ function getCrashDom() {
             trailLine: document.getElementById('crashTrailLine'),
             trailDot: document.getElementById('crashTrailDot'),
             topLeftMult: document.getElementById('crashMultTopLeft'),
-            historyList: document.getElementById('crashHistoryList'),
-            reconnectBadge: document.getElementById('crashReconnectBadge')
+            historyList: document.getElementById('crashHistoryList')
         };
     }
     return crashDomCache;
@@ -1553,7 +1551,7 @@ function initCrashRocketAnim() {
         container: dom.rocketEl,
         renderer: 'canvas',
         loop: true,
-        autoplay: false,
+        autoplay: true,
         animationData: animationData,
         rendererSettings: {
             clearCanvas: true,
@@ -1616,59 +1614,6 @@ function hideExplosionSmoothly() {
     }, EXPLOSION_FADE_MS);
 }
 
-// Показывает анимацию взрыва для раунда — но только если страница "Краш"
-// сейчас реально открыта (видна пользователю). Раунд-инженер (startCrashEngine)
-// крутится в фоне с момента запуска приложения независимо от того, какая
-// страница сейчас открыта, поэтому если просто проигрывать взрыв ровно в
-// момент, когда статус раунда меняется на "crashed", он почти всегда будет
-// проигрываться "в пустоту" — за скрытой (display:none) страницей — и
-// успевать полностью доиграть и спрятаться (hideExplosionSmoothly) ещё
-// до того, как игрок вообще откроет вкладку "Краш". Поэтому вызываем эту
-// функцию не только из endCrashRound(), но и при каждом обновлении
-// состояния раунда (applyCrashGlobalRound) и при открытии страницы
-// (initCrashPage) — а флаг crashExplosionShownRoundId гарантирует, что
-// для одного и того же раунда взрыв реально проигрывается только один раз.
-function tryShowCrashExplosion(round) {
-    if (!round || round.status !== 'crashed') return;
-    if (!isCrashPageOpen()) return;
-    if (crashExplosionShownRoundId === round.id) return;
-
-    const dom = getCrashDom();
-    // Раньше раунд помечался "показанным" даже если explosionEl/анимация
-    // ещё не были готовы (например, initCrashExplosionAnim() не успел
-    // отработать) — взрыв тогда пропадал безвозвратно: флаг уже стоял, и
-    // при следующем вызове (даже когда всё было готово) функция выходила
-    // на первой же проверке. Теперь помечаем раунд как показанный только
-    // когда реально что-то отрисовали ниже.
-    if (!dom.explosionEl) return;
-    crashExplosionShownRoundId = round.id;
-    // Взрыв должен появляться ровно там же, где стояла ракета (по центру
-    // сцены), а не в левом нижнем углу — по умолчанию у #crashExplosion
-    // нет своего transform (он сбрасывается в resetCrashVisuals()), и без
-    // этой строки анимация рисовалась в углу, никак не совпадая с ракетой.
-    const explosionCenterX = (crashStageW - 200) / 2 - 16;
-    const explosionCenterY = 16 - (crashStageH - 200) / 2;
-    dom.explosionEl.style.transform =
-        `translate3d(${explosionCenterX}px,${explosionCenterY}px,0)`;
-    dom.explosionEl.style.opacity = '1';
-    dom.explosionEl.style.display = 'block';
-    // На случай отложенного показа (страница была закрыта в момент краша,
-    // а теперь открылась) — убедимся, что ракета точно скрыта.
-    if (crashRocketAnim) crashRocketAnim.pause();
-    if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
-    if (crashExplosionAnim) {
-        const endFrame = Math.max(
-            1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION)
-        );
-        if (crashExplosionTotalFrames) {
-            crashExplosionAnim.playSegments([0, endFrame], true);
-        } else {
-            crashExplosionAnim.goToAndPlay(0, true);
-        }
-    }
-    explosionShake(dom.stageEl, 500, 20);
-}
-
 function openCrash() {
     showPage("crashPage");
     updateNav("games");
@@ -1688,18 +1633,161 @@ function syncCrashStageDims() {
     if (!dom.stageEl) return;
     crashStageW = dom.stageEl.clientWidth || crashStageW;
     crashStageH = dom.stageEl.clientHeight || crashStageH;
-    // См. комментарий в initCrashPage(): если размеры сцены реально
-    // изменились (открытие страницы, поворот экрана), лottie-канвасы
-    // тоже нужно попросить пересчитаться, иначе они могут остаться
-    // залипшими на старом (в т.ч. нулевом) размере.
-    if (dom.stageEl.clientWidth) {
-        if (crashRocketAnim) crashRocketAnim.resize();
-        if (crashExplosionAnim) crashExplosionAnim.resize();
-    }
 }
 
 window.addEventListener('resize', syncCrashStageDims);
 window.addEventListener('orientationchange', syncCrashStageDims);
+
+function initCrashPage() {
+    renderCrashHistory();
+    renderCrashUI();
+    initCrashRocketAnim();
+    initCrashExplosionAnim();
+    syncCrashStageDims();
+    // Подстраховка: сразу после открытия страницы её CSS-переход может ещё
+    // не завершиться, поэтому один раз перемеряем на следующем кадре.
+    requestAnimationFrame(syncCrashStageDims);
+}
+
+function startCrashEngine() {
+    if (crashLoopStarted) return;
+    crashLoopStarted = true;
+    loadOrSeedCrashHistory();
+    renderCrashHistory();
+    beginWaitingPhase();
+}
+
+function beginWaitingPhase() {
+    crashGame.phase = 'waiting';
+    crashGame.currentMult = 1.00;
+    crashGame.betPlaced = false;
+    crashGame.cashedOut = false;
+    crashGame.bet = 0;
+    crashGame.phaseEndsAt = Date.now() + CRASH_WAIT_MS;
+
+    // Публикуем хеш нового раунда сразу в начале 5-сек ожидания (commit
+    // честной игры до того, как раунд полетит). Коэффициент краша уже
+    // зашит в currentCrashState.crashPoint и будет использован в
+    // beginFlyingPhase() — так итог раунда реально соответствует хешу.
+    prepareNextCrashRound();
+
+    renderCrashUI();
+
+    clearInterval(crashTimerHandle);
+    crashTimerHandle = setInterval(() => {
+        const msLeft = crashGame.phaseEndsAt - Date.now();
+        if (msLeft <= 0) {
+            clearInterval(crashTimerHandle);
+            beginFlyingPhase();
+        } else {
+            renderCrashUI();
+        }
+    }, 100);
+}
+
+function generateCrashPoint() {
+    const houseEdge = 0.05;
+    const r = Math.random();
+    if (r < houseEdge) return 1.00;
+    const point = (1 - houseEdge) / (1 - r);
+    return Math.max(1.00, Math.floor(point * 100) / 100);
+}
+
+// Сохраняет текущую ленту коэффициентов и момент сохранения — чтобы при
+// следующем заходе можно было понять, сколько раундов "прошло без нас".
+function saveCrashHistory() {
+    try {
+        localStorage.setItem(CRASH_HISTORY_STORAGE_KEY, JSON.stringify(crashHistory));
+        localStorage.setItem(CRASH_HISTORY_TS_STORAGE_KEY, String(Date.now()));
+    } catch (e) {
+        // localStorage недоступен (приватный режим и т.п.) — просто не сохраняем
+    }
+}
+
+// При первом заходе — сразу генерирует полную ленту "прошедших" раундов, чтобы
+// не было пусто. При повторном заходе — подгружает сохранённую ленту и
+// досимулирует раунды, которые должны были пройти за время отсутствия
+// (имитация того, что игра "крутится" 24/7, даже когда никто не играет).
+function loadOrSeedCrashHistory() {
+    let stored = [];
+    let storedTs = null;
+
+    try {
+        const raw = localStorage.getItem(CRASH_HISTORY_STORAGE_KEY);
+        if (raw) stored = JSON.parse(raw) || [];
+        const rawTs = localStorage.getItem(CRASH_HISTORY_TS_STORAGE_KEY);
+        if (rawTs) storedTs = parseInt(rawTs, 10);
+    } catch (e) {
+        stored = [];
+        storedTs = null;
+    }
+
+    if (!Array.isArray(stored) || stored.length === 0) {
+        // Ничего не сохранено — первый визит. Генерируем стартовую ленту,
+        // будто раунды уже шли до нас.
+        crashHistory = Array.from({ length: CRASH_HISTORY_MAX }, () => generateCrashPoint());
+    } else {
+        crashHistory = stored.slice(0, CRASH_HISTORY_MAX);
+
+        if (storedTs && !isNaN(storedTs)) {
+            const elapsedMs = Date.now() - storedTs;
+            const backfillCount = Math.min(
+                CRASH_HISTORY_MAX,
+                Math.max(0, Math.floor(elapsedMs / CRASH_AVG_ROUND_MS))
+            );
+            for (let i = 0; i < backfillCount; i++) {
+                crashHistory.unshift(generateCrashPoint());
+            }
+            if (crashHistory.length > CRASH_HISTORY_MAX) {
+                crashHistory.length = CRASH_HISTORY_MAX;
+            }
+        }
+    }
+
+    saveCrashHistory();
+}
+
+function beginFlyingPhase() {
+    crashGame.phase = 'flying';
+    // Коэффициент краша берём из уже опубликованного в начале ожидания
+    // хеша (currentCrashState), а не генерируем заново — иначе показанный
+    // игроку хеш никак не будет связан с реальным результатом раунда.
+    crashGame.crashPoint = currentCrashState.crashPoint;
+    crashGame.currentMult = 1.00;
+    crashGame.startTime = performance.now();
+    crashLastHeavyUpdate = 0;
+
+    syncCrashStageDims();
+
+    crashTrailPoints = [];
+    const dom = getCrashDom();
+
+    if (dom.trailLine) {
+        dom.trailLine.setAttribute('d', '');
+        dom.trailLine.classList.remove('crash-trail-crashed');
+        dom.trailLine.style.opacity = '1';
+    }
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-trail-crashed', 'crash-dot-live');
+        dom.trailDot.style.opacity = '0';
+    }
+
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = '1.00x';
+        dom.topLeftMult.classList.remove('crashed');
+        dom.topLeftMult.style.display = 'block';
+    }
+
+    // Разовые переключения состояния экрана на весь полёт — раньше
+    // выполнялись заново в каждом кадре renderCrashUI без необходимости.
+    if (dom.countdownEl) dom.countdownEl.style.display = 'none';
+    if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+    if (dom.betInput) dom.betInput.disabled = true;
+
+    renderCrashUI();
+    tickCrash();
+}
 
 // Резкая тряска экрана с затуханием на GPU
 function explosionShake(el, duration = 500, magnitude = 20) {
@@ -1718,6 +1806,371 @@ function explosionShake(el, duration = 500, magnitude = 20) {
         requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+}
+
+function tickCrash() {
+    const now = performance.now();
+    const elapsed = now - crashGame.startTime;
+
+    let rawMult;
+    if (elapsed < CRASH_SLOW_START_MS) {
+        const p = elapsed / CRASH_SLOW_START_MS;
+        const eased = Math.pow(p, 3);
+        rawMult = 1 + (CRASH_SLOW_START_TARGET - 1) * eased;
+    } else {
+        const elapsedAfter = elapsed - CRASH_SLOW_START_MS;
+        rawMult = CRASH_SLOW_START_TARGET * Math.exp(CRASH_GROWTH_PER_MS * elapsedAfter);
+    }
+
+    crashGame.currentMult = Math.min(
+        crashGame.crashPoint,
+        Math.floor(rawMult * 100) / 100
+    );
+
+    let heavy = true;
+    if (now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS) {
+        crashLastHeavyUpdate = now;
+        heavy = true;
+    } else {
+        heavy = false;
+    }
+
+    renderCrashUI(heavy);
+
+    if (crashGame.currentMult >= crashGame.crashPoint) {
+        endCrashRound();
+        return;
+    }
+
+    crashAnimHandle = requestAnimationFrame(tickCrash);
+}
+
+function endCrashRound() {
+    cancelAnimationFrame(crashAnimHandle);
+
+    // Раскрываем секретный ключ (соль) этого раунда — теперь можно
+    // проверить, что SHA256(ключ) равен хешу, показанному ДО раунда.
+    revealCrashRoundKey();
+
+    lastCrashPoint = crashGame.crashPoint;
+    crashHistory.unshift(crashGame.crashPoint);
+    if (crashHistory.length > CRASH_HISTORY_MAX) crashHistory.length = CRASH_HISTORY_MAX;
+    renderCrashHistory();
+    saveCrashHistory();
+
+    if (window.tg?.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
+    }
+
+    const dom = getCrashDom();
+
+    if (crashRocketAnim) crashRocketAnim.pause();
+    if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
+
+    if (dom.trailLine) {
+        dom.trailLine.classList.add('crash-trail-crashed');
+    }
+    if (dom.trailDot) {
+        dom.trailDot.classList.remove('crash-dot-live');
+        dom.trailDot.classList.add('crash-trail-crashed');
+        dom.trailDot.style.opacity = '1';
+    }
+    
+    setTimeout(() => {
+        if (dom.trailLine) dom.trailLine.style.opacity = '0';
+        if (dom.trailDot) dom.trailDot.style.opacity = '0';
+    }, 1200);
+
+    setTimeout(() => {
+        if (dom.trailLine) dom.trailLine.setAttribute('d', '');
+        crashTrailPoints = [];
+    }, 2200);
+
+    if (dom.explosionEl) {
+        let offsetTransform = 'translate3d(0px, 0px, 0px)';
+        if (dom.rocketEl && dom.rocketEl.style.transform) {
+            const m = dom.rocketEl.style.transform.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px/);
+            if (m) offsetTransform = `translate3d(${m[1]}px, ${m[2]}px, 0px)`;
+        }
+        dom.explosionEl.style.transform = offsetTransform;
+        clearTimeout(crashExplosionHideTimeout);
+        dom.explosionEl.style.opacity = '1';
+        dom.explosionEl.style.display = 'block';
+        if (crashExplosionAnim) {
+            if (crashExplosionTotalFrames > 0) {
+                const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
+                crashExplosionAnim.playSegments([0, endFrame], true);
+            } else {
+                crashExplosionAnim.goToAndPlay(0, true);
+            }
+        }
+    }
+
+    if (dom.multEl) dom.multEl.style.color = '#e74c3c';
+    if (dom.topLeftMult) {
+        dom.topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        dom.topLeftMult.classList.add('crashed');
+        dom.topLeftMult.style.display = 'block';
+    }
+    if (dom.actionBtn) {
+        dom.actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
+        dom.actionBtn.disabled = true;
+    }
+
+    explosionShake(dom.stageEl, 500, 20);
+    setTimeout(beginWaitingPhase, 3000);
+}
+
+async function placeCrashBet() {
+    if (crashGame.phase !== 'waiting' || crashGame.betPlaced) return;
+    if (crashGame.isProcessing) return;
+    if (!lockEconomy()) return;
+
+    const dom = getCrashDom();
+    const bet = roundMoney(parseFloat(dom.betInput?.value));
+
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    crashGame.isProcessing = true;
+    const snapshot = snapshotBalanceState();
+
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debitResult = await placeBetServer(bet, 'Краш');
+    if (!debitResult.ok) {
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
+
+    crashGame.bet = bet;
+    crashGame.betPlaced = true;
+    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш');
+    crashGame.cashedOut = false;
+    crashGame.isProcessing = false;
+    unlockEconomy();
+    renderCrashUI();
+}
+
+async function cashOutCrash() {
+    if (crashGame.phase !== 'flying' || !crashGame.betPlaced || crashGame.cashedOut) return;
+    if (crashGame.isProcessing) return;
+    if (!lockEconomy()) return;
+
+    crashGame.isProcessing = true;
+    const snapshot = snapshotBalanceState();
+
+    const mult = crashGame.currentMult;
+    const winAmount = roundMoney(crashGame.bet * mult);
+
+    currentTotalWin = roundMoney(currentTotalWin + winAmount);
+    currentWinsCount++;
+    if (mult > currentMaxWin) currentMaxWin = mult;
+
+    setUIBalance(roundMoney(currentBalance + winAmount));
+    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
+
+    if (!creditResult.ok) {
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        return;
+    }
+    currentBalance = creditResult.balance;
+    setUIBalance(currentBalance);
+
+    crashGame.cashedOut = true;
+    crashGame.isProcessing = false;
+
+    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+    resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
+
+    renderCrashUI();
+    unlockEconomy();
+}
+
+function handleCrashAction() {
+    if (crashGame.isProcessing) return;
+
+    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) {
+        placeCrashBet();
+    } else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
+        cashOutCrash();
+    }
+}
+
+function adjustCrashBet(factor) {
+    if (crashGame.betPlaced) return;
+    applyBetFactor(getCrashDom().betInput, factor);
+}
+
+function setCrashMaxBet() {
+    if (crashGame.betPlaced) return;
+    applyBetMax(getCrashDom().betInput);
+}
+
+function renderCrashHistory() {
+    const dom = getCrashDom();
+    if (!dom.historyList) return;
+
+    dom.historyList.innerHTML = crashHistory.map(point => {
+        const color = point < 1.5 ? '#e74c3c' : (point >= 2 ? '#2ecc71' : '#f1c40f');
+        return `<span style="display:inline-block; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:4px 8px; font-size:11px; font-weight:800; color:${color};">${point.toFixed(2)}x</span>`;
+    }).join('');
+}
+
+function renderCrashUI(heavy = true) {
+    const dom = getCrashDom();
+    if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
+
+    if (crashGame.phase === 'waiting') {
+        const secLeft = Math.max(0, Math.ceil((crashGame.phaseEndsAt - Date.now()) / 1000));
+        dom.statusEl.textContent = lastCrashPoint !== null
+            ? `Прошлый раунд: ${lastCrashPoint.toFixed(2)}x · Старт через ${secLeft}с`
+            : `Старт через ${secLeft}с`;
+
+        dom.multEl.textContent = '1.00x';
+        dom.multEl.style.color = '#fff';
+
+        if (secLeft >= 1 && secLeft <= 5) {
+            if (dom.countdownEl) {
+                dom.countdownEl.textContent = String(secLeft);
+                dom.countdownEl.className = 'crash-countdown ' + (secLeft === 5 ? 'cc-green' : (secLeft >= 3 ? 'cc-yellow' : 'cc-red'));
+                dom.countdownEl.style.display = 'flex';
+            }
+            if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
+            if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
+        } else {
+            if (dom.countdownEl) dom.countdownEl.style.display = 'none';
+            if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '1';
+            if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+        }
+
+        if (dom.rocketEl) {
+            const stageW = crashStageW;
+            const stageH = crashStageH;
+            const centerXWait = (stageW - 200) / 2 - 16;
+            const centerYWait = 16 - (stageH - 200) / 2;
+
+            dom.rocketEl.style.transform = `translate3d(${centerXWait}px, ${centerYWait}px, 0px) rotate(45deg)`;
+        }
+        if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
+
+        if (dom.explosionEl) dom.explosionEl.style.display = 'none';
+        if (crashExplosionAnim) crashExplosionAnim.goToAndStop(0, true);
+        if (dom.stageEl) dom.stageEl.style.transform = 'translate3d(0px, 0px, 0px)';
+
+        if (dom.trailLine) {
+            dom.trailLine.setAttribute('d', '');
+            dom.trailLine.classList.remove('crash-trail-crashed');
+            dom.trailLine.style.opacity = '1';
+        }
+
+        if (dom.trailDot) {
+            dom.trailDot.classList.remove('crash-dot-live', 'crash-trail-crashed');
+            dom.trailDot.style.opacity = '0';
+        }
+
+        if (dom.topLeftMult) dom.topLeftMult.style.display = 'none';
+        if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced;
+
+        dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : 'Сделать ставку';
+        dom.actionBtn.disabled = crashGame.betPlaced;
+        return;
+    }
+
+    // phase === 'flying'
+    // Расчёт позиции ракеты и точки следа — дешёвая математика, считаем
+    // каждый кадр, чтобы ракета двигалась идеально плавно.
+    const stageW = crashStageW;
+    const stageH = crashStageH;
+
+    const centerX = (stageW - 200) / 2 - 16;
+    const centerY = 16 - (stageH - 200) / 2;
+
+    const currentM = crashGame.currentMult;
+
+    // Скорость полета ракеты: достигает верхнего угла (пика) ровно при 3.00x
+    const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
+
+    // Поворот ракеты адаптирован под траекторию до 3.00x
+    const angle = 45 - (90 * trailProgress);
+
+    if (dom.rocketEl) {
+        dom.rocketEl.style.transform = `translate3d(${centerX}px, ${centerY}px, 0px) rotate(${angle}deg)`;
+    }
+
+    // "Тяжёлые" обновления — текст с text-shadow и SVG-след с несколькими
+    // drop-shadow — троттлим до ~30 раз/сек (см. CRASH_HEAVY_UPDATE_INTERVAL_MS
+    // в tickCrash), чтобы не грузить рендер на каждый из 60 кадров.
+    if (heavy) {
+        if (dom.topLeftMult) {
+            dom.topLeftMult.textContent = currentM.toFixed(2) + 'x';
+        }
+
+        const trailStartX = stageW * 0.05;
+        const trailStartY = stageH * 0.95;
+        const trailEndX = stageW * 0.95;
+        const trailEndY = stageH * 0.05;
+
+        const headX = trailStartX + (trailEndX - trailStartX) * trailProgress;
+        const headY = trailStartY + (trailEndY - trailStartY) * trailProgress;
+
+        if (dom.trailLine) {
+            const segDx = headX - trailStartX;
+            const segDy = headY - trailStartY;
+            const segLen = Math.hypot(segDx, segDy) || 1;
+            const bow = 0.25 * segLen;
+            const ctrlX = (trailStartX + headX) / 2 + (-segDy / segLen) * bow;
+            const ctrlY = (trailStartY + headY) / 2 + (segDx / segLen) * bow;
+            dom.trailLine.setAttribute('d', `M ${trailStartX},${trailStartY} Q ${ctrlX},${ctrlY} ${headX},${headY}`);
+        }
+
+        if (dom.trailDot) {
+            dom.trailDot.setAttribute('cx', headX);
+            dom.trailDot.setAttribute('cy', headY);
+            dom.trailDot.style.opacity = '1';
+            dom.trailDot.classList.add('crash-dot-live');
+        }
+
+        if (crashGame.betPlaced && !crashGame.cashedOut) {
+            const potential = (crashGame.bet * currentM).toFixed(2);
+            dom.actionBtn.textContent = `Забрать ${potential}$`;
+            dom.actionBtn.disabled = false;
+        } else if (crashGame.cashedOut) {
+            dom.actionBtn.textContent = 'Выигрыш забран ✓';
+            dom.actionBtn.disabled = true;
+        } else {
+            dom.actionBtn.textContent = 'Ждите следующего раунда';
+            dom.actionBtn.disabled = true;
+        }
+    }
+
+    // Тряска экрана — дешёвый compositor-only transform, оставляем на каждый
+    // кадр ради плавности вибрации.
+    if (dom.stageEl) {
+        const shakeStrength = Math.min(8, (crashGame.currentMult - 1) * 1.2);
+        const dx = (Math.random() - 0.5) * shakeStrength;
+        const dy = (Math.random() - 0.5) * shakeStrength;
+        dom.stageEl.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
+    }
 }
 
 /* =========================
@@ -3386,6 +3839,106 @@ function claimBonus() {
 }
 
 /* =========================
+   ЗАГОТОВЛЕННОЕ СООБЩЕНИЕ (savePreparedInlineMessage)
+   https://core.telegram.org/method/messages.savePreparedInlineMessage
+   https://core.telegram.org/bots/api#savepreparedinlinemessage
+
+   Mini App сам не может сохранить сообщение: метод доступен только боту.
+   Токен лежит в Supabase (таблица app_secrets), клиент его не читает.
+   RPC create_prepared_share_message вызывает savePreparedInlineMessage,
+   затем Telegram.WebApp.shareMessage(id) открывает экран «Share Message».
+========================= */
+const SHARE_TEST_CHROME_URL = 'https://www.google.com/chrome/';
+
+function openShareTestChrome() {
+    if (tg?.openLink) {
+        tg.openLink(SHARE_TEST_CHROME_URL);
+        return;
+    }
+    window.open(SHARE_TEST_CHROME_URL, '_blank', 'noopener');
+}
+
+function getTelegramUserId() {
+    const unsafeId = Number(tg?.initDataUnsafe?.user?.id);
+    if (Number.isFinite(unsafeId) && unsafeId > 0) return unsafeId;
+
+    try {
+        const params = new URLSearchParams(tg?.initData || '');
+        const userRaw = params.get('user');
+        if (!userRaw) return 0;
+        const user = JSON.parse(userRaw);
+        const parsed = Number(user?.id);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+async function requestPreparedMessageId() {
+    const userId = getTelegramUserId();
+    const { data, error } = await supabase.rpc('create_prepared_share_message', {
+        p_user_id: userId
+    });
+
+    if (error) {
+        throw new Error(error.message || 'Не удалось сохранить заготовку');
+    }
+
+    const preparedId = typeof data === 'string' ? data : (data && data.id);
+    if (!preparedId) {
+        throw new Error('Supabase не вернул id заготовки');
+    }
+
+    return preparedId;
+}
+
+async function sharePreparedInvite() {
+    const btn = document.getElementById('shareInviteBtn');
+    if (btn?.disabled) return;
+
+    if (!tg) {
+        showMessage('Откройте приложение через Telegram');
+        return;
+    }
+
+    if (typeof tg.shareMessage !== 'function') {
+        showMessage('Обновите Telegram: нужен клиент с Bot API 8.0 (shareMessage).');
+        return;
+    }
+
+    if (!getTelegramUserId()) {
+        showMessage('Не удалось определить Telegram ID');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Готовим сообщение…';
+    }
+
+    try {
+        const preparedId = await requestPreparedMessageId();
+        tg.shareMessage(preparedId, (sent) => {
+            if (sent) {
+                showMessage('Сообщение отправлено');
+            }
+        });
+    } catch (err) {
+        const text = String(err && err.message ? err.message : err);
+        if (/Could not find the function|schema cache|create_prepared_share_message/i.test(text)) {
+            showMessage('Выполните share_prepared_message.sql в Supabase SQL Editor и вставьте токен в таблицу app_secrets.');
+        } else {
+            showMessage(text);
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Отправить…';
+        }
+    }
+}
+
+/* =========================
    ПРОМОКОД / СКРЫТАЯ АДМИН-ПАНЕЛЬ
 ========================= */
 
@@ -3713,6 +4266,8 @@ window.adjustCrashBet = adjustCrashBet;
 window.autoPickMinesTile = autoPickMinesTile;
 window.changeMinesBy = changeMinesBy;
 window.claimBonus = claimBonus;
+window.sharePreparedInvite = sharePreparedInvite;
+window.openShareTestChrome = openShareTestChrome;
 window.demoBalanceAction = demoBalanceAction;
 window.goHome = goHome;
 window.handleCrashAction = handleCrashAction;
@@ -4537,47 +5092,49 @@ function launchIceArenaPuck(winner) {
     const field = document.getElementById('iceField');
     const puck = document.getElementById('icePuck');
     const arrow = puck ? puck.querySelector('.ice-puck-arrow') : null;
+
     if (!field || !puck) {
         finishIceArenaRound(winner);
         return;
     }
 
+    puck.classList.remove('ice-puck-spinning');
+
+    const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
+    let cursor = 0;
+    let targetXPct = 50;
+    for (const p of iceArena.players) {
+        const w = total > 0 ? (p.bet / total) * 100 : 0;
+        if (p.id === winner.id) {
+            targetXPct = cursor + w / 2;
+            break;
+        }
+        cursor += w;
+    }
+
     const rect = field.getBoundingClientRect();
     const fieldW = rect.width;
     const fieldH = rect.height;
+
     const puckRadius = (puck.offsetWidth || 24) / 2;
     const margin = puckRadius + 3;
     const arrowOffset = puckRadius + 6;
 
-    // Случайная стартовая позиция (с отступом от краёв)
-    const startX = margin + Math.random() * (fieldW - 2 * margin);
-    const startY = margin + Math.random() * (fieldH - 2 * margin);
+    const minX = margin, maxX = fieldW - margin;
+    const minY = margin, maxY = fieldH - margin;
 
-    // Случайное направление и скорость
-    let angle = Math.random() * 2 * Math.PI;
-    let speed = 300 + Math.random() * 500; // 300–800 px/сек
-    let vx = Math.cos(angle) * speed;
-    let vy = Math.sin(angle) * speed;
+    let x = fieldW / 2;
+    let y = fieldH / 2;
 
-    let x = startX;
-    let y = startY;
-    puck.style.left = x + 'px';
-    puck.style.top = y + 'px';
+    const targetX = (targetXPct / 100) * fieldW;
+    const targetY = fieldH * (0.35 + Math.random() * 0.3);
 
-    // Установка угла стрелки (указывает направление движения)
-    function setArrowAngle(vx, vy) {
+    function setArrowAngle(dirX, dirY) {
         if (!arrow) return;
-        const ang = Math.atan2(vy, vx) * 180 / Math.PI + 90;
+        const ang = Math.atan2(dirY, dirX) * 180 / Math.PI + 90;
         arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + ang + 'deg)';
     }
-    setArrowAngle(vx, vy);
 
-    let bounceCount = 0;
-    const maxBounces = 5 + Math.floor(Math.random() * 4); // 5–8 отскоков
-    let decelerating = false;
-    let lastTime = performance.now();
-
-    // Короткая вибрация при отскоке
     function pulsePuckBounce() {
         puck.classList.remove('ice-puck-shake');
         void puck.offsetWidth;
@@ -4585,32 +5142,73 @@ function launchIceArenaPuck(winner) {
         if (window.tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
     }
 
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 2000 + Math.random() * 900;
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+
+    const bounceTarget = 2 + Math.floor(Math.random() * 2);
+    let bounceCount = 0;
+
+    const stopPlanned = Math.random() < 0.55;
+    const stopAtBounce = stopPlanned ? 1 + Math.floor(Math.random() * Math.max(1, bounceTarget - 1)) : -1;
+    let stopUntil = 0;
+
+    setArrowAngle(vx, vy);
+
+    let phase = 'bounce';
+    let homeStartX = x, homeStartY = y, homeStartTime = 0;
+    const homeDuration = 480 + Math.random() * 220;
+    const launchStart = performance.now();
+    let lastTime = launchStart;
+
+    function easeOutStrong(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+
     function frame(now) {
         const dt = Math.min(0.04, (now - lastTime) / 1000);
         lastTime = now;
 
-        if (!decelerating) {
-            // Фаза активного движения с отскоками
+        if (phase === 'bounce' && now - launchStart > 3000) {
+            phase = 'home';
+            homeStartX = x; homeStartY = y; homeStartTime = now;
+        }
+
+        if (phase === 'stop') {
+            puck.style.left = x + 'px';
+            puck.style.top = y + 'px';
+            if (now < stopUntil) {
+                requestAnimationFrame(frame);
+                return;
+            }
+            phase = 'bounce';
+        }
+
+        if (phase === 'bounce') {
             x += vx * dt;
             y += vy * dt;
 
             let bounced = false;
-            if (x < margin) { x = margin; vx = -vx; bounced = true; }
-            else if (x > fieldW - margin) { x = fieldW - margin; vx = -vx; bounced = true; }
-            if (y < margin) { y = margin; vy = -vy; bounced = true; }
-            else if (y > fieldH - margin) { y = fieldH - margin; vy = -vy; bounced = true; }
+            if (x < minX) { x = minX; vx = -vx; bounced = true; }
+            else if (x > maxX) { x = maxX; vx = -vx; bounced = true; }
+            if (y < minY) { y = minY; vy = -vy; bounced = true; }
+            else if (y > maxY) { y = maxY; vy = -vy; bounced = true; }
 
             if (bounced) {
                 bounceCount++;
-                // Затухание скорости при ударе о борт
-                const damping = 0.92 + Math.random() * 0.03;
-                vx *= damping;
-                vy *= damping;
+                vx *= 0.85;
+                vy *= 0.85;
                 pulsePuckBounce();
                 setArrowAngle(vx, vy);
 
-                if (bounceCount >= maxBounces) {
-                    decelerating = true;
+                if (bounceCount >= bounceTarget) {
+                    phase = 'home';
+                    homeStartX = x; homeStartY = y; homeStartTime = now;
+                } else if (stopPlanned && bounceCount === stopAtBounce) {
+                    phase = 'stop';
+                    stopUntil = now + 150 + Math.random() * 220;
+                    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
                 }
             } else {
                 setArrowAngle(vx, vy);
@@ -4619,74 +5217,40 @@ function launchIceArenaPuck(winner) {
             puck.style.left = x + 'px';
             puck.style.top = y + 'px';
             requestAnimationFrame(frame);
-        } else {
-            // Фаза замедления – шайба плавно останавливается
-            const decelFactor = 0.98;
-            vx *= decelFactor;
-            vy *= decelFactor;
-            x += vx * dt;
-            y += vy * dt;
+            return;
+        }
 
-            let bounced = false;
-            if (x < margin) { x = margin; vx = -vx * 0.9; bounced = true; }
-            else if (x > fieldW - margin) { x = fieldW - margin; vx = -vx * 0.9; bounced = true; }
-            if (y < margin) { y = margin; vy = -vy * 0.9; bounced = true; }
-            else if (y > fieldH - margin) { y = fieldH - margin; vy = -vy * 0.9; bounced = true; }
-            if (bounced) {
-                pulsePuckBounce();
-                setArrowAngle(vx, vy);
-            }
+        const elapsed = now - homeStartTime;
+        const t = Math.min(1, elapsed / homeDuration);
+        const eased = easeOutStrong(t);
 
-            puck.style.left = x + 'px';
-            puck.style.top = y + 'px';
+        x = homeStartX + (targetX - homeStartX) * eased;
+        y = homeStartY + (targetY - homeStartY) * eased;
+        const scale = 1 - 0.06 * eased;
 
-            const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-            if (currentSpeed < 5) {
-                // Шайба остановилась – показываем кульминацию
-                puck.style.left = x + 'px';
-                puck.style.top = y + 'px';
+        puck.style.left = x + 'px';
+        puck.style.top = y + 'px';
+        puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+        setArrowAngle(targetX - homeStartX, targetY - homeStartY);
 
-                // Вибрация и тряска экрана в кульминационный момент
-                if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-
-                const fieldWrap = document.getElementById('iceFieldWrap');
-                if (fieldWrap) {
-                    let shakeCount = 0;
-                    const shakeInterval = setInterval(() => {
-                        if (shakeCount > 10) {
-                            clearInterval(shakeInterval);
-                            fieldWrap.style.transform = '';
-                            return;
-                        }
-                        const dx = (Math.random() - 0.5) * 4;
-                        const dy = (Math.random() - 0.5) * 4;
-                        fieldWrap.style.transform = `translate3d(${dx}px, ${dy}px, 0px)`;
-                        shakeCount++;
-                    }, 50);
-                }
-
-                // Зум на место остановки шайбы (в процентах от размеров поля)
-                const puckXPct = (x / fieldW) * 100;
-                const puckYPct = (y / fieldH) * 100;
-                zoomIceArenaField(puckXPct, puckYPct, winner);
-                return;
-            }
-
+        if (t < 1) {
             requestAnimationFrame(frame);
+        } else {
+            puck.style.left = targetX + 'px';
+            puck.style.top = targetY + 'px';
+            puck.style.transform = 'translate(-50%, -50%) scale(1)';
+            zoomIceArenaField(targetXPct, winner);
         }
     }
-
     requestAnimationFrame(frame);
 }
 
-function zoomIceArenaField(puckX, puckY, winner) {
+function zoomIceArenaField(targetXPct, winner) {
     const fieldWrap = document.getElementById('iceFieldWrap');
     const field = document.getElementById('iceField');
 
     if (field) {
-        // Устанавливаем точку трансформации в координаты остановки шайбы
-        field.style.transformOrigin = puckX + '% ' + puckY + '%';
-        // Подсвечиваем сегмент победителя (можно оставить как визуальный бонус)
+        field.style.transformOrigin = targetXPct + '% 50%';
         field.querySelectorAll('.ice-band').forEach(band => {
             if (band.dataset.playerId === winner.id) {
                 band.classList.add('ice-band-winner');
@@ -4791,1254 +5355,4 @@ window.restartIceArena = restartIceArena;
 window.applyBetFactor = applyBetFactor;
 window.applyBetMax = applyBetMax;
 
-/* ================================================================
-   CRASH — глобальный раунд через Supabase
-
-   Один раз выполнить в Supabase → SQL Editor:
-
-   create extension if not exists pgcrypto;
-   create table if not exists public.crash_rounds (
-       id uuid primary key default gen_random_uuid(),
-       status text not null default 'betting'
-           check (status in ('betting', 'flying', 'crashed')),
-       betting_ends_at timestamptz not null,
-       started_at timestamptz,
-       crashed_at timestamptz,
-       seed text not null,
-       round_hash text not null,
-       crash_point numeric(12,2) not null,
-       reveal_key text,
-       created_at timestamptz not null default now()
-   );
-   create table if not exists public.crash_bets (
-       id bigint generated always as identity primary key,
-       round_id uuid not null references public.crash_rounds(id) on delete cascade,
-       telegram_id bigint not null,
-       name text not null,
-       avatar text,
-       amount numeric(18,2) not null check (amount >= 0.10),
-       status text not null default 'active'
-           check (status in ('active', 'cashed_out', 'lost')),
-       cashout_multiplier numeric(12,2),
-       win_amount numeric(18,2),
-       payout_done boolean not null default false,
-       created_at timestamptz not null default now(),
-       unique (round_id, telegram_id)
-   );
-   create unique index if not exists crash_one_active_round
-       on public.crash_rounds ((true))
-       where status in ('betting', 'flying');
-   alter table public.crash_rounds enable row level security;
-   alter table public.crash_bets enable row level security;
-   drop policy if exists crash_rounds_read on public.crash_rounds;
-   drop policy if exists crash_bets_read on public.crash_bets;
-   create policy crash_rounds_read on public.crash_rounds
-       for select using (true);
-   create policy crash_bets_read on public.crash_bets
-       for select using (true);
-
-   -- INSERT/UPDATE прав на таблицы клиенту не выдаём. Все переходы
-   -- выполняются атомарными SECURITY DEFINER RPC-функциями.
-   create or replace function public.get_or_create_crash_round()
-   returns public.crash_rounds language plpgsql security definer
-   set search_path = public as $$
-   declare r public.crash_rounds; v_seed text; v_hash text;
-           v_int numeric; v_point numeric;
-   begin
-       select * into r from public.crash_rounds
-       where status in ('betting', 'flying')
-       order by created_at desc limit 1;
-       if found then return r; end if;
-       v_seed := encode(gen_random_bytes(24), 'hex');
-       v_hash := encode(digest(v_seed, 'sha256'), 'hex');
-       v_int := ('x' || substr(v_hash, 1, 8))::bit(32)::bigint;
-       if mod(v_int, 33) = 0 then v_point := 1.00;
-       else v_point := least(1000.00,
-           greatest(1.00, round(100 / (1 - v_int / 4294967296.0), 2)));
-       end if;
-       insert into public.crash_rounds
-           (status, betting_ends_at, seed, round_hash, crash_point)
-       values ('betting', now() + interval '5 seconds', v_seed, v_hash, v_point)
-       returning * into r;
-       return r;
-   exception when unique_violation then
-       select * into r from public.crash_rounds
-       where status in ('betting', 'flying')
-       order by created_at desc limit 1;
-       return r;
-   end; $$;
-
-   create or replace function public.advance_crash_round(p_round_id uuid)
-   returns public.crash_rounds language plpgsql security definer
-   set search_path = public as $$
-   declare r public.crash_rounds; v_flight_seconds numeric;
-   begin
-       select * into r from public.crash_rounds where id = p_round_id for update;
-       if not found then return null; end if;
-       if r.status = 'betting' and r.betting_ends_at <= now() then
-           update public.crash_rounds set status = 'flying', started_at = now()
-           where id = r.id and status = 'betting' returning * into r;
-       elsif r.status = 'flying' and r.started_at is not null then
-           if r.crash_point <= 1.5 then
-               v_flight_seconds := 6 * power(greatest(0, (r.crash_point - 1) / 0.5), 1.0 / 3.0);
-           else
-               v_flight_seconds := 6 + ln(r.crash_point / 1.5) / (ln(2) / 10);
-           end if;
-           if r.started_at + make_interval(secs => v_flight_seconds) <= now() then
-               update public.crash_rounds
-               set status = 'crashed', crashed_at = now(), reveal_key = seed
-               where id = r.id and status = 'flying' returning * into r;
-               update public.crash_bets set status = 'lost'
-               where round_id = r.id and status = 'active';
-           end if;
-       end if;
-       return r;
-   end; $$;
-
-   create or replace function public.register_crash_bet(
-       p_round_id uuid, p_telegram_id bigint, p_name text,
-       p_avatar text, p_amount numeric
-   ) returns public.crash_bets language plpgsql security definer
-   set search_path = public as $$
-   declare b public.crash_bets;
-   begin
-       insert into public.crash_bets (round_id, telegram_id, name, avatar, amount)
-       select p_round_id, p_telegram_id, left(coalesce(p_name, 'Игрок'), 80),
-              p_avatar, round(p_amount, 2)
-       where exists (select 1 from public.crash_rounds
-           where id = p_round_id and status = 'betting' and betting_ends_at > now())
-       returning * into b;
-       if not found then raise exception 'Раунд уже начался или ставка уже существует'; end if;
-       return b;
-   end; $$;
-
-   create or replace function public.claim_crash_cashout(
-       p_round_id uuid, p_telegram_id bigint,
-       p_multiplier numeric, p_win_amount numeric
-   ) returns public.crash_bets language plpgsql security definer
-   set search_path = public as $$
-   declare b public.crash_bets;
-   begin
-       update public.crash_bets b
-       set status = 'cashed_out', cashout_multiplier = round(p_multiplier, 2),
-           win_amount = round(p_win_amount, 2), payout_done = false
-       where b.round_id = p_round_id and b.telegram_id = p_telegram_id
-         and b.status = 'active'
-         and exists (select 1 from public.crash_rounds r
-           where r.id = b.round_id and r.status = 'flying'
-             and p_multiplier >= 1 and p_multiplier <= r.crash_point
-             and r.started_at + make_interval(secs =>
-               case when r.crash_point <= 1.5
-                    then 6 * power(greatest(0, (r.crash_point - 1) / 0.5), 1.0 / 3.0)
-                    else 6 + ln(r.crash_point / 1.5) / (ln(2) / 10)
-               end) > now())
-       returning b.* into b;
-       if not found then raise exception 'Кэшаут уже выполнен или раунд завершён'; end if;
-       return b;
-   end; $$;
-
-   create or replace function public.complete_crash_payout(p_bet_id bigint)
-   returns boolean language sql security definer set search_path = public as $$
-       update public.crash_bets set payout_done = true
-       where id = p_bet_id and status = 'cashed_out' and not payout_done
-       returning true;
-   $$;
-   create or replace function public.release_crash_cashout(p_bet_id bigint)
-   returns boolean language sql security definer set search_path = public as $$
-       update public.crash_bets
-       set status = 'active', cashout_multiplier = null, win_amount = null
-       where id = p_bet_id and status = 'cashed_out' and not payout_done
-       returning true;
-   $$;
-
-   revoke all on function public.get_or_create_crash_round() from public;
-   revoke all on function public.advance_crash_round(uuid) from public;
-   revoke all on function public.register_crash_bet(uuid,bigint,text,text,numeric) from public;
-   revoke all on function public.claim_crash_cashout(uuid,bigint,numeric,numeric) from public;
-   revoke all on function public.complete_crash_payout(bigint) from public;
-   revoke all on function public.release_crash_cashout(bigint) from public;
-   grant execute on function public.get_or_create_crash_round() to anon, authenticated;
-   grant execute on function public.advance_crash_round(uuid) to anon, authenticated;
-   grant execute on function public.register_crash_bet(uuid,bigint,text,text,numeric) to anon, authenticated;
-   grant execute on function public.claim_crash_cashout(uuid,bigint,numeric,numeric) to anon, authenticated;
-   grant execute on function public.complete_crash_payout(bigint) to anon, authenticated;
-   grant execute on function public.release_crash_cashout(bigint) to anon, authenticated;
-   alter publication supabase_realtime add table public.crash_rounds;
-   alter publication supabase_realtime add table public.crash_bets;
-   ================================================================ */
-
-const CRASH_ROUNDS_TABLE = 'crash_rounds';
-const CRASH_BETS_TABLE = 'crash_bets';
-const CRASH_GLOBAL_RESULT_HOLD_MS = 3000;
-const CRASH_GLOBAL_POLL_MS = 1000;
-const CRASH_GLOBAL_GAME_LABEL = 'Краш';
-let crashGlobal = {
-    round: null, bets: [], channel: null, pollHandle: null,
-    refreshInFlight: false, lastRenderedRoundId: null, lastRenderedPhase: null
-};
-
-function crashRpcRow(data) {
-    return Array.isArray(data) ? (data[0] || null) : (data || null);
-}
-
-function crashTelegramId() {
-    return tg?.initDataUnsafe?.user?.id || null;
-}
-
-function crashPlayerName() {
-    const user = tg?.initDataUnsafe?.user;
-    return document.getElementById('username')?.textContent?.trim() ||
-        [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Игрок';
-}
-
-function crashFlightMs(point) {
-    const value = Math.max(1, Number(point) || 1);
-    if (value <= 1.5) return 6000 * Math.pow(Math.max(0, (value - 1) / 0.5), 1 / 3);
-    return 6000 + Math.log(value / 1.5) / (Math.log(2) / 10000);
-}
-
-function crashMultiplierAt(round, now = Date.now()) {
-    if (!round?.started_at) return 1;
-    const elapsed = Math.max(0, now - Date.parse(round.started_at));
-    let raw;
-    if (elapsed < CRASH_SLOW_START_MS) {
-        raw = 1 + (CRASH_SLOW_START_TARGET - 1) * Math.pow(elapsed / CRASH_SLOW_START_MS, 3);
-    } else {
-        raw = CRASH_SLOW_START_TARGET *
-            Math.exp(CRASH_GROWTH_PER_MS * (elapsed - CRASH_SLOW_START_MS));
-    }
-    return Math.min(Number(round.crash_point) || 1, Math.floor(raw * 100) / 100);
-}
-
-function crashOwnBet() {
-    const id = crashTelegramId();
-    return id == null ? null : crashGlobal.bets.find(
-        bet => String(bet.telegram_id) === String(id)
-    ) || null;
-}
-
-function ensureCrashGlobalRoomUi() {
-    if (document.getElementById('crashGlobalRoom')) return;
-    const dom = getCrashDom();
-    if (!dom.historyList?.parentElement) return;
-    const panel = document.createElement('div');
-    panel.id = 'crashGlobalRoom';
-    panel.style.cssText =
-        'margin:10px 0 12px;padding:9px 11px;border-radius:12px;' +
-        'background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);' +
-        'color:rgba(255,255,255,.78);font-size:11px;line-height:1.35;';
-    dom.historyList.parentElement.insertBefore(panel, dom.historyList);
-}
-
-function renderCrashGlobalRoom() {
-    const panel = document.getElementById('crashGlobalRoom');
-    if (!panel) return;
-    const active = crashGlobal.bets.filter(bet => bet.status === 'active');
-    const total = active.reduce((sum, bet) => sum + (Number(bet.amount) || 0), 0);
-    const players = crashGlobal.bets.slice(0, 8).map(bet => {
-        const result = bet.status === 'cashed_out'
-            ? ` · забрал ${Number(bet.win_amount || 0).toFixed(2)}$`
-            : bet.status === 'lost' ? ' · проигрыш' : '';
-        return `<span style="white-space:nowrap">${escapeHtml(bet.name || 'Игрок')}${result}</span>`;
-    }).join(' · ');
-    panel.innerHTML =
-        `<div style="font-weight:800;color:#fff">Всего ${active.length} ставок ● ${total.toFixed(2)}$</div>` +
-        (players ? `<div style="margin-top:4px;opacity:.72">${players}</div>` : '');
-}
-
-// ==========================================
-// ПЕРЕПОДКЛЮЧЕНИЕ ПОСЛЕ ВОЗВРАТА В ПРИЛОЖЕНИЕ
-// Если игрок свернул приложение (или ушёл с телефона) и вернулся —
-// вместо того чтобы просто "доиграть" по устаревшим данным, показываем
-// внизу под ракетой бейдж "Переподключение…" и тихо подтягиваем
-// актуальное состояние раунда. Как только оно применится (через
-// applyCrashGlobalRound → renderCrashUI), бейдж прячем — игрок увидит
-// раунд таким, какой он есть по-настоящему прямо сейчас.
-// ==========================================
-let crashWasHidden = false;
-
-function isCrashPageOpen() {
-    const el = document.getElementById('crashPage');
-    return !!el && !el.classList.contains('hidden');
-}
-
-function showCrashReconnectBadge() {
-    const dom = getCrashDom();
-    if (dom.reconnectBadge) dom.reconnectBadge.style.display = 'flex';
-}
-
-function hideCrashReconnectBadge() {
-    const dom = getCrashDom();
-    if (dom.reconnectBadge) dom.reconnectBadge.style.display = 'none';
-}
-
-async function resyncCrashAfterReturn() {
-    if (!crashLoopStarted || !isCrashPageOpen()) return;
-    showCrashReconnectBadge();
-    try {
-        await refreshCrashGlobalState();
-        await loadCrashGlobalHistory();
-    } catch (error) {
-        console.error('Не удалось переподключиться к Crash после возврата:', error);
-    } finally {
-        hideCrashReconnectBadge();
-    }
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-        crashWasHidden = true;
-    } else if (document.visibilityState === 'visible' && crashWasHidden) {
-        crashWasHidden = false;
-        resyncCrashAfterReturn();
-    }
-});
-
-// Подстраховка: в некоторых WebView (в т.ч. иногда в Telegram)
-// visibilitychange срабатывает не всегда надёжно — pageshow/focus
-// дублируют триггер, но resyncCrashAfterReturn ничего не сделает,
-// если crashWasHidden уже false, так что двойного вызова не будет.
-window.addEventListener('pageshow', () => {
-    if (crashWasHidden) {
-        crashWasHidden = false;
-        resyncCrashAfterReturn();
-    }
-});
-window.addEventListener('focus', () => {
-    if (crashWasHidden) {
-        crashWasHidden = false;
-        resyncCrashAfterReturn();
-    }
-});
-
-async function loadCrashGlobalHistory() {
-    const { data, error } = await supabase
-        .from(CRASH_ROUNDS_TABLE)
-        .select('crash_point, crashed_at, created_at')
-        .eq('status', 'crashed')
-        .order('crashed_at', { ascending: false })
-        .limit(CRASH_HISTORY_MAX);
-    if (error) {
-        console.error('Ошибка загрузки истории crash_rounds:', error);
-        return;
-    }
-    crashHistory = (data || [])
-        .map(row => Number(row.crash_point))
-        .filter(point => Number.isFinite(point));
-    lastCrashPoint = crashHistory.length ? crashHistory[0] : null;
-    renderCrashHistory();
-}
-
-async function getCrashGlobalRound() {
-    const { data, error } = await supabase
-        .from(CRASH_ROUNDS_TABLE)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-    if (error) {
-        console.error('Ошибка загрузки общего Crash-раунда:', error);
-        return null;
-    }
-    return data || null;
-}
-
-async function getCrashGlobalBets(roundId) {
-    if (!roundId) return [];
-    const { data, error } = await supabase
-        .from(CRASH_BETS_TABLE)
-        .select('*')
-        .eq('round_id', roundId)
-        .order('created_at', { ascending: true });
-    if (error) {
-        console.error('Ошибка загрузки ставок общего Crash-раунда:', error);
-        return [];
-    }
-    return data || [];
-}
-
-function setCrashFairnessFromRound(round) {
-    currentCrashState = {
-        salt: round?.status === 'crashed' ? (round.reveal_key || round.seed || '') : '',
-        hash: round?.round_hash || '',
-        crashPoint: Number(round?.crash_point) || 1,
-        isFinished: round?.status === 'crashed'
-    };
-    const hashInput = document.getElementById('crashRoundHashInput');
-    if (hashInput) hashInput.value = currentCrashState.hash;
-    if (round?.status !== 'crashed') hideCrashRoundKey();
-    else revealCrashRoundKey();
-}
-
-function applyCrashGlobalRound(round, bets) {
-    if (!round) return;
-    const previousId = crashGlobal.round?.id;
-    const previousStatus = crashGlobal.round?.status;
-    crashGlobal.round = round;
-    crashGlobal.bets = bets || [];
-    setCrashFairnessFromRound(round);
-    // Пришло свежее состояние раунда с сервера — снимаем временную
-    // блокировку кэшаута, поставленную в tickCrash() при локальном
-    // обнаружении конца полёта.
-    crashRoundSettling = false;
-
-    const own = crashOwnBet();
-    crashGame.roundId = round.id;
-    crashGame.bet = Number(own?.amount) || 0;
-    crashGame.betPlaced = !!own;
-    crashGame.cashedOut = own?.status === 'cashed_out';
-    crashGame.crashPoint = Number(round.crash_point) || 1;
-    crashGame.currentMult = round.status === 'flying'
-        ? crashMultiplierAt(round)
-        : round.status === 'crashed' ? crashGame.crashPoint : 1;
-    crashGame.phase = round.status === 'flying'
-        ? 'flying' : round.status === 'crashed' ? 'crashed' : 'waiting';
-    crashGame.startTime = round.started_at ? Date.parse(round.started_at) : 0;
-    crashGame.phaseEndsAt = round.betting_ends_at ? Date.parse(round.betting_ends_at) : 0;
-
-    renderCrashGlobalRoom();
-    if (previousId !== round.id || previousStatus !== round.status) {
-        crashGlobal.lastRenderedRoundId = round.id;
-        crashGlobal.lastRenderedPhase = round.status;
-        if (round.status === 'flying') beginFlyingPhase(round);
-        else if (round.status === 'crashed') endCrashRound(round);
-        else beginWaitingPhase(round);
-    }
-    // Догоняющий показ взрыва: если раунд уже "crashed", но страница
-    // "Краш" в момент самого краша была закрыта (или крашнулся раунд ещё
-    // до первого открытия вкладки), tryShowCrashExplosion() сама
-    // проверит, что не показывала взрыв для этого round.id, и покажет
-    // его сейчас, раз страница уже открыта.
-    tryShowCrashExplosion(round);
-    renderCrashUI();
-}
-
-async function advanceCrashGlobalRound(round) {
-    if (!round?.id) return round;
-    const { data, error } = await supabase.rpc('advance_crash_round', {
-        p_round_id: round.id
-    });
-    if (error) {
-        console.error('Не удалось атомарно продвинуть Crash-раунд:', error);
-        return round;
-    }
-    return crashRpcRow(data) || round;
-}
-
-async function refreshCrashGlobalState() {
-    if (crashGlobal.refreshInFlight) return;
-    crashGlobal.refreshInFlight = true;
-    try {
-        let round = await getCrashGlobalRound();
-        if (!round) {
-            const { data, error } = await supabase.rpc('get_or_create_crash_round');
-            if (error) throw error;
-            round = crashRpcRow(data);
-        }
-
-        if (round?.status === 'betting' &&
-            Date.parse(round.betting_ends_at) <= Date.now()) {
-            round = await advanceCrashGlobalRound(round);
-        } else if (round?.status === 'flying' &&
-            Date.parse(round.started_at) + crashFlightMs(round.crash_point) <= Date.now()) {
-            round = await advanceCrashGlobalRound(round);
-        } else if (round?.status === 'crashed') {
-            const endedAt = Date.parse(round.crashed_at || round.created_at);
-            if (Number.isFinite(endedAt) &&
-                Date.now() - endedAt >= CRASH_GLOBAL_RESULT_HOLD_MS) {
-                const { data, error } = await supabase.rpc('get_or_create_crash_round');
-                if (!error) round = crashRpcRow(data) || round;
-                else console.error('Не удалось создать следующий Crash-раунд:', error);
-            }
-        }
-
-        if (round) {
-            const bets = await getCrashGlobalBets(round.id);
-            applyCrashGlobalRound(round, bets);
-            if (round.status === 'crashed') await loadCrashGlobalHistory();
-        }
-    } catch (error) {
-        console.error('Ошибка синхронизации общего Crash-раунда:', error);
-    } finally {
-        crashGlobal.refreshInFlight = false;
-    }
-}
-
-function subscribeCrashGlobal() {
-    if (crashGlobal.channel) return;
-    try {
-        crashGlobal.channel = supabase
-            .channel('crash_global_room')
-            .on('postgres_changes', {
-                event: '*', schema: 'public', table: CRASH_ROUNDS_TABLE
-            }, () => refreshCrashGlobalState())
-            .on('postgres_changes', {
-                event: '*', schema: 'public', table: CRASH_BETS_TABLE
-            }, () => refreshCrashGlobalState())
-            .subscribe((status) => {
-                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                    console.warn('Realtime Crash недоступен, работает polling-подстраховка.');
-                }
-            });
-    } catch (error) {
-        console.error('Не удалось подписаться на realtime Crash:', error);
-    }
-}
-
-function startCrashEngine() {
-    if (crashLoopStarted) return;
-    crashLoopStarted = true;
-    ensureCrashGlobalRoomUi();
-    renderCrashHistory();
-    // ВАЖНО: раньше анимации ракеты/взрыва создавались только в
-    // initCrashPage(), то есть только когда игрок САМ открывал вкладку
-    // "Краш". Раунд-инженер же стартует здесь, при загрузке всего
-    // приложения, и может успеть провести игрока через несколько раундов
-    // (полёт → краш → пауза) ещё до первого открытия страницы. Поскольку
-    // beginFlyingPhase()/endCrashRound() дергают crashRocketAnim /
-    // crashExplosionAnim только "если они уже существуют", всё это время
-    // они были null — ракета не проигрывала анимацию (пустой контейнер) и
-    // взрыв ни разу не запускался, а tryShowCrashExplosion() при этом уже
-    // помечал раунд как "показанный" — так что даже отложенный показ при
-    // последующем заходе на страницу больше не срабатывал. Создаём обе
-    // Lottie-анимации сразу, вместе с самим движком, а не по факту захода.
-    initCrashRocketAnim();
-    initCrashExplosionAnim();
-    subscribeCrashGlobal();
-    loadCrashGlobalHistory();
-    refreshCrashGlobalState();
-    clearInterval(crashGlobal.pollHandle);
-    crashGlobal.pollHandle = setInterval(refreshCrashGlobalState, CRASH_GLOBAL_POLL_MS);
-}
-
-function initCrashPage() {
-    ensureCrashGlobalRoomUi();
-    renderCrashHistory();
-    // На случай, если движок ещё не запускался (страховка) или библиотека
-    // lottie догрузилась только сейчас — создаём анимации, если их вдруг
-    // всё ещё нет.
-    initCrashRocketAnim();
-    initCrashExplosionAnim();
-    syncCrashStageDims();
-    requestAnimationFrame(syncCrashStageDims);
-    // ВАЖНО: обе Lottie-анимации теперь создаются в startCrashEngine() —
-    // то есть пока страница "Краш" ещё скрыта (display:none). Canvas-рендерер
-    // lottie меряет размер контейнера ИМЕННО в момент loadAnimation(), а у
-    // элемента внутри display:none-родителя offsetWidth/offsetHeight — 0,
-    // даже если сам элемент задан фиксированными 200×200px в inline-стиле.
-    // В итоге lottie создаёт canvas нулевого размера — и он остаётся
-    // нулевым НАВСЕГДА, потому что lottie не переизмеряет контейнер сам
-    // просто от того, что тот стал видимым (только по window resize).
-    // Поэтому при каждом реальном открытии страницы (когда контейнер уже
-    // отображается и имеет настоящий размер) принудительно просим lottie
-    // пересчитать размеры — иначе ракета/взрыв так и остаются невидимым
-    // "пустым" canvas 0×0, хотя сам контейнер (opacity/transform) на месте.
-    if (crashRocketAnim) crashRocketAnim.resize();
-    if (crashExplosionAnim) crashExplosionAnim.resize();
-    // Догоняющая синхронизация визуала под РЕАЛЬНУЮ фазу раунда прямо
-    // сейчас: если раунд уже летит (был запущен, пока страница была
-    // закрыта — а движок фоновой, поэтому status мог не поменяться с
-    // последнего внутреннего рендера, и applyCrashGlobalRound() не стал
-    // повторно звать beginFlyingPhase()), нужно вручную поставить ракету
-    // в полётный режим и запустить её анимацию пламени, а не ждать
-    // следующей смены раунда.
-    const round = crashGlobal.round;
-    const dom = getCrashDom();
-    if (round?.status === 'flying') {
-        if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
-        if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
-        cancelAnimationFrame(crashAnimHandle);
-        tickCrash();
-    }
-    renderCrashUI();
-    // Догоняющий показ взрыва при заходе на страницу (см. комментарий в
-    // tryShowCrashExplosion): важно вызывать это ПОСЛЕ initCrashExplosionAnim(),
-    // иначе при самом первом открытии страницы crashExplosionAnim ещё не
-    // создан и взрыв просто не покажется.
-    tryShowCrashExplosion(crashGlobal.round);
-}
-
-function beginWaitingPhase(round = crashGlobal.round) {
-    if (!round) return;
-    crashGame.phase = 'waiting';
-    crashGame.currentMult = 1;
-    crashGame.phaseEndsAt = Date.parse(round.betting_ends_at) || Date.now();
-    crashGame.crashPoint = Number(round.crash_point) || 1;
-    crashGame.startTime = 0;
-
-    // Полный сброс ракеты/взрыва перед новым раундом. Без этого блока
-    // ракета оставалась скрытой (opacity 0) с прошлого краша и
-    // "никуда не улетала" во время паузы, а взрыв мог зависнуть
-    // поверх сцены до следующего запуска.
-    resetCrashVisuals();
-
-    // Если ставка была поставлена заранее (во время полёта или во время
-    // паузы предыдущего раунда) — автоматически регистрируем её сейчас,
-    // как только открылся приём ставок на новый раунд.
-    if (crashGame.betQueued && !crashGame.betPlaced) {
-        const queuedAmount = crashGame.queuedBet;
-        crashGame.betQueued = false;
-        crashGame.queuedBet = null;
-        const dom = getCrashDom();
-        if (dom.betInput && queuedAmount) dom.betInput.value = queuedAmount;
-        placeCrashBet();
-    }
-
-    renderCrashUI();
-}
-
-// Приводит ракету и взрыв в исходное состояние — вызывается и в начале
-// паузы, и в начале полёта (на случай, если фаза "пауза" была
-// пропущена, например, после возврата в приложение через долгое время).
-function resetCrashVisuals() {
-    const dom = getCrashDom();
-    syncCrashStageDims();
-    clearTimeout(crashExplosionHideTimeout);
-    if (dom.explosionEl) {
-        dom.explosionEl.style.opacity = '0';
-        dom.explosionEl.style.display = 'none';
-        dom.explosionEl.style.transform = '';
-    }
-    if (crashExplosionAnim) crashExplosionAnim.goToAndStop(0, true);
-    // Ракета должна "лететь" (проигрывать анимацию пламени) только во
-    // время реального полёта — здесь просто ставим её в состояние покоя
-    // на первом кадре. Запуск анимации — отдельно, в beginFlyingPhase().
-    if (crashRocketAnim) crashRocketAnim.goToAndStop(0, true);
-    if (dom.rocketEl) {
-        // Скрыта по умолчанию: видимой ракету делает только
-        // beginFlyingPhase() (перекрывает opacity сразу после вызова
-        // resetCrashVisuals()). Во время паузы renderCrashUI() держит её
-        // скрытой, поэтому здесь безопасно ставить '0' в качестве базы.
-        dom.rocketEl.style.opacity = '0';
-        // Важно: во время полёта ракета не "летит" по сцене — она всегда
-        // стоит в одной и той же точке (см. tickCrash: centerX/centerY
-        // не зависят от прогресса) и только поворачивается. Раньше здесь
-        // стоял другой якорь (0,0 — левый нижний угол), из-за чего между
-        // паузой и стартом полёта ракета визуально "прыгала". Теперь
-        // используем ту же формулу, что и в полёте, чтобы точка покоя и
-        // точка полёта совпадали и ракета оставалась на месте.
-        const centerX = (crashStageW - 200) / 2 - 16;
-        const centerY = 16 - (crashStageH - 200) / 2;
-        dom.rocketEl.style.transform = `translate3d(${centerX}px,${centerY}px,0) rotate(45deg)`;
-    }
-    if (dom.trailLine) {
-        dom.trailLine.setAttribute('d', '');
-        dom.trailLine.classList.remove('crash-trail-crashed');
-        dom.trailLine.style.opacity = '1';
-    }
-    if (dom.trailDot) {
-        dom.trailDot.classList.remove('crash-dot-live', 'crash-trail-crashed');
-        dom.trailDot.style.opacity = '0';
-    }
-    if (dom.topLeftMult) dom.topLeftMult.style.display = 'none';
-}
-
-function beginFlyingPhase(round = crashGlobal.round) {
-    if (!round) return;
-    crashGame.phase = 'flying';
-    crashGame.crashPoint = Number(round.crash_point) || 1;
-    crashGame.startTime = Date.parse(round.started_at) || Date.now();
-    crashGame.currentMult = crashMultiplierAt(round);
-    crashLastHeavyUpdate = 0;
-    syncCrashStageDims();
-    crashTrailPoints = [];
-
-    // Та же защита, что и в beginWaitingPhase: если этот раунд —
-    // первый, который приложение увидело после возврата (пауза была
-    // пропущена), взрыв с прошлого краша не должен оставаться висеть.
-    resetCrashVisuals();
-    // Запускаем анимацию пламени ракеты именно сейчас — только на время
-    // реального полёта (во время паузы/отсчёта ракета должна стоять
-    // на месте без анимации, см. resetCrashVisuals()).
-    if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
-
-    const dom = getCrashDom();
-    if (dom.trailLine) {
-        dom.trailLine.setAttribute('d', '');
-        dom.trailLine.classList.remove('crash-trail-crashed');
-        dom.trailLine.style.opacity = '1';
-    }
-    if (dom.trailDot) {
-        dom.trailDot.classList.remove('crash-trail-crashed');
-        dom.trailDot.style.opacity = '0';
-    }
-    if (dom.topLeftMult) {
-        dom.topLeftMult.textContent = '1.00x';
-        dom.topLeftMult.classList.remove('crashed');
-        dom.topLeftMult.style.display = 'block';
-    }
-    if (dom.countdownEl) dom.countdownEl.style.display = 'none';
-    if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
-    if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
-    // Разрешаем набрать сумму для ставки на следующий раунд, пока свою
-    // ставку в текущем полёте игрок не поставил и не поставил в очередь —
-    // финальное состояние (disabled/enabled) выставит renderCrashUI().
-    if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced || crashGame.betQueued;
-    cancelAnimationFrame(crashAnimHandle);
-    tickCrash();
-}
-
-// Раньше раунды почти всегда продвигал сам клиент (тот же браузер, что и
-// считает локальный порог конца полёта) — рассинхрон практически не был
-// заметен. Теперь раунд по-настоящему крутится на сервере (см.
-// crash_engine_tick()/pg_cron) по СВОИМ часам, независимо от игрока. Если
-// часы устройства игрока немного отстают (или запрос идёт по медленной
-// сети), локальный порог ниже сработает позже настоящего момента краша на
-// сервере — игрок нажимает "Забрать" уже после факта, получает отказ.
-// Отступаем чуть раньше локального порога, чтобы клиент сам блокировал
-// кэшаут (показывая "Раунд завершается…") с небольшим запасом, вместо
-// того чтобы дать отправить заведомо опоздавший запрос на сервер.
-const CRASH_SETTLING_SAFETY_MS = 700;
-
-function tickCrash() {
-    if (crashGlobal.round?.status !== 'flying') return;
-    const now = Date.now();
-    crashGame.currentMult = crashMultiplierAt(crashGlobal.round, now);
-    const heavy = now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS;
-    if (heavy) crashLastHeavyUpdate = now;
-    const flightEndsAt = Date.parse(crashGlobal.round.started_at) +
-        crashFlightMs(crashGlobal.round.crash_point);
-    if (flightEndsAt - CRASH_SETTLING_SAFETY_MS <= now) {
-        crashRoundSettling = true;
-    }
-    if (flightEndsAt <= now) {
-        refreshCrashGlobalState();
-    }
-    renderCrashUI(heavy);
-    crashAnimHandle = requestAnimationFrame(tickCrash);
-}
-
-function endCrashRound(round = crashGlobal.round) {
-    if (!round) return;
-    cancelAnimationFrame(crashAnimHandle);
-    crashGame.phase = 'crashed';
-    crashGame.crashPoint = Number(round.crash_point) || 1;
-    crashGame.currentMult = crashGame.crashPoint;
-    lastCrashPoint = crashGame.crashPoint;
-    setCrashFairnessFromRound(round);
-    renderCrashHistory();
-
-    const dom = getCrashDom();
-    if (crashRocketAnim) crashRocketAnim.pause();
-    if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
-    if (dom.trailLine) dom.trailLine.classList.add('crash-trail-crashed');
-    if (dom.trailDot) {
-        dom.trailDot.classList.remove('crash-dot-live');
-        dom.trailDot.classList.add('crash-trail-crashed');
-        dom.trailDot.style.opacity = '1';
-    }
-    // Взрыв (и скрытие ракеты) запускаем через tryShowCrashExplosion() —
-    // она сама решает, показывать ли анимацию прямо сейчас (только если
-    // страница "Краш" реально открыта) или отложить показ до момента,
-    // когда игрок на неё зайдёт (см. вызовы в applyCrashGlobalRound()
-    // и initCrashPage()). Без этой развязки анимация почти всегда играла
-    // "в пустоту" за скрытой страницей, пока раунд-инженер крутится в
-    // фоне с самого запуска приложения.
-    tryShowCrashExplosion(round);
-    if (dom.multEl) dom.multEl.style.color = '#e74c3c';
-    if (dom.topLeftMult) {
-        dom.topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
-        dom.topLeftMult.classList.add('crashed');
-        dom.topLeftMult.style.display = 'block';
-    }
-    // Текст/состояние кнопки ставки (включая «Ставка принята» для заранее
-    // поставленной ставки) выставляет renderCrashUI(), вызываемый сразу
-    // после этой функции из applyCrashGlobalRound().
-}
-
-function renderCrashHistory() {
-    const dom = getCrashDom();
-    if (!dom.historyList) return;
-    dom.historyList.innerHTML = crashHistory.map(point => {
-        const color = point < 1.5 ? '#e74c3c' : point >= 2 ? '#2ecc71' : '#f1c40f';
-        return `<span style="display:inline-block;background:rgba(255,255,255,.06);` +
-            `border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px 8px;` +
-            `font-size:11px;font-weight:800;color:${color};">${Number(point).toFixed(2)}x</span>`;
-    }).join('');
-}
-
-function renderCrashUI(heavy = true) {
-    const dom = getCrashDom();
-    if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
-    const round = crashGlobal.round;
-
-    if (crashGame.phase === 'waiting' || !round) {
-        const secLeft = round
-            ? Math.max(0, Math.ceil((crashGame.phaseEndsAt - Date.now()) / 1000)) : 0;
-        dom.statusEl.textContent = lastCrashPoint !== null
-            ? `Прошлый раунд: ${lastCrashPoint.toFixed(2)}x · Старт через ${secLeft}с`
-            : `Старт через ${secLeft}с`;
-        dom.multEl.textContent = '1.00x';
-        dom.multEl.style.color = '#fff';
-        if (dom.countdownEl) {
-            dom.countdownEl.textContent = String(secLeft);
-            dom.countdownEl.className = 'crash-countdown ' +
-                (secLeft === 5 ? 'cc-green' : secLeft >= 3 ? 'cc-yellow' : 'cc-red');
-            dom.countdownEl.style.display = secLeft > 0 && secLeft <= 5 ? 'flex' : 'none';
-        }
-        if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = secLeft > 0 ? '0' : '1';
-        // Во время паузы/приёма ставок ракета не должна быть видна — она
-        // появляется только с началом полёта (beginFlyingPhase). Раньше
-        // здесь стояло '1', из-за чего ракета "стояла на сцене" всю паузу
-        // между раундами.
-        if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
-        // pending — ставка уже принята (в этом раунде) либо ещё обрабатывается
-        // (например, только что была автоматически поставлена из очереди).
-        const pending = crashGame.betPlaced || crashGame.isProcessing;
-        if (dom.betInput) dom.betInput.disabled = pending;
-        dom.actionBtn.textContent = pending ? 'Ставка принята' : 'Сделать ставку';
-        dom.actionBtn.disabled = pending;
-        return;
-    }
-
-    if (crashGame.phase === 'crashed') {
-        dom.statusEl.textContent =
-            `Краш на ${crashGame.crashPoint.toFixed(2)}x · следующий раунд скоро`;
-        dom.multEl.textContent = crashGame.crashPoint.toFixed(2) + 'x';
-        dom.multEl.style.color = '#e74c3c';
-        // Пауза между раундами: разрешаем поставить на следующий раунд заранее.
-        if (dom.actionBtn) {
-            if (crashGame.cashedOut) {
-                dom.actionBtn.textContent = 'Выигрыш забран ✓';
-                dom.actionBtn.disabled = true;
-            } else if (crashGame.betQueued) {
-                dom.actionBtn.textContent = 'Ставка принята';
-                dom.actionBtn.disabled = true;
-            } else {
-                dom.actionBtn.textContent = 'Сделать ставку';
-                dom.actionBtn.disabled = false;
-            }
-        }
-        if (dom.betInput) dom.betInput.disabled = crashGame.betQueued;
-        return;
-    }
-
-    const currentM = crashGame.currentMult;
-    const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
-    const stageW = crashStageW;
-    const stageH = crashStageH;
-    const centerX = (stageW - 200) / 2 - 16;
-    const centerY = 16 - (stageH - 200) / 2;
-    dom.multEl.textContent = currentM.toFixed(2) + 'x';
-    dom.multEl.style.color = '#fff';
-    dom.statusEl.textContent = 'Раунд идёт · общая комната';
-    if (dom.rocketEl) {
-        dom.rocketEl.style.transform =
-            `translate3d(${centerX}px,${centerY}px,0) rotate(${45 - 90 * trailProgress}deg)`;
-    }
-
-    if (heavy) {
-        if (dom.topLeftMult) dom.topLeftMult.textContent = currentM.toFixed(2) + 'x';
-        const sx = stageW * .05;
-        const sy = stageH * .95;
-        const ex = stageW * .95;
-        const ey = stageH * .05;
-        const hx = sx + (ex - sx) * trailProgress;
-        const hy = sy + (ey - sy) * trailProgress;
-        if (dom.trailLine) {
-            const dx = hx - sx;
-            const dy = hy - sy;
-            const len = Math.hypot(dx, dy) || 1;
-            const bow = .25 * len;
-            dom.trailLine.setAttribute('d',
-                `M ${sx},${sy} Q ${(sx + hx) / 2 - dy / len * bow},` +
-                `${(sy + hy) / 2 + dx / len * bow} ${hx},${hy}`);
-        }
-        if (dom.trailDot) {
-            dom.trailDot.setAttribute('cx', hx);
-            dom.trailDot.setAttribute('cy', hy);
-            dom.trailDot.style.opacity = '1';
-            dom.trailDot.classList.add('crash-dot-live');
-        }
-    }
-
-    if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced || crashGame.betQueued;
-
-    if (crashGame.betPlaced && !crashGame.cashedOut && !crashRoundSettling) {
-        dom.actionBtn.textContent = `Забрать ${(crashGame.bet * currentM).toFixed(2)}$`;
-        dom.actionBtn.disabled = false;
-    } else if (crashGame.betPlaced && !crashGame.cashedOut && crashRoundSettling) {
-        // Раунд по нашим расчётам уже должен был завершиться — ждём
-        // подтверждения от сервера, кэшаут временно недоступен.
-        dom.actionBtn.textContent = 'Раунд завершается…';
-        dom.actionBtn.disabled = true;
-    } else if (crashGame.cashedOut) {
-        dom.actionBtn.textContent = 'Выигрыш забран ✓';
-        dom.actionBtn.disabled = true;
-    } else if (crashGame.betQueued) {
-        // Ставка ещё не поставлена в этом раунде, но уже поставлена
-        // "в очередь" — она будет автоматически сделана на старте
-        // следующего раунда.
-        dom.actionBtn.textContent = 'Ставка принята';
-        dom.actionBtn.disabled = true;
-    } else {
-        // Своей ставки в этом раунде нет — можно поставить на следующий.
-        dom.actionBtn.textContent = 'Сделать ставку';
-        dom.actionBtn.disabled = false;
-    }
-}
-
-async function placeCrashBet() {
-    if (crashGame.phase !== 'waiting' || crashGame.betPlaced || crashGame.isProcessing) return;
-    const round = crashGlobal.round;
-    const telegramId = crashTelegramId();
-    if (!round || round.status !== 'betting' || !telegramId) {
-        showMessage('Раунд уже начался или профиль ещё загружается.');
-        return;
-    }
-    if (!lockEconomy()) return;
-
-    const dom = getCrashDom();
-    const bet = roundMoney(parseFloat(dom.betInput?.value));
-    if (!bet || isNaN(bet) || bet < 0.10) {
-        showMessage('Минимальная ставка — 0.10 $!');
-        unlockEconomy();
-        return;
-    }
-    if (bet > currentBalance) {
-        showMessage('Недостаточно средств!');
-        unlockEconomy();
-        return;
-    }
-
-    crashGame.isProcessing = true;
-    const snapshot = snapshotBalanceState();
-    currentTurnover = roundMoney(currentTurnover + bet);
-    currentBetsCount++;
-    setUIBalance(roundMoney(currentBalance - bet));
-
-    const debitResult = await placeBetServer(bet, CRASH_GLOBAL_GAME_LABEL);
-    if (!debitResult.ok) {
-        restoreBalanceState(snapshot);
-        showMessage('Не удалось списать ставку. Проверьте соединение и попробуйте снова.');
-        crashGame.isProcessing = false;
-        unlockEconomy();
-        return;
-    }
-    currentBalance = debitResult.balance;
-    setUIBalance(currentBalance);
-
-    const user = tg?.initDataUnsafe?.user;
-    const { data, error } = await supabase.rpc('register_crash_bet', {
-        p_round_id: round.id,
-        p_telegram_id: telegramId,
-        p_name: crashPlayerName(),
-        p_avatar: user?.photo_url || null,
-        p_amount: bet
-    });
-    if (error || !crashRpcRow(data)) {
-        // place_bet уже успел списать деньги, поэтому при гонке за
-        // последним слотом возвращаем сумму через тот же серверный RPC.
-        const refundResult = await resolveWinServerWithRetry(bet, 1);
-        if (refundResult.ok) {
-            currentBalance = refundResult.balance;
-            setUIBalance(currentBalance);
-        } else {
-            restoreBalanceState(snapshot);
-        }
-        showMessage('Раунд уже начался. Ставка не принята; обновите приложение.');
-        crashGame.isProcessing = false;
-        unlockEconomy();
-        return;
-    }
-
-    const savedBet = crashRpcRow(data);
-    crashGlobal.bets.push(savedBet);
-    crashGame.bet = bet;
-    crashGame.betPlaced = true;
-    crashGame.cashedOut = false;
-    crashGame.liveBetId = await broadcastLiveBet(bet, CRASH_GLOBAL_GAME_LABEL);
-    crashGame.isProcessing = false;
-    unlockEconomy();
-    renderCrashGlobalRoom();
-    renderCrashUI();
-}
-
-async function cashOutCrash() {
-    const round = crashGlobal.round;
-    const telegramId = crashTelegramId();
-    const own = crashOwnBet();
-    if (crashGame.phase !== 'flying' || !round || !own ||
-        own.status !== 'active' || crashGame.isProcessing || !telegramId ||
-        crashRoundSettling) return;
-    if (!lockEconomy()) return;
-
-    crashGame.isProcessing = true;
-    const mult = Math.min(crashMultiplierAt(round), Number(round.crash_point) || 1);
-    const winAmount = roundMoney(crashGame.bet * mult);
-    const { data, error } = await supabase.rpc('claim_crash_cashout', {
-        p_round_id: round.id,
-        p_telegram_id: telegramId,
-        p_multiplier: mult,
-        p_win_amount: winAmount
-    });
-    if (error || !crashRpcRow(data)) {
-        // ВРЕМЕННО (для диагностики): раньше здесь всегда показывался
-        // один и тот же текст "раунд уже завершён", независимо от
-        // реальной причины отказа на сервере (claim_crash_cashout может
-        // кинуть исключение по РАЗНЫМ причинам — не только из-за
-        // истёкшего времени полёта, но и, например, если ставка уже была
-        // кэшаучена раньше). Показываем настоящий текст ошибки Postgres,
-        // чтобы понять истинную причину — потом можно вернуть обратно
-        // человекочитаемое сообщение.
-        console.error('claim_crash_cashout failed:', error, data);
-        showMessage('Кэшаут не выполнен: ' +
-            (error?.message || error?.hint || error?.details || 'неизвестная ошибка сервера'));
-        crashGame.isProcessing = false;
-        unlockEconomy();
-        refreshCrashGlobalState();
-        return;
-    }
-
-    const claimed = crashRpcRow(data);
-    const snapshot = snapshotBalanceState();
-    currentTotalWin = roundMoney(currentTotalWin + winAmount);
-    currentWinsCount++;
-    if (mult > currentMaxWin) currentMaxWin = mult;
-    setUIBalance(roundMoney(currentBalance + winAmount));
-
-    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
-    if (!creditResult.ok) {
-        await supabase.rpc('release_crash_cashout', { p_bet_id: claimed.id });
-        restoreBalanceState(snapshot);
-        showMessage('Не удалось зачислить выигрыш. Нажмите «Забрать» ещё раз.');
-        crashGame.isProcessing = false;
-        unlockEconomy();
-        refreshCrashGlobalState();
-        return;
-    }
-    currentBalance = creditResult.balance;
-    setUIBalance(currentBalance);
-    await supabase.rpc('complete_crash_payout', { p_bet_id: claimed.id });
-
-    const index = crashGlobal.bets.findIndex(
-        bet => String(bet.id) === String(claimed.id)
-    );
-    if (index >= 0) crashGlobal.bets[index] = claimed;
-    crashGame.cashedOut = true;
-    crashGame.isProcessing = false;
-    if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-    showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
-    resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
-    renderCrashGlobalRoom();
-    renderCrashUI();
-    unlockEconomy();
-}
-
-// Ставит "в очередь" ставку на следующий раунд — используется, когда
-// игрок нажимает "Сделать ставку" пока идёт полёт текущего раунда или
-// пока раунд на паузе (только что завершился). Деньги не списываются
-// сразу — реальная ставка (placeCrashBet) уйдёт на сервер автоматически,
-// как только откроется приём ставок на новый раунд (см. beginWaitingPhase).
-function queueCrashBet() {
-    if (crashGame.betQueued || crashGame.betPlaced || crashGame.isProcessing) return;
-    const dom = getCrashDom();
-    const bet = roundMoney(parseFloat(dom.betInput?.value));
-    if (!bet || isNaN(bet) || bet < 0.10) {
-        showMessage('Минимальная ставка — 0.10 $!');
-        return;
-    }
-    if (bet > currentBalance) {
-        showMessage('Недостаточно средств!');
-        return;
-    }
-    crashGame.betQueued = true;
-    crashGame.queuedBet = bet;
-    if (dom.betInput) dom.betInput.disabled = true;
-    renderCrashUI();
-}
-
-function handleCrashAction() {
-    if (crashGame.isProcessing) return;
-    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) {
-        placeCrashBet();
-    } else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
-        cashOutCrash();
-    } else if (
-        (crashGame.phase === 'flying' || crashGame.phase === 'crashed') &&
-        !crashGame.betPlaced && !crashGame.betQueued && !crashGame.cashedOut
-    ) {
-        queueCrashBet();
-    }
-}
-
-function adjustCrashBet(factor) {
-    if (!crashGame.betPlaced && !crashGame.betQueued) applyBetFactor(getCrashDom().betInput, factor);
-}
-
-function setCrashMaxBet() {
-    if (!crashGame.betPlaced && !crashGame.betQueued) applyBetMax(getCrashDom().betInput);
-}
-
 })();
-
-/* ================================================================
-   SHARE MESSAGE — тестовая копия нативного окна Telegram
-   (savePreparedInlineMessage / tg.shareMessage).
-
-   РЕАЛЬНАЯ СХЕМА (когда будет бэкенд):
-   1) Бэкенд вызывает Bot API savePreparedInlineMessage с текстом,
-      картинкой (через media) и inline-клавиатурой -> получает msg_id.
-   2) Клиент вызывает tg.shareMessage(msg_id, callback) -> Telegram
-      сам рисует нативный экран выбора чата (тот, что на скриншоте) и
-      сам отправляет сообщение выбранному пользователю.
-
-   Ниже — только визуальная копия для теста верстки: текст, картинка
-   и инлайн-кнопка берутся из полей на странице "Бонусы", список
-   контактов — мок (для реального списка чатов нужен tg.shareMessage,
-   т.к. мини-аппы не имеют доступа к списку контактов пользователя).
-================================================================== */
-
-let shareMsgDraft = null;
-let shareContactsSelected = new Set();
-
-const SHARE_MOCK_CONTACTS = [
-    { id: 'c1', name: 'Алексей Петров', sub: '@alexpetrov' },
-    { id: 'c2', name: 'Мария Иванова', sub: '@maria_i' },
-    { id: 'c3', name: 'Игровой чат «WXS Ice Arena»', sub: '128 участников' },
-    { id: 'c4', name: 'Дмитрий Соколов', sub: '@dsokolov' },
-    { id: 'c5', name: 'Избранное', sub: 'Saved Messages' },
-    { id: 'c6', name: 'Ольга Кузнецова', sub: '@olga_k' }
-];
-
-function escapeHtmlShare(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-// Экранирует текст и оборачивает http(s)-ссылки в <a>, как в реальном
-// превью Telegram.
-function autolinkShareText(str) {
-    const escaped = escapeHtmlShare(str);
-    return escaped.replace(/(https?:\/\/[^\s<]+)/g, function (url) {
-        return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
-    });
-}
-
-function openShareMessageTest() {
-    const botName = (document.getElementById('shareTestBotName').value || 'EDGE_GIFT_BOT').trim();
-    const text = document.getElementById('shareTestText').value || '';
-    const imageUrl = (document.getElementById('shareTestImage').value || '').trim();
-    const btnText = (document.getElementById('shareTestBtnText').value || '').trim();
-    const btnUrl = (document.getElementById('shareTestBtnUrl').value || '').trim();
-
-    if (!text.trim() && !imageUrl) {
-        showMessage('Заполните хотя бы текст сообщения или картинку');
-        return;
-    }
-
-    openShareMessageModal({ botName, text, imageUrl, btnText, btnUrl });
-}
-
-function openShareMessageModal(draft) {
-    shareMsgDraft = draft;
-
-    document.getElementById('shareBubbleVia').textContent = 'via @' + draft.botName.replace(/^@/, '');
-    document.getElementById('shareBubbleText').innerHTML = autolinkShareText(draft.text || '');
-
-    const now = new Date();
-    document.getElementById('shareBubbleTime').textContent =
-        now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-
-    const imgWrap = document.getElementById('shareBubbleImageWrap');
-    const imgEl = document.getElementById('shareBubbleImage');
-    if (draft.imageUrl) {
-        imgEl.src = draft.imageUrl;
-        imgWrap.classList.remove('hidden');
-    } else {
-        imgEl.src = '';
-        imgWrap.classList.add('hidden');
-    }
-
-    const inlineBtn = document.getElementById('shareInlineBtn');
-    if (draft.btnText) {
-        inlineBtn.textContent = draft.btnText;
-        inlineBtn.classList.remove('hidden');
-    } else {
-        inlineBtn.classList.add('hidden');
-    }
-
-    document.getElementById('shareHintText').textContent =
-        draft.botName.replace(/^@/, '') + ' offers you to send this message to a chat you select.';
-
-    document.getElementById('shareMessageModal').classList.remove('hidden');
-    document.body.classList.add('fairness-modal-open');
-}
-
-function closeShareMessageModal() {
-    document.getElementById('shareMessageModal').classList.add('hidden');
-    document.body.classList.remove('fairness-modal-open');
-}
-
-function handleShareInlineBtnClick() {
-    if (!shareMsgDraft || !shareMsgDraft.btnUrl) return;
-    if (tg?.openLink) {
-        tg.openLink(shareMsgDraft.btnUrl);
-    } else {
-        window.open(shareMsgDraft.btnUrl, '_blank');
-    }
-}
-
-function renderShareContacts(filter) {
-    const list = document.getElementById('shareContactsList');
-    const q = (filter || '').trim().toLowerCase();
-    const items = SHARE_MOCK_CONTACTS.filter(c =>
-        !q || c.name.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q)
-    );
-
-    list.innerHTML = items.map(c => {
-        const initial = c.name.trim().charAt(0).toUpperCase();
-        const selected = shareContactsSelected.has(c.id) ? ' selected' : '';
-        return (
-            '<div class="share-contact-item' + selected + '" onclick="toggleShareContact(\'' + c.id + '\')">' +
-                '<div class="share-contact-avatar">' + initial + '</div>' +
-                '<div class="share-contact-info">' +
-                    '<div class="share-contact-name">' + escapeHtmlShare(c.name) + '</div>' +
-                    '<div class="share-contact-sub">' + escapeHtmlShare(c.sub) + '</div>' +
-                '</div>' +
-                '<div class="share-contact-check">✓</div>' +
-            '</div>'
-        );
-    }).join('');
-}
-
-function openShareContactsPicker() {
-    shareContactsSelected = new Set();
-    renderShareContacts('');
-    document.getElementById('shareContactsSendBtn').classList.add('hidden');
-    document.getElementById('shareContactsModal').classList.remove('hidden');
-}
-
-function closeShareContactsPicker() {
-    document.getElementById('shareContactsModal').classList.add('hidden');
-}
-
-function filterShareContacts(value) {
-    renderShareContacts(value);
-}
-
-function toggleShareContact(id) {
-    if (shareContactsSelected.has(id)) {
-        shareContactsSelected.delete(id);
-    } else {
-        shareContactsSelected.add(id);
-    }
-    renderShareContacts(document.querySelector('.share-contacts-search')?.value || '');
-    document.getElementById('shareContactsSendBtn').classList.toggle('hidden', shareContactsSelected.size === 0);
-}
-
-function sendSharedMessage() {
-    const names = SHARE_MOCK_CONTACTS
-        .filter(c => shareContactsSelected.has(c.id))
-        .map(c => c.name)
-        .join(', ');
-
-    closeShareContactsPicker();
-    closeShareMessageModal();
-
-    // ТЕСТОВЫЙ режим: реальная отправка появится, когда бэкенд будет
-    // вызывать savePreparedInlineMessage и клиент — tg.shareMessage().
-    showMessage('Тест: сообщение "отправлено" — ' + (names || 'без получателя'));
-}

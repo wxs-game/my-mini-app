@@ -17,7 +17,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 
-    <link rel="stylesheet" href="style.css?v=ice-global-1">
+    <link rel="stylesheet" href="style.css?v=ice-global-share-2">
 
     <!-- Шрифт для большого таймера обратного отсчёта в Краше -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -113,38 +113,6 @@
         .crash-mult-topleft.crashed {
             color: #ff4d4d;
             text-shadow: 0 0 8px rgba(255,77,77,0.9), 0 0 24px rgba(255,43,43,0.6);
-        }
-
-        .crash-reconnect-badge {
-            position: absolute;
-            left: 50%;
-            bottom: 14px;
-            transform: translateX(-50%);
-            display: none;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            border-radius: 20px;
-            background: rgba(0,0,0,0.6);
-            border: 1px solid rgba(255,255,255,0.14);
-            font-size: 12px;
-            font-weight: 700;
-            color: #ffd700;
-            z-index: 9;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-        .crash-reconnect-spinner {
-            width: 12px;
-            height: 12px;
-            border: 2px solid rgba(255,215,0,0.25);
-            border-top-color: #ffd700;
-            border-radius: 50%;
-            display: inline-block;
-            animation: crashReconnectSpin 0.8s linear infinite;
-        }
-        @keyframes crashReconnectSpin {
-            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -510,21 +478,12 @@
                 </svg>
                 <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; transition: transform 0.08s linear;"></div>
                 <div id="crashExplosion" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; text-align:center; display:none; transition: transform 0.08s linear, opacity 0.3s ease;"></div>
-                <div id="crashCenterInfo" style="position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); text-align:center; width: 100%; display:none;">
+                <div id="crashCenterInfo" style="position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); text-align:center; width: 100%;">
                     <strong id="crashMultiplier" style="display:block; font-size: 34px; font-weight: 900; color:#fff;">1.00x</strong>
                     <div id="crashStatus" style="font-size: 12px; color:#888; font-weight:700; margin-top:4px;">Загрузка...</div>
                 </div>
                 <div id="crashMultTopLeft" class="crash-mult-topleft">1.00x</div>
                 <div id="crashCountdown" class="crash-countdown"></div>
-
-                <!-- Индикатор переподключения. Появляется, когда игрок
-                     вернулся в приложение после того, как оно было
-                     свёрнуто/неактивно, и скрывается сразу же, как
-                     только состояние раунда подтянулось к реальному. -->
-                <div id="crashReconnectBadge" class="crash-reconnect-badge">
-                    <span class="crash-reconnect-spinner"></span>
-                    <span>Переподключение…</span>
-                </div>
 
                 <!-- Круглая кнопка с "#" внизу справа на экране игры Crash -->
                 <button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность" onclick="openCrashFairnessModal()">
@@ -690,7 +649,7 @@
             <div class="ice-arena-field-wrap" id="iceFieldWrap">
                 <div class="ice-arena-field" id="iceField">
                     <div class="ice-arena-empty-state" id="iceEmptyState">
-                        ❄️ Ожидаем игроков...
+                        ❄️ Общее лобби<br>Сделайте ставку — соперники подключатся сюда же
                     </div>
 
                     <div class="ice-puck hidden" id="icePuck">
@@ -729,6 +688,7 @@
             <button class="mines-main-btn ice-arena-bet-btn" id="iceArenaBetBtn" onclick="placeIceArenaBet()" style="width: 100%; margin-top: 12px;">
                 СДЕЛАТЬ СТАВКУ
             </button>
+            <p class="wheel-subtitle" style="margin-top: 8px;">Глобальное лобби: все игроки мира в одном раунде. Комиссия 5% только с выигрыша — ставка возвращается полностью.</p>
         </section>
     </main>
 
@@ -846,98 +806,36 @@
             <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
         </section>
 
-        <!-- ================================================================
-             ТЕСТОВЫЙ БЛОК: Share Message (savePreparedInlineMessage /
-             tg.shareMessage). Пока нет бэкенд-вызова savePreparedInlineMessage —
-             ниже своя копия нативного экрана Telegram для проверки верстки.
-             Текст/картинку/кнопку вводит сам пользователь.
-        ================================================================== -->
-        <section class="wheel-card" style="text-align: left;">
-            <h2 style="text-align:center;">Тест: Share Message</h2>
-            <p class="wheel-subtitle" style="text-align:center;">Заполни поля и нажми «Отправить», чтобы открыть окно шаринга</p>
+        <section class="wheel-card share-invite-card">
+            <div class="promo-label">ОТПРАВИТЬ</div>
+            <h2 class="promo-title">Позвать друзей на лёд</h2>
+            <p class="wheel-subtitle" style="margin-bottom: 16px;">Заготовленное сообщение с картинкой и кнопкой — Telegram сам откроет «Share Message».</p>
 
-            <div class="share-test-field">
-                <label>Имя бота (via @...)</label>
-                <input type="text" id="shareTestBotName" class="promo-input" placeholder="EDGE_GIFT_BOT" style="width:100%;">
+            <div class="share-preview-wrap">
+                <div class="share-preview-badge">Превью сообщения</div>
+                <div class="share-preview-via">via WXS GAME</div>
+                <div class="share-preview-bubble">
+                    <div class="share-preview-photo" role="img" aria-label="Превью картинки приглашения">
+                        <span class="share-preview-photo-emoji">🏒</span>
+                        <span class="share-preview-photo-title">ICE ARENA</span>
+                        <span class="share-preview-photo-sub">WXS GAME · лови куш на льду</span>
+                    </div>
+                    <div class="share-preview-text">
+                        🎁 Хочешь забрать банк на Ice Arena?<br><br>
+                        Залетай в WXS GAME, крути игры и поднимай вместе с друзьями. Лёд уже готов — удача на твоей стороне!
+                    </div>
+                    <button type="button" class="share-preview-inline-btn" onclick="openShareTestChrome()">
+                        ОТКРЫТЬ CHROME
+                    </button>
+                </div>
             </div>
 
-            <div class="share-test-field">
-                <label>Текст сообщения</label>
-                <textarea id="shareTestText" class="promo-input share-test-textarea" placeholder="Введите текст сообщения…" rows="4"></textarea>
-            </div>
-
-            <div class="share-test-field">
-                <label>Ссылка на картинку (URL)</label>
-                <input type="text" id="shareTestImage" class="promo-input" placeholder="https://…jpg" style="width:100%;">
-            </div>
-
-            <div class="share-test-field">
-                <label>Текст инлайн-кнопки</label>
-                <input type="text" id="shareTestBtnText" class="promo-input" placeholder="ОТКРЫТЬ КЕЙС" style="width:100%;">
-            </div>
-
-            <div class="share-test-field">
-                <label>Ссылка инлайн-кнопки (URL)</label>
-                <input type="text" id="shareTestBtnUrl" class="promo-input" placeholder="https://t.me/…" style="width:100%;">
-            </div>
-
-            <button class="main-action-btn" style="width:100%; margin-top: 6px;" onclick="openShareMessageTest()">Отправить</button>
+            <p class="share-invite-hint">WXS GAME предлагает отправить это сообщение в выбранный чат.</p>
+            <button class="main-action-btn share-invite-btn" id="shareInviteBtn" onclick="sharePreparedInvite()">
+                Отправить…
+            </button>
         </section>
     </main>
-
-    <!-- ==================== SHARE MESSAGE: копия нативного окна Telegram ==================== -->
-    <div id="shareMessageModal" class="share-msg-modal hidden">
-        <div class="share-msg-topbar">
-            <button class="share-msg-close" onclick="closeShareMessageModal()">
-                <span class="share-msg-close-x">✕</span> Close
-            </button>
-            <div class="share-msg-topbar-right">
-                <span class="share-msg-chevron">︿</span>
-                <span class="share-msg-kebab">⋮</span>
-            </div>
-        </div>
-
-        <div class="share-msg-body">
-            <h1 class="share-msg-title">Share Message</h1>
-
-            <div class="share-preview-pill-wrap">
-                <span class="share-preview-pill">Message preview</span>
-            </div>
-
-            <div class="share-bubble-frame">
-                <div class="share-bubble-via" id="shareBubbleVia">via @EDGE_GIFT_BOT</div>
-
-                <div class="share-bubble-image-wrap" id="shareBubbleImageWrap">
-                    <img id="shareBubbleImage" class="share-bubble-image" src="" alt="">
-                </div>
-
-                <div class="share-bubble-text-wrap">
-                    <div class="share-bubble-text" id="shareBubbleText"></div>
-                    <div class="share-bubble-time" id="shareBubbleTime"></div>
-                </div>
-
-                <button class="share-inline-btn" id="shareInlineBtn" onclick="handleShareInlineBtnClick()"></button>
-            </div>
-
-            <p class="share-hint-text" id="shareHintText">EDGE GIFT offers you to send this message to a chat you select.</p>
-        </div>
-
-        <button class="share-with-btn" onclick="openShareContactsPicker()">Share with…</button>
-    </div>
-
-    <!-- ==================== SHARE MESSAGE: выбор чата (нативный список контактов) ==================== -->
-    <div id="shareContactsModal" class="share-contacts-modal hidden">
-        <div class="share-contacts-backdrop" onclick="closeShareContactsPicker()"></div>
-        <div class="share-contacts-sheet">
-            <div class="share-contacts-drag-handle-area" onclick="closeShareContactsPicker()">
-                <div class="share-contacts-drag-handle"></div>
-            </div>
-            <h3 class="share-contacts-title">Share with…</h3>
-            <input type="text" class="promo-input share-contacts-search" placeholder="Поиск" oninput="filterShareContacts(this.value)">
-            <div class="share-contacts-list" id="shareContactsList"></div>
-            <button class="share-contacts-send-btn hidden" id="shareContactsSendBtn" onclick="sendSharedMessage()">Отправить</button>
-        </div>
-    </div>
 
     <!-- ================================================================
          СЛУЖЕБНАЯ АДМИН-ПАНЕЛЬ. Открывается только по секретному коду,
@@ -997,6 +895,6 @@
 <script src="animations/explosion-data-part7.js"></script>
 <script src="animations/explosion-data-part8.js"></script>
 <!-- Исполняемый скрипт логики приложения -->
-<script src="script.js?v=ice-global-1"></script>
+<script src="script.js?v=ice-global-share-2"></script>
 </body>
 </html>
