@@ -1469,6 +1469,12 @@ let crashGame = {
 
 let crashAnimHandle = null;
 let crashLoopStarted = false;
+// Локально мы узнаём о конце полёта раньше сервера (по формуле времени),
+// но статус раунда в БД меняется отдельным запросом (advance_crash_round),
+// который может занять доли секунды. Пока идёт это уточнение, кэшаут
+// временно блокируем — иначе игрок успевает нажать «Забрать» в это окно,
+// запрос уходит на уже фактически завершённый раунд, и сервер его отклоняет.
+let crashRoundSettling = false;
 let crashHistory = [];      // последние коэффициенты, самый новый — первый
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
 let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
@@ -5107,6 +5113,10 @@ function applyCrashGlobalRound(round, bets) {
     crashGlobal.round = round;
     crashGlobal.bets = bets || [];
     setCrashFairnessFromRound(round);
+    // Пришло свежее состояние раунда с сервера — снимаем временную
+    // блокировку кэшаута, поставленную в tickCrash() при локальном
+    // обнаружении конца полёта.
+    crashRoundSettling = false;
 
     const own = crashOwnBet();
     crashGame.roundId = round.id;
@@ -5327,11 +5337,12 @@ function tickCrash() {
     crashGame.currentMult = crashMultiplierAt(crashGlobal.round, now);
     const heavy = now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS;
     if (heavy) crashLastHeavyUpdate = now;
-    renderCrashUI(heavy);
     if (Date.parse(crashGlobal.round.started_at) +
         crashFlightMs(crashGlobal.round.crash_point) <= now) {
+        crashRoundSettling = true;
         refreshCrashGlobalState();
     }
+    renderCrashUI(heavy);
     crashAnimHandle = requestAnimationFrame(tickCrash);
 }
 
@@ -5467,9 +5478,14 @@ function renderCrashUI(heavy = true) {
         }
     }
 
-    if (crashGame.betPlaced && !crashGame.cashedOut) {
+    if (crashGame.betPlaced && !crashGame.cashedOut && !crashRoundSettling) {
         dom.actionBtn.textContent = `Забрать ${(crashGame.bet * currentM).toFixed(2)}$`;
         dom.actionBtn.disabled = false;
+    } else if (crashGame.betPlaced && !crashGame.cashedOut && crashRoundSettling) {
+        // Раунд по нашим расчётам уже должен был завершиться — ждём
+        // подтверждения от сервера, кэшаут временно недоступен.
+        dom.actionBtn.textContent = 'Раунд завершается…';
+        dom.actionBtn.disabled = true;
     } else {
         dom.actionBtn.textContent = crashGame.cashedOut
             ? 'Выигрыш забран ✓' : 'Ждите следующего раунда';
@@ -5558,7 +5574,8 @@ async function cashOutCrash() {
     const telegramId = crashTelegramId();
     const own = crashOwnBet();
     if (crashGame.phase !== 'flying' || !round || !own ||
-        own.status !== 'active' || crashGame.isProcessing || !telegramId) return;
+        own.status !== 'active' || crashGame.isProcessing || !telegramId ||
+        crashRoundSettling) return;
     if (!lockEconomy()) return;
 
     crashGame.isProcessing = true;
