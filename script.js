@@ -1680,6 +1680,14 @@ function syncCrashStageDims() {
     if (!dom.stageEl) return;
     crashStageW = dom.stageEl.clientWidth || crashStageW;
     crashStageH = dom.stageEl.clientHeight || crashStageH;
+    // См. комментарий в initCrashPage(): если размеры сцены реально
+    // изменились (открытие страницы, поворот экрана), лottie-канвасы
+    // тоже нужно попросить пересчитаться, иначе они могут остаться
+    // залипшими на старом (в т.ч. нулевом) размере.
+    if (dom.stageEl.clientWidth) {
+        if (crashRocketAnim) crashRocketAnim.resize();
+        if (crashExplosionAnim) crashExplosionAnim.resize();
+    }
 }
 
 window.addEventListener('resize', syncCrashStageDims);
@@ -5305,6 +5313,20 @@ function initCrashPage() {
     initCrashExplosionAnim();
     syncCrashStageDims();
     requestAnimationFrame(syncCrashStageDims);
+    // ВАЖНО: обе Lottie-анимации теперь создаются в startCrashEngine() —
+    // то есть пока страница "Краш" ещё скрыта (display:none). Canvas-рендерер
+    // lottie меряет размер контейнера ИМЕННО в момент loadAnimation(), а у
+    // элемента внутри display:none-родителя offsetWidth/offsetHeight — 0,
+    // даже если сам элемент задан фиксированными 200×200px в inline-стиле.
+    // В итоге lottie создаёт canvas нулевого размера — и он остаётся
+    // нулевым НАВСЕГДА, потому что lottie не переизмеряет контейнер сам
+    // просто от того, что тот стал видимым (только по window resize).
+    // Поэтому при каждом реальном открытии страницы (когда контейнер уже
+    // отображается и имеет настоящий размер) принудительно просим lottie
+    // пересчитать размеры — иначе ракета/взрыв так и остаются невидимым
+    // "пустым" canvas 0×0, хотя сам контейнер (opacity/transform) на месте.
+    if (crashRocketAnim) crashRocketAnim.resize();
+    if (crashExplosionAnim) crashExplosionAnim.resize();
     // Догоняющая синхронизация визуала под РЕАЛЬНУЮ фазу раунда прямо
     // сейчас: если раунд уже летит (был запущен, пока страница была
     // закрыта — а движок фоновой, поэтому status мог не поменяться с
@@ -5448,15 +5470,30 @@ function beginFlyingPhase(round = crashGlobal.round) {
     tickCrash();
 }
 
+// Раньше раунды почти всегда продвигал сам клиент (тот же браузер, что и
+// считает локальный порог конца полёта) — рассинхрон практически не был
+// заметен. Теперь раунд по-настоящему крутится на сервере (см.
+// crash_engine_tick()/pg_cron) по СВОИМ часам, независимо от игрока. Если
+// часы устройства игрока немного отстают (или запрос идёт по медленной
+// сети), локальный порог ниже сработает позже настоящего момента краша на
+// сервере — игрок нажимает "Забрать" уже после факта, получает отказ.
+// Отступаем чуть раньше локального порога, чтобы клиент сам блокировал
+// кэшаут (показывая "Раунд завершается…") с небольшим запасом, вместо
+// того чтобы дать отправить заведомо опоздавший запрос на сервер.
+const CRASH_SETTLING_SAFETY_MS = 700;
+
 function tickCrash() {
     if (crashGlobal.round?.status !== 'flying') return;
     const now = Date.now();
     crashGame.currentMult = crashMultiplierAt(crashGlobal.round, now);
     const heavy = now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS;
     if (heavy) crashLastHeavyUpdate = now;
-    if (Date.parse(crashGlobal.round.started_at) +
-        crashFlightMs(crashGlobal.round.crash_point) <= now) {
+    const flightEndsAt = Date.parse(crashGlobal.round.started_at) +
+        crashFlightMs(crashGlobal.round.crash_point);
+    if (flightEndsAt - CRASH_SETTLING_SAFETY_MS <= now) {
         crashRoundSettling = true;
+    }
+    if (flightEndsAt <= now) {
         refreshCrashGlobalState();
     }
     renderCrashUI(heavy);
