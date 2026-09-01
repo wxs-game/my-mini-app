@@ -1642,6 +1642,14 @@ function tryShowCrashExplosion(round) {
     // когда реально что-то отрисовали ниже.
     if (!dom.explosionEl) return;
     crashExplosionShownRoundId = round.id;
+    // Взрыв должен появляться ровно там же, где стояла ракета (по центру
+    // сцены), а не в левом нижнем углу — по умолчанию у #crashExplosion
+    // нет своего transform (он сбрасывается в resetCrashVisuals()), и без
+    // этой строки анимация рисовалась в углу, никак не совпадая с ракетой.
+    const explosionCenterX = (crashStageW - 200) / 2 - 16;
+    const explosionCenterY = 16 - (crashStageH - 200) / 2;
+    dom.explosionEl.style.transform =
+        `translate3d(${explosionCenterX}px,${explosionCenterY}px,0)`;
     dom.explosionEl.style.opacity = '1';
     dom.explosionEl.style.display = 'block';
     // На случай отложенного показа (страница была закрыта в момент краша,
