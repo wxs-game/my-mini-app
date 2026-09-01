@@ -1632,10 +1632,16 @@ function tryShowCrashExplosion(round) {
     if (!round || round.status !== 'crashed') return;
     if (!isCrashPageOpen()) return;
     if (crashExplosionShownRoundId === round.id) return;
-    crashExplosionShownRoundId = round.id;
 
     const dom = getCrashDom();
+    // Раньше раунд помечался "показанным" даже если explosionEl/анимация
+    // ещё не были готовы (например, initCrashExplosionAnim() не успел
+    // отработать) — взрыв тогда пропадал безвозвратно: флаг уже стоял, и
+    // при следующем вызове (даже когда всё было готово) функция выходила
+    // на первой же проверке. Теперь помечаем раунд как показанный только
+    // когда реально что-то отрисовали ниже.
     if (!dom.explosionEl) return;
+    crashExplosionShownRoundId = round.id;
     dom.explosionEl.style.opacity = '1';
     dom.explosionEl.style.display = 'block';
     // На случай отложенного показа (страница была закрыта в момент краша,
@@ -5268,6 +5274,20 @@ function startCrashEngine() {
     crashLoopStarted = true;
     ensureCrashGlobalRoomUi();
     renderCrashHistory();
+    // ВАЖНО: раньше анимации ракеты/взрыва создавались только в
+    // initCrashPage(), то есть только когда игрок САМ открывал вкладку
+    // "Краш". Раунд-инженер же стартует здесь, при загрузке всего
+    // приложения, и может успеть провести игрока через несколько раундов
+    // (полёт → краш → пауза) ещё до первого открытия страницы. Поскольку
+    // beginFlyingPhase()/endCrashRound() дергают crashRocketAnim /
+    // crashExplosionAnim только "если они уже существуют", всё это время
+    // они были null — ракета не проигрывала анимацию (пустой контейнер) и
+    // взрыв ни разу не запускался, а tryShowCrashExplosion() при этом уже
+    // помечал раунд как "показанный" — так что даже отложенный показ при
+    // последующем заходе на страницу больше не срабатывал. Создаём обе
+    // Lottie-анимации сразу, вместе с самим движком, а не по факту захода.
+    initCrashRocketAnim();
+    initCrashExplosionAnim();
     subscribeCrashGlobal();
     loadCrashGlobalHistory();
     refreshCrashGlobalState();
@@ -5278,11 +5298,29 @@ function startCrashEngine() {
 function initCrashPage() {
     ensureCrashGlobalRoomUi();
     renderCrashHistory();
-    renderCrashUI();
+    // На случай, если движок ещё не запускался (страховка) или библиотека
+    // lottie догрузилась только сейчас — создаём анимации, если их вдруг
+    // всё ещё нет.
     initCrashRocketAnim();
     initCrashExplosionAnim();
     syncCrashStageDims();
     requestAnimationFrame(syncCrashStageDims);
+    // Догоняющая синхронизация визуала под РЕАЛЬНУЮ фазу раунда прямо
+    // сейчас: если раунд уже летит (был запущен, пока страница была
+    // закрыта — а движок фоновой, поэтому status мог не поменяться с
+    // последнего внутреннего рендера, и applyCrashGlobalRound() не стал
+    // повторно звать beginFlyingPhase()), нужно вручную поставить ракету
+    // в полётный режим и запустить её анимацию пламени, а не ждать
+    // следующей смены раунда.
+    const round = crashGlobal.round;
+    const dom = getCrashDom();
+    if (round?.status === 'flying') {
+        if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+        if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
+        cancelAnimationFrame(crashAnimHandle);
+        tickCrash();
+    }
+    renderCrashUI();
     // Догоняющий показ взрыва при заходе на страницу (см. комментарий в
     // tryShowCrashExplosion): важно вызывать это ПОСЛЕ initCrashExplosionAnim(),
     // иначе при самом первом открытии страницы crashExplosionAnim ещё не
@@ -5337,7 +5375,11 @@ function resetCrashVisuals() {
     // на первом кадре. Запуск анимации — отдельно, в beginFlyingPhase().
     if (crashRocketAnim) crashRocketAnim.goToAndStop(0, true);
     if (dom.rocketEl) {
-        dom.rocketEl.style.opacity = '1';
+        // Скрыта по умолчанию: видимой ракету делает только
+        // beginFlyingPhase() (перекрывает opacity сразу после вызова
+        // resetCrashVisuals()). Во время паузы renderCrashUI() держит её
+        // скрытой, поэтому здесь безопасно ставить '0' в качестве базы.
+        dom.rocketEl.style.opacity = '0';
         // Важно: во время полёта ракета не "летит" по сцене — она всегда
         // стоит в одной и той же точке (см. tickCrash: centerX/centerY
         // не зависят от прогресса) и только поворачивается. Раньше здесь
@@ -5490,7 +5532,11 @@ function renderCrashUI(heavy = true) {
             dom.countdownEl.style.display = secLeft > 0 && secLeft <= 5 ? 'flex' : 'none';
         }
         if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = secLeft > 0 ? '0' : '1';
-        if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
+        // Во время паузы/приёма ставок ракета не должна быть видна — она
+        // появляется только с началом полёта (beginFlyingPhase). Раньше
+        // здесь стояло '1', из-за чего ракета "стояла на сцене" всю паузу
+        // между раундами.
+        if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
         // pending — ставка уже принята (в этом раунде) либо ещё обрабатывается
         // (например, только что была автоматически поставлена из очереди).
         const pending = crashGame.betPlaced || crashGame.isProcessing;
