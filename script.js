@@ -4497,7 +4497,6 @@ function resetIceArenaVisuals(opts) {
 function restartIceArena() {
     const overlay = document.getElementById('iceResultOverlay');
     if (overlay) overlay.classList.add('hidden');
-    iceArena.animatingRoundId = null;
     resetIceArenaVisuals({ hideOverlay: true, resetPuck: true });
     renderIceArenaField();
     const round = iceArena.round;
