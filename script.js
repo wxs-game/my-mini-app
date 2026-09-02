@@ -4323,6 +4323,7 @@ window.copyCrashKey = copyCrashKey;
 
    create table if not exists public.ice_arena_rounds (
        id uuid primary key default gen_random_uuid(),
+       game_number bigint generated always as identity,
        status text not null default 'betting',
        betting_ends_at timestamptz,
        seed text not null,
@@ -4348,6 +4349,10 @@ window.copyCrashKey = copyCrashKey;
        created_at timestamptz not null default now(),
        unique (round_id, telegram_id)
    );
+   -- Если таблица ice_arena_rounds уже существует (создана раньше без
+   -- этого столбца), выполните отдельно:
+   -- alter table public.ice_arena_rounds add column if not exists game_number bigint generated always as identity;
+
    create unique index if not exists ice_arena_one_active_round
        on public.ice_arena_rounds ((true))
        where status in ('betting', 'spinning');
@@ -5046,10 +5051,13 @@ function renderIceArenaPlayersList() {
 
 function updateIceArenaTopbar() {
     const bankEl = document.getElementById('iceBankValue');
-    const countEl = document.getElementById('icePlayersCount');
+    const gameNumberEl = document.getElementById('iceGameNumber');
     const total = iceArena.players.reduce((s, p) => s + p.bet, 0);
     if (bankEl) bankEl.textContent = total.toFixed(2) + ' $';
-    if (countEl) countEl.textContent = iceArena.players.length;
+    if (gameNumberEl) {
+        const num = iceArena.round?.game_number;
+        gameNumberEl.textContent = num ? ('#' + num) : '—';
+    }
 }
 
 function beginIceArenaSpin(winner) {
