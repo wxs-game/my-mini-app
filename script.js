@@ -4498,6 +4498,8 @@ function restartIceArena() {
     const overlay = document.getElementById('iceResultOverlay');
     if (overlay) overlay.classList.add('hidden');
     iceArena.animatingRoundId = null;
+    resetIceArenaVisuals({ hideOverlay: true, resetPuck: true });
+    renderIceArenaField();
     const round = iceArena.round;
     if (round && round.status === 'result') {
         maybeAdvanceIceArena({ ...round, resolved_at: new Date(0).toISOString() }, iceArena.players);
@@ -4616,9 +4618,6 @@ function applyIceArenaRound(round, bets) {
     if (round.status === 'betting') {
         iceArena.phase = (round.betting_ends_at && iceArena.players.length >= 2) ? 'countdown' : 'betting';
         iceArena.winner = null;
-        if (iceArena.animatingRoundId !== round.id) {
-            resetIceArenaVisuals({ hideOverlay: true, resetPuck: true });
-        }
     } else if (round.status === 'spinning' || round.status === 'result') {
         iceArena.winner = {
             id: String(round.winner_telegram_id),
