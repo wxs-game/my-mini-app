@@ -3491,26 +3491,66 @@ body.fairness-modal-open {
     to   { transform: translate(-50%, -18px) rotate(var(--ice-spin-deg, 1080deg)); }
 }
 
-/* Бейдж последнего множителя внизу поля — открывает историю раундов */
-.ice-history-badge {
-    position: absolute;
-    left: 50%;
-    bottom: 12px;
-    transform: translateX(-50%);
-    z-index: 4;
-    padding: 5px 12px;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 900;
-    cursor: pointer;
-    backdrop-filter: blur(2px);
-    transition: transform 0.15s ease;
+/* ---------- Лента кэфов последних игр Айс Арены — под игровым полем ---------- */
+.ice-history-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-top: 10px;
+    padding-bottom: 2px;
 }
 
-.ice-history-badge:active {
-    transform: translateX(-50%) scale(0.94);
+.ice-history-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.ice-history-chip {
+    flex: 0 0 auto;
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.ice-history-chip:active {
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- Кнопка "История игр" под полем ---------- */
+.ice-history-open-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.ice-history-open-btn:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.98);
+}
+
+.ice-history-open-icon {
+    font-size: 14px;
 }
 
 /* ===== Модалка истории Айс Арены ===== */
@@ -3627,54 +3667,120 @@ body.ice-history-modal-open {
     padding: 30px 10px;
 }
 
+/* Карточка раунда в списке истории — стиль "ARENA": шапка с номером
+   игры/временем/выплатой и отдельная строка со ставкой/кэфом/шансом.
+   Весь блок кликабелен и сразу переводит в экран реплея — отдельных
+   кнопок "Честность"/"Повтор" в списке нет. */
 .ice-history-row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 10px;
     background: #0d0d0d;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 14px;
-    padding: 8px 12px;
+    border-radius: 16px;
+    padding: 12px 14px;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, transform 0.12s ease;
 }
 
-.ice-history-row:active { background: #171717; }
+.ice-history-row:active { background: #171717; transform: scale(0.99); }
 
-.ice-history-row-avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.08);
+.ice-history-row-top {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
-    overflow: hidden;
+    justify-content: space-between;
+    gap: 10px;
 }
 
-.ice-history-row-info { flex: 1; min-width: 0; }
-
-.ice-history-row-name {
+.ice-history-row-game {
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 900;
     color: #ffffff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .ice-history-row-time {
     font-size: 11px;
     font-weight: 700;
     color: #777777;
+    margin-left: 6px;
 }
 
-.ice-history-row-mult {
-    font-size: 14px;
+.ice-history-row-wallet {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
     font-weight: 900;
+    color: #2ecc71;
     flex-shrink: 0;
+}
+
+.ice-history-row-wallet-icon {
+    font-size: 13px;
+}
+
+.ice-history-row-body {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    padding: 8px 10px;
+}
+
+.ice-history-row-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.ice-history-row-name {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 90px;
+    flex-shrink: 0;
+}
+
+.ice-history-row-stats {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    justify-content: space-around;
+}
+
+.ice-history-row-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 0 6px;
+    border-left: 1px solid rgba(255,255,255,0.08);
+}
+
+.ice-history-row-stat:first-child { border-left: none; }
+
+.ice-history-row-stat-val {
+    font-size: 13px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.ice-history-row-stat-lbl {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #777777;
+    text-transform: uppercase;
 }
 
 .ice-history-detail-view { padding-top: 2px; }
