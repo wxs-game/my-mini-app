@@ -4987,14 +4987,14 @@ function renderIceArenaField() {
     if (!iceArena.players.length) {
         if (empty) {
             empty.classList.remove('hidden');
-            empty.innerHTML = '❄️ Общее лобби<br>Сделайте ставку — соперники подключатся сюда же';
+            empty.innerHTML = '❄️ Ждём игроков...<br>Чем выше ставка - больше шанс забрать всё!';
         }
         return;
     }
     if (empty) {
         if (iceArena.players.length === 1 && iceArena.phase === 'betting') {
             empty.classList.remove('hidden');
-            empty.innerHTML = '❄️ Ждём соперников в глобальном лобби...';
+            empty.innerHTML = '❄️ Ждём еще минимум одного игрока...';
         } else {
             empty.classList.add('hidden');
         }
@@ -5070,7 +5070,7 @@ function beginIceArenaSpin(winner) {
     const timerBox = document.getElementById('iceTimerBox');
     const countdownEl = document.getElementById('iceCountdownValue');
     if (timerBox) timerBox.classList.remove('counting', 'waiting');
-    if (countdownEl) countdownEl.textContent = '🎲';
+    if (countdownEl) countdownEl.textContent = '—';
 
     const empty = document.getElementById('iceEmptyState');
     if (empty) empty.classList.add('hidden');
