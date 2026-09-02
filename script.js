@@ -5341,6 +5341,32 @@ async function finishIceArenaRound(winner) {
     if (overlay) overlay.classList.remove('hidden');
     updateIceArenaBetControls();
 
+    if (round && !iceArenaHistory.some(h => h.id === round.id)) {
+        pushIceArenaHistory({
+            id: round.id,
+            gameNumber: round.game_number || null,
+            ts: Date.now(),
+            bank: total,
+            payout,
+            multiplier: winner.bet > 0 ? payout / winner.bet : 0,
+            winner: {
+                id: winner.id,
+                name: winner.name,
+                avatar: winner.avatar,
+                bet: winner.bet,
+                isUser: !!winner.isUser
+            },
+            players: iceArena.players.map(p => ({
+                id: p.id,
+                name: p.name,
+                avatar: p.avatar,
+                bet: p.bet,
+                color: p.color,
+                isUser: !!p.isUser
+            }))
+        });
+    }
+
     if (round && round.status === 'spinning') {
         await supabase.from(ICE_ARENA_ROUNDS_TABLE)
             .update({ status: 'result', resolved_at: new Date().toISOString() })
@@ -5350,10 +5376,381 @@ async function finishIceArenaRound(winner) {
     }
 }
 
+// ==========================================
+// ИСТОРИЯ РАУНДОВ АЙС АРЕНЫ (× победителя, реплей шайбы)
+// ==========================================
+const ICE_ARENA_HISTORY_KEY = 'ice_arena_history_v1';
+const ICE_ARENA_HISTORY_MAX = 30;
+let iceArenaHistory = [];
+let iceArenaHistoryDetailEntry = null;
+let iceArenaHistoryReplaying = false;
+
+function loadIceArenaHistory() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(ICE_ARENA_HISTORY_KEY) || '[]');
+        if (Array.isArray(stored)) iceArenaHistory = stored.slice(0, ICE_ARENA_HISTORY_MAX);
+    } catch (e) {
+        iceArenaHistory = [];
+    }
+    updateIceHistoryBadge();
+}
+
+function saveIceArenaHistory() {
+    try {
+        localStorage.setItem(ICE_ARENA_HISTORY_KEY, JSON.stringify(iceArenaHistory));
+    } catch (e) {}
+}
+
+function pushIceArenaHistory(entry) {
+    iceArenaHistory.unshift(entry);
+    if (iceArenaHistory.length > ICE_ARENA_HISTORY_MAX) iceArenaHistory.length = ICE_ARENA_HISTORY_MAX;
+    saveIceArenaHistory();
+    updateIceHistoryBadge();
+}
+
+function iceHistoryMultColor(mult) {
+    if (mult >= 2) return '#2ecc71';
+    if (mult < 1.5) return '#e74c3c';
+    return '#ffd700';
+}
+
+function updateIceHistoryBadge() {
+    const badge = document.getElementById('iceHistoryBadge');
+    if (!badge) return;
+    if (!iceArenaHistory.length) {
+        badge.classList.add('hidden');
+        return;
+    }
+    const last = iceArenaHistory[0];
+    badge.classList.remove('hidden');
+    badge.textContent = '×' + last.multiplier.toFixed(2);
+    badge.style.color = iceHistoryMultColor(last.multiplier);
+}
+
+function openIceArenaHistory() {
+    renderIceArenaHistoryList();
+    showIceArenaHistoryList();
+    document.getElementById('iceHistoryModal')?.classList.remove('hidden');
+    document.body.classList.add('ice-history-modal-open');
+}
+
+function closeIceArenaHistory() {
+    document.getElementById('iceHistoryModal')?.classList.add('hidden');
+    document.body.classList.remove('ice-history-modal-open');
+
+    const content = document.getElementById('iceHistoryContent');
+    if (content) {
+        content.classList.remove('dragging');
+        content.style.transform = '';
+    }
+    iceArenaHistoryDetailEntry = null;
+    iceArenaHistoryReplaying = false;
+}
+
+function renderIceArenaHistoryList() {
+    const list = document.getElementById('iceHistoryList');
+    if (!list) return;
+
+    if (!iceArenaHistory.length) {
+        list.innerHTML = '<div class="ice-history-empty">Пока нет завершённых раундов</div>';
+        return;
+    }
+
+    list.innerHTML = iceArenaHistory.map(entry => {
+        const time = new Date(entry.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const color = iceHistoryMultColor(entry.multiplier);
+        return '<div class="ice-history-row" onclick="openIceArenaHistoryDetail(\'' + entry.id + '\')">' +
+            '<div class="ice-history-row-avatar">' + iceAvatarHtml(entry.winner.avatar) + '</div>' +
+            '<div class="ice-history-row-info">' +
+                '<div class="ice-history-row-name">' + escapeIceName(entry.winner.name) + (entry.winner.isUser ? ' (Вы)' : '') + '</div>' +
+                '<div class="ice-history-row-time">' + time + (entry.gameNumber ? ' · #' + entry.gameNumber : '') + '</div>' +
+            '</div>' +
+            '<div class="ice-history-row-mult" style="color:' + color + ';">×' + entry.multiplier.toFixed(2) + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+function showIceArenaHistoryList() {
+    document.getElementById('iceHistoryListView')?.classList.remove('hidden');
+    document.getElementById('iceHistoryDetailView')?.classList.add('hidden');
+    iceArenaHistoryDetailEntry = null;
+}
+
+function openIceArenaHistoryDetail(id) {
+    const entry = iceArenaHistory.find(h => h.id === id);
+    if (!entry) return;
+    iceArenaHistoryDetailEntry = entry;
+
+    document.getElementById('iceHistoryListView')?.classList.add('hidden');
+    document.getElementById('iceHistoryDetailView')?.classList.remove('hidden');
+
+    const gameEl = document.getElementById('iceHistoryDetailGame');
+    if (gameEl) gameEl.textContent = entry.gameNumber ? ('#' + entry.gameNumber) : '—';
+
+    renderIceArenaHistoryPreview(entry);
+
+    const chance = entry.bank > 0 ? ((entry.winner.bet / entry.bank) * 100).toFixed(1) : '0.0';
+    const color = iceHistoryMultColor(entry.multiplier);
+    const info = document.getElementById('iceHistoryDetailInfo');
+    if (info) {
+        info.innerHTML =
+            '<div class="ice-history-detail-row"><span>Победитель</span><strong>' + escapeIceName(entry.winner.name) + (entry.winner.isUser ? ' (Вы)' : '') + '</strong></div>' +
+            '<div class="ice-history-detail-row"><span>Шанс на победу</span><strong>' + chance + '%</strong></div>' +
+            '<div class="ice-history-detail-row"><span>Банк</span><strong>' + entry.bank.toFixed(2) + ' $</strong></div>' +
+            '<div class="ice-history-detail-row"><span>Выигрыш</span><strong style="color:' + color + ';">+' + entry.payout.toFixed(2) + ' $ (×' + entry.multiplier.toFixed(2) + ')</strong></div>';
+    }
+}
+
+function renderIceArenaHistoryPreview(entry) {
+    const field = document.getElementById('iceHistoryPreviewField');
+    const puck = document.getElementById('iceHistoryPuck');
+    if (!field) return;
+
+    field.querySelectorAll('.ice-band').forEach(b => b.remove());
+
+    const total = entry.players.reduce((s, p) => s + p.bet, 0);
+    let cursor = 0;
+    entry.players.forEach(p => {
+        const widthPct = total > 0 ? (p.bet / total) * 100 : 0;
+        const chancePct = total > 0 ? ((p.bet / total) * 100).toFixed(1) : '0.0';
+
+        const band = document.createElement('div');
+        band.className = 'ice-band' + (p.isUser ? ' ice-band-user' : '');
+        band.dataset.playerId = p.id;
+        band.style.left = cursor + '%';
+        band.style.width = widthPct + '%';
+        band.style.background = `linear-gradient(180deg, ${p.color}dd 0%, ${p.color}55 100%)`;
+        band.innerHTML =
+            '<div class="ice-band-avatar">' + iceAvatarHtml(p.avatar) + '</div>' +
+            '<div class="ice-band-name">' + escapeIceName(p.name) + '</div>' +
+            '<div class="ice-band-bet">' + p.bet.toFixed(2) + '$ · ' + chancePct + '%</div>';
+
+        if (puck) field.insertBefore(band, puck); else field.appendChild(band);
+        cursor += widthPct;
+    });
+
+    if (puck) {
+        puck.classList.add('hidden');
+        puck.style.left = '';
+        puck.style.top = '';
+        puck.style.transform = '';
+    }
+
+    const btn = document.getElementById('iceHistoryReplayBtn');
+    if (btn) btn.classList.remove('ice-replay-hidden');
+}
+
+function replayIceArenaHistoryRound() {
+    const entry = iceArenaHistoryDetailEntry;
+    const field = document.getElementById('iceHistoryPreviewField');
+    const puck = document.getElementById('iceHistoryPuck');
+    const btn = document.getElementById('iceHistoryReplayBtn');
+    if (!entry || !field || !puck || iceArenaHistoryReplaying) return;
+
+    field.querySelectorAll('.ice-band').forEach(b => b.classList.remove('ice-band-winner'));
+
+    iceArenaHistoryReplaying = true;
+    if (btn) btn.classList.add('ice-replay-hidden');
+    puck.classList.remove('hidden');
+    puck.style.transform = 'translate(-50%, -50%) scale(1)';
+
+    runIceReplayPuckAnimation(field, puck, entry.players, entry.winner.id, () => {
+        field.querySelectorAll('.ice-band').forEach(band => {
+            if (band.dataset.playerId === entry.winner.id) band.classList.add('ice-band-winner');
+        });
+        if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        setTimeout(() => {
+            iceArenaHistoryReplaying = false;
+            if (btn) btn.classList.remove('ice-replay-hidden');
+        }, 500);
+    });
+}
+
+// Упрощённая версия анимации шайбы (launchIceArenaPuck), параметризованная
+// произвольным полем/шайбой/списком игроков — используется для реплея
+// уже завершённого раунда из истории, не трогая живую игру.
+function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
+    const arrow = puck.querySelector('.ice-puck-arrow');
+
+    const total = players.reduce((s, p) => s + p.bet, 0);
+    let cursor = 0;
+    let targetXPct = 50;
+    for (const p of players) {
+        const w = total > 0 ? (p.bet / total) * 100 : 0;
+        if (p.id === winnerId) {
+            targetXPct = cursor + w / 2;
+            break;
+        }
+        cursor += w;
+    }
+
+    const rect = field.getBoundingClientRect();
+    const fieldW = rect.width;
+    const fieldH = rect.height;
+
+    const puckRadius = (puck.offsetWidth || 20) / 2;
+    const margin = puckRadius + 3;
+    const arrowOffset = puckRadius + 6;
+    const minX = margin, maxX = fieldW - margin;
+    const minY = margin, maxY = fieldH - margin;
+
+    let x = fieldW / 2;
+    let y = fieldH / 2;
+    const targetX = (targetXPct / 100) * fieldW;
+    const targetY = fieldH * (0.35 + Math.random() * 0.3);
+
+    function setArrowAngle(dirX, dirY) {
+        if (!arrow) return;
+        const ang = Math.atan2(dirY, dirX) * 180 / Math.PI + 90;
+        arrow.style.transform = 'translate(-50%, -' + arrowOffset + 'px) rotate(' + ang + 'deg)';
+    }
+
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 1500 + Math.random() * 700;
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+
+    const bounceTarget = 2 + Math.floor(Math.random() * 2);
+    let bounceCount = 0;
+    setArrowAngle(vx, vy);
+
+    let phase = 'bounce';
+    let homeStartX = x, homeStartY = y, homeStartTime = 0;
+    const homeDuration = 420 + Math.random() * 180;
+    const launchStart = performance.now();
+    let lastTime = launchStart;
+
+    function easeOutStrong(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function frame(now) {
+        const dt = Math.min(0.04, (now - lastTime) / 1000);
+        lastTime = now;
+
+        if (phase === 'bounce' && now - launchStart > 2200) {
+            phase = 'home';
+            homeStartX = x; homeStartY = y; homeStartTime = now;
+        }
+
+        if (phase === 'bounce') {
+            x += vx * dt;
+            y += vy * dt;
+            let bounced = false;
+            if (x < minX) { x = minX; vx = -vx; bounced = true; }
+            else if (x > maxX) { x = maxX; vx = -vx; bounced = true; }
+            if (y < minY) { y = minY; vy = -vy; bounced = true; }
+            else if (y > maxY) { y = maxY; vy = -vy; bounced = true; }
+
+            if (bounced) {
+                bounceCount++;
+                vx *= 0.85; vy *= 0.85;
+                puck.classList.remove('ice-puck-shake');
+                void puck.offsetWidth;
+                puck.classList.add('ice-puck-shake');
+                setArrowAngle(vx, vy);
+                if (bounceCount >= bounceTarget) {
+                    phase = 'home';
+                    homeStartX = x; homeStartY = y; homeStartTime = now;
+                }
+            } else {
+                setArrowAngle(vx, vy);
+            }
+
+            puck.style.left = x + 'px';
+            puck.style.top = y + 'px';
+            requestAnimationFrame(frame);
+            return;
+        }
+
+        const elapsed = now - homeStartTime;
+        const t = Math.min(1, elapsed / homeDuration);
+        const eased = easeOutStrong(t);
+        x = homeStartX + (targetX - homeStartX) * eased;
+        y = homeStartY + (targetY - homeStartY) * eased;
+        const scale = 1 - 0.06 * eased;
+
+        puck.style.left = x + 'px';
+        puck.style.top = y + 'px';
+        puck.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+        setArrowAngle(targetX - homeStartX, targetY - homeStartY);
+
+        if (t < 1) {
+            requestAnimationFrame(frame);
+        } else {
+            puck.style.left = targetX + 'px';
+            puck.style.top = targetY + 'px';
+            puck.style.transform = 'translate(-50%, -50%) scale(1)';
+            onDone();
+        }
+    }
+    requestAnimationFrame(frame);
+}
+
+// Перетягивание вниз для закрытия истории Айс Арены (как в доке честности)
+(function initIceHistoryDrag() {
+    const handle = document.getElementById('iceHistoryDragHandle');
+    const content = document.getElementById('iceHistoryContent');
+    if (!handle || !content) return;
+
+    const CLOSE_THRESHOLD = 80;
+    let startY = 0, currentY = 0, dragging = false, moved = false;
+
+    function onPointerDown(e) {
+        dragging = true;
+        moved = false;
+        content.classList.add('dragging');
+        startY = (e.touches ? e.touches[0].clientY : e.clientY);
+        currentY = 0;
+        document.addEventListener('touchmove', onPointerMove, { passive: false });
+        document.addEventListener('touchend', onPointerUp);
+        document.addEventListener('mousemove', onPointerMove);
+        document.addEventListener('mouseup', onPointerUp);
+    }
+
+    function onPointerMove(e) {
+        if (!dragging) return;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY);
+        const delta = y - startY;
+        currentY = Math.max(0, delta);
+        if (currentY > 4) moved = true;
+        content.style.transform = `translateY(${currentY}px)`;
+        if (e.cancelable) e.preventDefault();
+    }
+
+    function onPointerUp() {
+        if (!dragging) return;
+        dragging = false;
+        content.classList.remove('dragging');
+        document.removeEventListener('touchmove', onPointerMove);
+        document.removeEventListener('touchend', onPointerUp);
+        document.removeEventListener('mousemove', onPointerMove);
+        document.removeEventListener('mouseup', onPointerUp);
+
+        if (currentY > CLOSE_THRESHOLD) {
+            closeIceArenaHistory();
+        } else {
+            content.style.transform = '';
+        }
+        currentY = 0;
+    }
+
+    handle.addEventListener('touchstart', onPointerDown, { passive: true });
+    handle.addEventListener('mousedown', onPointerDown);
+    handle.addEventListener('click', () => {
+        if (!moved) closeIceArenaHistory();
+    });
+})();
+
+loadIceArenaHistory();
+
 window.openIceArena = openIceArena;
 window.leaveIceArena = leaveIceArena;
 window.placeIceArenaBet = placeIceArenaBet;
 window.restartIceArena = restartIceArena;
+window.openIceArenaHistory = openIceArenaHistory;
+window.closeIceArenaHistory = closeIceArenaHistory;
+window.openIceArenaHistoryDetail = openIceArenaHistoryDetail;
+window.showIceArenaHistoryList = showIceArenaHistoryList;
+window.replayIceArenaHistoryRound = replayIceArenaHistoryRound;
 
 window.applyBetFactor = applyBetFactor;
 window.applyBetMax = applyBetMax;

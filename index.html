@@ -550,6 +550,38 @@
     </div>
 </div>
 
+<div id="iceHistoryModal" class="ice-history-modal hidden">
+    <div class="ice-history-backdrop" id="iceHistoryBackdrop" onclick="closeIceArenaHistory()"></div>
+    <div class="ice-history-content" id="iceHistoryContent">
+        <div class="ice-history-drag-handle-area" id="iceHistoryDragHandle">
+            <div class="ice-history-drag-handle"></div>
+        </div>
+
+        <div class="ice-history-list-view" id="iceHistoryListView">
+            <div class="ice-history-header">
+                <h3>История игр</h3>
+            </div>
+            <div class="ice-history-list" id="iceHistoryList"></div>
+        </div>
+
+        <div class="ice-history-detail-view hidden" id="iceHistoryDetailView">
+            <div class="ice-history-header ice-history-header-detail">
+                <button class="ice-history-back-btn" onclick="showIceArenaHistoryList()">‹ Назад</button>
+                <h3>Раунд <span id="iceHistoryDetailGame">—</span></h3>
+            </div>
+
+            <div class="ice-history-preview-field" id="iceHistoryPreviewField">
+                <div class="ice-puck hidden" id="iceHistoryPuck">
+                    <div class="ice-puck-arrow"></div>
+                </div>
+                <button class="ice-history-replay-btn" id="iceHistoryReplayBtn" onclick="replayIceArenaHistoryRound()">▶ Replay</button>
+            </div>
+
+            <div class="ice-history-detail-info" id="iceHistoryDetailInfo"></div>
+        </div>
+    </div>
+</div>
+
     <!-- ==================== БАЛАНС ==================== -->
     <main id="balancePage" class="balance-page hidden">
         <div class="page-header" style="margin-top: 10px;">
@@ -655,6 +687,8 @@
                     <div class="ice-puck hidden" id="icePuck">
                         <div class="ice-puck-arrow"></div>
                     </div>
+
+                    <div class="ice-history-badge hidden" id="iceHistoryBadge" onclick="openIceArenaHistory()">×0.00</div>
                 </div>
 
                 <div class="ice-result-overlay hidden" id="iceResultOverlay">
