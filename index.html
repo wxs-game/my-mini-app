@@ -863,11 +863,33 @@
             <div class="header-space"></div>
         </div>
 
-        <section class="wheel-card" style="text-align: left;">
+        <div class="admin-tabs-scroll">
+            <button class="admin-tab-btn active" data-admin-tab="players" onclick="switchAdminTab('players')">Игроки</button>
+            <button class="admin-tab-btn" data-admin-tab="operations" onclick="switchAdminTab('operations')">Операции</button>
+            <button class="admin-tab-btn" data-admin-tab="actions" onclick="switchAdminTab('actions')">Действия</button>
+            <button class="admin-tab-btn" data-admin-tab="presets" onclick="switchAdminTab('presets')">Заготовки</button>
+        </div>
+
+        <section id="adminTabPlayers" class="wheel-card admin-tab-section" style="text-align: left;">
             <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminPlayers()">Обновить список</button>
             <div id="adminPlayersList" class="admin-players-list">
                 <p class="wheel-subtitle">Загрузка…</p>
             </div>
+        </section>
+
+        <section id="adminTabOperations" class="wheel-card admin-tab-section hidden" style="text-align: left;">
+            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminOperations()">Обновить список</button>
+            <div id="adminOperationsList" class="admin-players-list">
+                <p class="wheel-subtitle">Загрузка…</p>
+            </div>
+        </section>
+
+        <section id="adminTabActions" class="wheel-card admin-tab-section hidden" style="text-align: left;">
+            <p class="wheel-subtitle">Раздел «Действия» — служебные действия администратора появятся здесь.</p>
+        </section>
+
+        <section id="adminTabPresets" class="wheel-card admin-tab-section hidden" style="text-align: left;">
+            <p class="wheel-subtitle">Раздел «Заготовки» — готовые шаблоны сумм и сообщений появятся здесь.</p>
         </section>
     </main>
 
