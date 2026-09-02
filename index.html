@@ -687,8 +687,6 @@
                     <div class="ice-puck hidden" id="icePuck">
                         <div class="ice-puck-arrow"></div>
                     </div>
-
-                    <div class="ice-history-badge hidden" id="iceHistoryBadge" onclick="openIceArenaHistory()">×0.00</div>
                 </div>
 
                 <div class="ice-result-overlay hidden" id="iceResultOverlay">
@@ -701,6 +699,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Кэфы последних игр — под игровым полем. Клик по кэфу сразу
+                 открывает реплей этого раунда, минуя список истории. -->
+            <div class="ice-history-strip" id="iceHistoryStrip"></div>
+
+            <button class="ice-history-open-btn" id="iceHistoryOpenBtn" onclick="openIceArenaHistory()">
+                <span class="ice-history-open-icon">🕓</span> История игр
+            </button>
 
             <div class="ice-arena-players-list" id="iceArenaPlayersList"></div>
 
