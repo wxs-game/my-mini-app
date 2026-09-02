@@ -5392,7 +5392,7 @@ function loadIceArenaHistory() {
     } catch (e) {
         iceArenaHistory = [];
     }
-    updateIceHistoryBadge();
+    renderIceHistoryStrip();
 }
 
 function saveIceArenaHistory() {
@@ -5405,7 +5405,7 @@ function pushIceArenaHistory(entry) {
     iceArenaHistory.unshift(entry);
     if (iceArenaHistory.length > ICE_ARENA_HISTORY_MAX) iceArenaHistory.length = ICE_ARENA_HISTORY_MAX;
     saveIceArenaHistory();
-    updateIceHistoryBadge();
+    renderIceHistoryStrip();
 }
 
 function iceHistoryMultColor(mult) {
@@ -5414,17 +5414,33 @@ function iceHistoryMultColor(mult) {
     return '#ffd700';
 }
 
-function updateIceHistoryBadge() {
-    const badge = document.getElementById('iceHistoryBadge');
-    if (!badge) return;
+// Лента кэфов последних раундов под игровым полем. Каждый чип кликабелен
+// и сразу открывает экран реплея этого раунда (см. openIceArenaHistoryDirect),
+// минуя список истории.
+function renderIceHistoryStrip() {
+    const strip = document.getElementById('iceHistoryStrip');
+    if (!strip) return;
+
     if (!iceArenaHistory.length) {
-        badge.classList.add('hidden');
+        strip.innerHTML = '';
         return;
     }
-    const last = iceArenaHistory[0];
-    badge.classList.remove('hidden');
-    badge.textContent = '×' + last.multiplier.toFixed(2);
-    badge.style.color = iceHistoryMultColor(last.multiplier);
+
+    strip.innerHTML = iceArenaHistory.map(entry => {
+        const color = iceHistoryMultColor(entry.multiplier);
+        return '<span class="ice-history-chip" style="color:' + color + ';" onclick="openIceArenaHistoryDirect(\'' + entry.id + '\')">×' + entry.multiplier.toFixed(2) + '</span>';
+    }).join('');
+}
+
+// Открывает модалку истории сразу на экране реплея конкретного раунда
+// (используется чипами кэфов под полем) — список истории при этом не
+// показывается, только рендерится "под капотом", чтобы кнопка "Назад"
+// в детальном экране продолжала работать корректно.
+function openIceArenaHistoryDirect(id) {
+    renderIceArenaHistoryList();
+    document.getElementById('iceHistoryModal')?.classList.remove('hidden');
+    document.body.classList.add('ice-history-modal-open');
+    openIceArenaHistoryDetail(id);
 }
 
 function openIceArenaHistory() {
@@ -5457,15 +5473,29 @@ function renderIceArenaHistoryList() {
     }
 
     list.innerHTML = iceArenaHistory.map(entry => {
-        const time = new Date(entry.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const date = new Date(entry.ts).toLocaleString('ru-RU', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' });
         const color = iceHistoryMultColor(entry.multiplier);
+        const chance = entry.bank > 0 ? ((entry.winner.bet / entry.bank) * 100).toFixed(0) : '0';
+
+        // Клик по всей карточке сразу открывает экран реплея этого раунда —
+        // отдельных кнопок "Честность"/"Повтор" в списке нет.
         return '<div class="ice-history-row" onclick="openIceArenaHistoryDetail(\'' + entry.id + '\')">' +
-            '<div class="ice-history-row-avatar">' + iceAvatarHtml(entry.winner.avatar) + '</div>' +
-            '<div class="ice-history-row-info">' +
-                '<div class="ice-history-row-name">' + escapeIceName(entry.winner.name) + (entry.winner.isUser ? ' (Вы)' : '') + '</div>' +
-                '<div class="ice-history-row-time">' + time + (entry.gameNumber ? ' · #' + entry.gameNumber : '') + '</div>' +
+            '<div class="ice-history-row-top">' +
+                '<div>' +
+                    '<span class="ice-history-row-game">' + (entry.gameNumber ? 'Раунд #' + entry.gameNumber : 'Раунд') + '</span>' +
+                    '<span class="ice-history-row-time">' + date + '</span>' +
+                '</div>' +
+                '<div class="ice-history-row-wallet"><span class="ice-history-row-wallet-icon">💳</span>' + entry.payout.toFixed(2) + '$</div>' +
             '</div>' +
-            '<div class="ice-history-row-mult" style="color:' + color + ';">×' + entry.multiplier.toFixed(2) + '</div>' +
+            '<div class="ice-history-row-body">' +
+                '<div class="ice-history-row-avatar">' + iceAvatarHtml(entry.winner.avatar) + '</div>' +
+                '<div class="ice-history-row-name">' + escapeIceName(entry.winner.name) + (entry.winner.isUser ? ' (Вы)' : '') + '</div>' +
+                '<div class="ice-history-row-stats">' +
+                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + entry.winner.bet.toFixed(2) + '$</span><span class="ice-history-row-stat-lbl">Ставка</span></div>' +
+                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val" style="color:' + color + ';">×' + entry.multiplier.toFixed(2) + '</span><span class="ice-history-row-stat-lbl">Кэф</span></div>' +
+                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + chance + '%</span><span class="ice-history-row-stat-lbl">Шанс</span></div>' +
+                '</div>' +
+            '</div>' +
         '</div>';
     }).join('');
 }
@@ -5749,6 +5779,7 @@ window.restartIceArena = restartIceArena;
 window.openIceArenaHistory = openIceArenaHistory;
 window.closeIceArenaHistory = closeIceArenaHistory;
 window.openIceArenaHistoryDetail = openIceArenaHistoryDetail;
+window.openIceArenaHistoryDirect = openIceArenaHistoryDirect;
 window.showIceArenaHistoryList = showIceArenaHistoryList;
 window.replayIceArenaHistoryRound = replayIceArenaHistoryRound;
 
