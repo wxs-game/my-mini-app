@@ -878,10 +878,23 @@
         </section>
 
         <section id="adminTabOperations" class="wheel-card admin-tab-section hidden" style="text-align: left;">
-            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminOperations()">Обновить список</button>
+            <div class="admin-ops-search-row">
+                <input type="text" inputmode="numeric" id="adminOpsSearchInput" class="admin-ops-search-input" placeholder="Поиск по ID игрока">
+                <button class="promo-apply-btn admin-ops-search-btn" onclick="adminOpsSearch()">Найти</button>
+                <button class="admin-ops-clear-btn" onclick="adminOpsClearSearch()">✕</button>
+            </div>
+
+            <div class="admin-ops-filter-row">
+                <button class="admin-ops-filter-btn active" data-filter="all" onclick="adminOpsSetFilter('all')">Все</button>
+                <button class="admin-ops-filter-btn" data-filter="win" onclick="adminOpsSetFilter('win')">Выигрышные</button>
+                <button class="admin-ops-filter-btn" data-filter="loss" onclick="adminOpsSetFilter('loss')">Проигрышные</button>
+            </div>
+
+            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminOperations(true)">Обновить список</button>
             <div id="adminOperationsList" class="admin-players-list">
                 <p class="wheel-subtitle">Загрузка…</p>
             </div>
+            <div id="adminOpsPagination" class="admin-ops-pagination"></div>
         </section>
 
         <section id="adminTabActions" class="wheel-card admin-tab-section hidden" style="text-align: left;">
