@@ -4680,16 +4680,13 @@ function updateIceArenaClock() {
 
     if (round.status === 'spinning') {
         if (timerBox) timerBox.classList.remove('counting', 'waiting');
-        if (countdownEl) countdownEl.textContent = '🎲';
+        if (countdownEl) countdownEl.textContent = '—';
         return;
     }
 
-    if (!round.betting_ends_at || iceArena.players.length < 2) {
-        if (timerBox) {
-            timerBox.classList.remove('counting');
-            timerBox.classList.toggle('waiting', iceArena.players.length > 0);
-        }
-        if (countdownEl) countdownEl.textContent = iceArena.players.length ? 'ждём' : '—';
+    if (!round.betting_ends_at) {
+        if (timerBox) timerBox.classList.remove('counting', 'waiting');
+        if (countdownEl) countdownEl.textContent = '—';
         return;
     }
 
