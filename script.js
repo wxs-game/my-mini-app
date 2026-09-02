@@ -4433,6 +4433,7 @@ function openIceArena() {
     updateNav('games');
     iceArena.watching = true;
     startIceArenaLobby();
+    loadIceArenaHistory();
     if (iceArena.round?.status === 'spinning' && iceArena.winner && iceArena.animatingRoundId !== iceArena.round.id) {
         iceArena.animatingRoundId = iceArena.round.id;
         renderIceArenaField();
@@ -5341,9 +5342,9 @@ async function finishIceArenaRound(winner) {
     if (overlay) overlay.classList.remove('hidden');
     updateIceArenaBetControls();
 
-    if (round && !iceArenaHistory.some(h => h.id === round.id)) {
+    if (round && !iceArenaHistory.some(h => String(h.id) === String(round.id))) {
         pushIceArenaHistory({
-            id: round.id,
+            id: String(round.id),
             gameNumber: round.game_number || null,
             ts: Date.now(),
             bank: total,
@@ -5378,33 +5379,107 @@ async function finishIceArenaRound(winner) {
 
 // ==========================================
 // ИСТОРИЯ РАУНДОВ АЙС АРЕНЫ (× победителя, реплей шайбы)
+// Хранится глобально в Supabase (таблицы ice_arena_rounds / ice_arena_bets),
+// а не в localStorage — поэтому видна всем игрокам и не сбрасывается
+// при перезаходе или смене устройства.
 // ==========================================
-const ICE_ARENA_HISTORY_KEY = 'ice_arena_history_v1';
 const ICE_ARENA_HISTORY_MAX = 30;
 let iceArenaHistory = [];
 let iceArenaHistoryDetailEntry = null;
 let iceArenaHistoryReplaying = false;
+let iceArenaHistoryLoading = null;
 
-function loadIceArenaHistory() {
-    try {
-        const stored = JSON.parse(localStorage.getItem(ICE_ARENA_HISTORY_KEY) || '[]');
-        if (Array.isArray(stored)) iceArenaHistory = stored.slice(0, ICE_ARENA_HISTORY_MAX);
-    } catch (e) {
-        iceArenaHistory = [];
-    }
-    renderIceHistoryStrip();
+// Подтягивает последние завершённые раунды и ставки всех игроков из
+// Supabase и собирает их в том же формате, что раньше хранился локально.
+async function loadIceArenaHistory() {
+    if (iceArenaHistoryLoading) return iceArenaHistoryLoading;
+
+    iceArenaHistoryLoading = (async () => {
+        try {
+            const { data: rounds, error } = await supabase
+                .from(ICE_ARENA_ROUNDS_TABLE)
+                .select('*')
+                .not('winner_telegram_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(ICE_ARENA_HISTORY_MAX);
+
+            if (error) {
+                console.error('Ice Arena history load:', error);
+                return;
+            }
+
+            const roundList = rounds || [];
+            if (!roundList.length) {
+                iceArenaHistory = [];
+                return;
+            }
+
+            const roundIds = roundList.map(r => r.id);
+            const { data: bets, error: betsError } = await supabase
+                .from(ICE_ARENA_BETS_TABLE)
+                .select('*')
+                .in('round_id', roundIds);
+
+            if (betsError) console.error('Ice Arena history bets:', betsError);
+
+            const betsByRound = {};
+            (bets || []).forEach(b => {
+                const key = String(b.round_id);
+                (betsByRound[key] = betsByRound[key] || []).push(b);
+            });
+
+            const myId = myIceTelegramId();
+
+            iceArenaHistory = roundList.map(r => {
+                const roundBets = betsByRound[String(r.id)] || [];
+                const players = roundBets.map((b, i) => ({
+                    id: String(b.telegram_id),
+                    name: b.name,
+                    avatar: b.avatar,
+                    bet: Number(b.amount),
+                    color: b.color || ICE_ARENA_COLORS[i % ICE_ARENA_COLORS.length],
+                    isUser: myId != null && Number(b.telegram_id) === Number(myId)
+                }));
+
+                const bank = r.bank != null ? Number(r.bank) : roundMoney(players.reduce((s, p) => s + p.bet, 0));
+                const payout = r.payout != null ? Number(r.payout) : 0;
+                const winnerFromBets = players.find(p => p.id === String(r.winner_telegram_id));
+                const winnerBet = r.winner_bet != null ? Number(r.winner_bet) : (winnerFromBets ? winnerFromBets.bet : 0);
+
+                return {
+                    id: String(r.id),
+                    gameNumber: r.game_number || null,
+                    ts: r.resolved_at ? new Date(r.resolved_at).getTime() : new Date(r.created_at).getTime(),
+                    bank,
+                    payout,
+                    multiplier: winnerBet > 0 ? payout / winnerBet : 0,
+                    winner: {
+                        id: String(r.winner_telegram_id),
+                        name: r.winner_name,
+                        avatar: r.winner_avatar,
+                        bet: winnerBet,
+                        isUser: myId != null && Number(r.winner_telegram_id) === Number(myId)
+                    },
+                    players
+                };
+            });
+        } catch (e) {
+            console.error('Ice Arena history load:', e);
+        } finally {
+            renderIceHistoryStrip();
+            iceArenaHistoryLoading = null;
+        }
+    })();
+
+    return iceArenaHistoryLoading;
 }
 
-function saveIceArenaHistory() {
-    try {
-        localStorage.setItem(ICE_ARENA_HISTORY_KEY, JSON.stringify(iceArenaHistory));
-    } catch (e) {}
-}
-
+// Оптимистичное локальное добавление раунда, который этот клиент только
+// что досмотрел вживую — чтобы кэф появился в ленте сразу, не дожидаясь
+// следующей подгрузки из Supabase (сами данные там уже сохранены сервером).
 function pushIceArenaHistory(entry) {
     iceArenaHistory.unshift(entry);
     if (iceArenaHistory.length > ICE_ARENA_HISTORY_MAX) iceArenaHistory.length = ICE_ARENA_HISTORY_MAX;
-    saveIceArenaHistory();
     renderIceHistoryStrip();
 }
 
@@ -5448,6 +5523,15 @@ function openIceArenaHistory() {
     showIceArenaHistoryList();
     document.getElementById('iceHistoryModal')?.classList.remove('hidden');
     document.body.classList.add('ice-history-modal-open');
+
+    // Подтягиваем самую свежую глобальную историю (могли пройти раунды на
+    // других устройствах/у других игроков) и перерисовываем список, если
+    // модалка всё ещё открыта и пользователь не ушёл в детальный экран.
+    loadIceArenaHistory().then(() => {
+        const modalOpen = !document.getElementById('iceHistoryModal')?.classList.contains('hidden');
+        const listVisible = !document.getElementById('iceHistoryListView')?.classList.contains('hidden');
+        if (modalOpen && listVisible) renderIceArenaHistoryList();
+    });
 }
 
 function closeIceArenaHistory() {
