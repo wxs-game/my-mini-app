@@ -540,7 +540,7 @@ async function loadLiveBetsHistory() {
     try {
         const { data, error } = await supabase
             .from(LIVE_BETS_TABLE)
-            .select('id, name, amount, game, win_amount, multiplier, created_at')
+            .select('id, name, amount, game, win_amount, multiplier, balance_before, balance_after, created_at')
             .order('created_at', { ascending: false })
             .limit(LIVE_BETS_MAX);
 
@@ -559,17 +559,22 @@ async function loadLiveBetsHistory() {
 }
 
 // Вызывается сразу после успешного списания ставки в каждой игре
-// (Мины, Кирка, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
-// через Realtime увидят все игроки (включая нас самих). Возвращает id
-// созданной строки — он нужен, чтобы потом дописать в неё выигрыш.
-async function broadcastLiveBet(amount, gameLabel) {
+// (Мины, Кирка, Краш, Колесо, Айс Арена) — сохраняет ставку в Supabase,
+// откуда её через Realtime увидят все игроки (включая нас самих).
+// balanceBefore/balanceAfter — баланс игрока непосредственно до и после
+// списания этой ставки (не путать с балансом после выигрыша) — нужны
+// для раздела "Операции" в админ-панели. Возвращает id созданной строки —
+// он нужен, чтобы потом дописать в неё выигрыш.
+async function broadcastLiveBet(amount, gameLabel, balanceBefore, balanceAfter) {
     const tgUser = tg?.initDataUnsafe?.user;
     const nameFromUI = document.getElementById('username')?.textContent?.trim();
     const row = {
         telegram_id: tgUser?.id || null,
         name: nameFromUI || 'Игрок',
         amount: roundMoney(amount),
-        game: gameLabel
+        game: gameLabel,
+        balance_before: (balanceBefore != null) ? roundMoney(balanceBefore) : null,
+        balance_after: (balanceAfter != null) ? roundMoney(balanceAfter) : null
     };
 
     try {
@@ -588,14 +593,16 @@ async function broadcastLiveBet(amount, gameLabel) {
 }
 
 // Вызывается при выигрыше (Мины/Краш — на "Забрать", Кирка — когда сломалась,
-// Колесо — по итогу спина). Если множитель выигрыша меньше LIVE_BET_WIN_THRESHOLD
-// или ставка не была сохранена (liveBetId нет) — запись в ленте не трогаем.
+// Колесо — по итогу спина). Пишет результат в БД всегда (это нужно для
+// точной статистики в разделе "Операции" админ-панели), а публичная лента
+// на главном экране сама решает, показывать ли конкретную запись — см.
+// isLiveTickerWin()/isLiveTickerItem(), которые всё ещё сверяются с
+// LIVE_BET_WIN_THRESHOLD на этапе рендера. opts.force сохранён для
+// обратной совместимости вызовов, но больше ни на что не влияет.
 async function resolveLiveBetWin(liveBetId, betAmount, winAmount, opts) {
     if (!liveBetId || !betAmount || betAmount <= 0 || !winAmount) return;
 
     const multiplier = winAmount / betAmount;
-    if (!opts?.force && multiplier < LIVE_BET_WIN_THRESHOLD) return;
-
     const winPatch = { win_amount: roundMoney(winAmount), multiplier: roundMoney(multiplier) };
 
 
@@ -1297,7 +1304,7 @@ async function startMinesGame() {
 
     minesGame.active = true;
     minesGame.bet = bet;
-    minesGame.liveBetId = await broadcastLiveBet(bet, 'Мины');
+    minesGame.liveBetId = await broadcastLiveBet(bet, 'Мины', roundMoney(currentBalance + bet), currentBalance);
     minesGame.gemsFound = 0;
     minesGame.revealed = Array(25).fill(false);
     minesGame.field = Array(25).fill('gem');
@@ -1961,7 +1968,7 @@ async function placeCrashBet() {
 
     crashGame.bet = bet;
     crashGame.betPlaced = true;
-    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш');
+    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш', roundMoney(currentBalance + bet), currentBalance);
     crashGame.cashedOut = false;
     crashGame.isProcessing = false;
     unlockEconomy();
@@ -2826,7 +2833,7 @@ async function startPickaxeGame() {
     setUIBalance(currentBalance);
 
     resetMineWorld();
-    const liveBetId = await broadcastLiveBet(bet, 'Кирка');
+    const liveBetId = await broadcastLiveBet(bet, 'Кирка', roundMoney(currentBalance + bet), currentBalance);
 
     // 1. Вращение рулетки — как открытие кейса: лента быстро прокручивается
     // и тормозит ровно на выпавшей (уже определённой заранее) кирке.
@@ -3511,7 +3518,7 @@ async function spinWheel() {
 
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
-    const liveBetId = await broadcastLiveBet(totalBet, 'Колесо');
+    const liveBetId = await broadcastLiveBet(totalBet, 'Колесо', roundMoney(currentBalance + totalBet), currentBalance);
 
     const result = document.getElementById('wheelResult');
     const resultValue = document.getElementById('resultValue');
@@ -3983,8 +3990,206 @@ function applyPromoCode() {
 
 function openAdminPanel() {
     showPage('adminPage');
-    loadAdminPlayers();
+    switchAdminTab('players');
 }
+
+// Переключение разделов админ-панели (Игроки / Операции / Действия / Заготовки).
+// Список разделов вынесен в массив, чтобы при добавлении нового раздела было
+// достаточно добавить один элемент сюда + секцию/кнопку в index.html.
+const ADMIN_TABS = ['players', 'operations', 'actions', 'presets'];
+
+function switchAdminTab(tab) {
+    ADMIN_TABS.forEach(t => {
+        const sectionId = 'adminTab' + t.charAt(0).toUpperCase() + t.slice(1);
+        const section = document.getElementById(sectionId);
+        const btn = document.querySelector('.admin-tab-btn[data-admin-tab="' + t + '"]');
+        if (section) section.classList.toggle('hidden', t !== tab);
+        if (btn) btn.classList.toggle('active', t === tab);
+    });
+
+    if (tab === 'players') {
+        loadAdminPlayers();
+    } else if (tab === 'operations') {
+        loadAdminOperations();
+    }
+}
+window.switchAdminTab = switchAdminTab;
+
+/* =========================
+   АДМИН-ПАНЕЛЬ: раздел "Операции" — лента последних ставок по всем
+   играм (Мины, Краш, Кирка, Колесо, Айс Арена). Данные берутся из той
+   же таблицы live_bets, которую уже читает лента на главном экране —
+   отдельная RPC тут не нужна, так как live_bets открыта на select всем
+   (см. комментарий над LIVE_BETS_TABLE выше). Карточка разворачивается
+   по тапу и показывает баланс до/после списания ставки — эти два поля
+   пишутся в broadcastLiveBet() в момент постановки ставки.
+
+   Поддерживает: постраничную загрузку (по 50 записей), поиск по
+   telegram_id игрока и фильтр по результату ставки (все/выигрыш/проигрыш).
+========================= */
+const ADMIN_OPERATIONS_PAGE_SIZE = 50;
+
+let adminOpsState = {
+    page: 0,          // 0-indexed текущая страница
+    totalCount: 0,     // всего записей, подходящих под текущий фильтр/поиск
+    filter: 'all',     // 'all' | 'win' | 'loss'
+    searchId: ''        // строка из поля поиска (telegram_id)
+};
+
+function adminOpsTotalPages() {
+    return Math.max(1, Math.ceil(adminOpsState.totalCount / ADMIN_OPERATIONS_PAGE_SIZE));
+}
+
+// Пересобирает запрос к live_bets с учётом текущих фильтра/поиска/страницы.
+// { count: 'exact' } нужен, чтобы знать общее число страниц для кнопок
+// "Вперёд"/"Назад" и текста "Страница X из Y".
+async function loadAdminOperations(resetToFirstPage) {
+    if (resetToFirstPage) adminOpsState.page = 0;
+
+    const list = document.getElementById('adminOperationsList');
+    if (!list) return;
+
+    list.innerHTML = '<p class="wheel-subtitle">Загрузка…</p>';
+
+    try {
+        let query = supabase
+            .from(LIVE_BETS_TABLE)
+            .select('id, telegram_id, name, game, amount, win_amount, multiplier, balance_before, balance_after, created_at', { count: 'exact' });
+
+        if (adminOpsState.searchId) {
+            query = query.eq('telegram_id', adminOpsState.searchId);
+        }
+        if (adminOpsState.filter === 'win') {
+            query = query.not('win_amount', 'is', null);
+        } else if (adminOpsState.filter === 'loss') {
+            query = query.is('win_amount', null);
+        }
+
+        const from = adminOpsState.page * ADMIN_OPERATIONS_PAGE_SIZE;
+        const to = from + ADMIN_OPERATIONS_PAGE_SIZE - 1;
+
+        const { data, error, count } = await query
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+        if (error) {
+            console.error('Ошибка загрузки операций:', error);
+            list.innerHTML = '<p class="wheel-subtitle">Не удалось загрузить операции.</p>';
+            return;
+        }
+
+        adminOpsState.totalCount = count || 0;
+        renderAdminOpsPagination();
+
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p class="wheel-subtitle">Ничего не найдено.</p>';
+            return;
+        }
+
+        list.innerHTML = data.map(renderAdminOperationCard).join('');
+    } catch (e) {
+        console.error('Ошибка загрузки операций:', e);
+        list.innerHTML = '<p class="wheel-subtitle">Не удалось загрузить операции.</p>';
+    }
+}
+
+function adminOpsSearch() {
+    const input = document.getElementById('adminOpsSearchInput');
+    adminOpsState.searchId = input ? input.value.trim() : '';
+    loadAdminOperations(true);
+}
+
+function adminOpsClearSearch() {
+    const input = document.getElementById('adminOpsSearchInput');
+    if (input) input.value = '';
+    adminOpsState.searchId = '';
+    loadAdminOperations(true);
+}
+
+function adminOpsSetFilter(filter) {
+    adminOpsState.filter = filter;
+    document.querySelectorAll('.admin-ops-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    loadAdminOperations(true);
+}
+
+function adminOpsPrevPage() {
+    if (adminOpsState.page <= 0) return;
+    adminOpsState.page--;
+    loadAdminOperations(false);
+}
+
+function adminOpsNextPage() {
+    if (adminOpsState.page >= adminOpsTotalPages() - 1) return;
+    adminOpsState.page++;
+    loadAdminOperations(false);
+}
+
+function renderAdminOpsPagination() {
+    const el = document.getElementById('adminOpsPagination');
+    if (!el) return;
+    const totalPages = adminOpsTotalPages();
+    const current = adminOpsState.page + 1;
+    el.innerHTML = `
+        <button class="admin-ops-page-btn" onclick="adminOpsPrevPage()" ${current <= 1 ? 'disabled' : ''}>‹ Назад</button>
+        <span class="admin-ops-page-text">Стр. ${current} из ${totalPages}</span>
+        <button class="admin-ops-page-btn" onclick="adminOpsNextPage()" ${current >= totalPages ? 'disabled' : ''}>Вперёд ›</button>
+    `;
+}
+window.adminOpsSearch = adminOpsSearch;
+window.adminOpsClearSearch = adminOpsClearSearch;
+window.adminOpsSetFilter = adminOpsSetFilter;
+window.adminOpsPrevPage = adminOpsPrevPage;
+window.adminOpsNextPage = adminOpsNextPage;
+
+function renderAdminOperationCard(op) {
+    const safeId = 'op_' + String(op.id);
+    const name = op.name || 'Игрок';
+    const game = op.game || '—';
+    const amount = roundMoney(op.amount || 0).toFixed(2);
+    const hasWin = op.win_amount != null;
+    const multText = (op.multiplier != null) ? ('x' + Number(op.multiplier).toFixed(2)) : '—';
+    const winText = hasWin ? roundMoney(op.win_amount).toFixed(2) + ' $' : '—';
+    const balBefore = (op.balance_before != null) ? roundMoney(op.balance_before).toFixed(2) + ' $' : '—';
+    const balAfter = (op.balance_after != null) ? roundMoney(op.balance_after).toFixed(2) + ' $' : '—';
+    const timeText = op.created_at
+        ? new Date(op.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '—';
+
+    // Результат ставки бейджем в правом углу: выигрыш (зелёный кеф) или
+    // просто сумма ставки, если раунд ещё не завершён/проигран.
+    const resultBadge = hasWin
+        ? `<div class="admin-op-badge admin-op-badge-win">${multText}</div>`
+        : `<div class="admin-op-badge">${amount} $</div>`;
+
+    return `
+        <div class="admin-op-card" onclick="toggleAdminOperation('${safeId}')">
+            <div class="admin-op-top">
+                <div>
+                    <div class="admin-player-name">${escapeHtml(name)}</div>
+                    <div class="admin-player-meta">${escapeHtml(game)} · ${timeText}</div>
+                </div>
+                ${resultBadge}
+            </div>
+            <div id="${safeId}" class="admin-op-details hidden">
+                <div class="admin-op-detail-row"><span>Имя</span><strong>${escapeHtml(name)}</strong></div>
+                <div class="admin-op-detail-row"><span>Режим</span><strong>${escapeHtml(game)}</strong></div>
+                <div class="admin-op-detail-row"><span>Ставка</span><strong>${amount} $</strong></div>
+                <div class="admin-op-detail-row"><span>Пойманный кеф</span><strong>${multText}</strong></div>
+                <div class="admin-op-detail-row"><span>Выигрыш</span><strong>${winText}</strong></div>
+                <div class="admin-op-detail-row"><span>Баланс до ставки</span><strong>${balBefore}</strong></div>
+                <div class="admin-op-detail-row"><span>Баланс после ставки</span><strong>${balAfter}</strong></div>
+            </div>
+        </div>
+    `;
+}
+
+function toggleAdminOperation(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden');
+}
+window.toggleAdminOperation = toggleAdminOperation;
 
 // Тянет всех игроков через защищённую RPC admin_list_players — сервер
 // сам проверяет по wxs_admins, что вызывающий действительно админ, и
@@ -4937,7 +5142,7 @@ async function placeIceArenaBet() {
         }
         currentBalance = debitResult.balance;
         setUIBalance(currentBalance);
-        broadcastLiveBet(bet, 'Айс Арена');
+        broadcastLiveBet(bet, 'Айс Арена', roundMoney(currentBalance + bet), currentBalance);
 
         const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
         const myAvatar = getMyIceArenaAvatar();
