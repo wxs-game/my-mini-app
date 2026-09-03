@@ -454,6 +454,8 @@ async function loadUserData() {
        game text not null,
        win_amount numeric,
        multiplier numeric,
+       result text,
+       resolved_at timestamptz,
        created_at timestamptz not null default now()
    );
    alter table public.live_bets enable row level security;
@@ -464,6 +466,12 @@ async function loadUserData() {
 
    (И включить Realtime для таблицы live_bets в Database → Replication,
    если ALTER PUBLICATION выше почему-то не сработает автоматически.)
+
+   Если таблица live_bets уже существует (создана до полей result/resolved_at
+   для вкладки "Действия" — начало и конец каждой ставки), докатить миграцией:
+
+   alter table public.live_bets add column if not exists result text;
+   alter table public.live_bets add column if not exists resolved_at timestamptz;
 ========================= */
 const LIVE_BETS_TABLE = 'live_bets';
 const LIVE_BETS_MAX = 10;
@@ -540,7 +548,7 @@ async function loadLiveBetsHistory() {
     try {
         const { data, error } = await supabase
             .from(LIVE_BETS_TABLE)
-            .select('id, name, amount, game, win_amount, multiplier, balance_before, balance_after, created_at')
+            .select('id, name, amount, game, win_amount, multiplier, created_at')
             .order('created_at', { ascending: false })
             .limit(LIVE_BETS_MAX);
 
@@ -559,22 +567,17 @@ async function loadLiveBetsHistory() {
 }
 
 // Вызывается сразу после успешного списания ставки в каждой игре
-// (Мины, Кирка, Краш, Колесо, Айс Арена) — сохраняет ставку в Supabase,
-// откуда её через Realtime увидят все игроки (включая нас самих).
-// balanceBefore/balanceAfter — баланс игрока непосредственно до и после
-// списания этой ставки (не путать с балансом после выигрыша) — нужны
-// для раздела "Операции" в админ-панели. Возвращает id созданной строки —
-// он нужен, чтобы потом дописать в неё выигрыш.
-async function broadcastLiveBet(amount, gameLabel, balanceBefore, balanceAfter) {
+// (Мины, Кирка, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
+// через Realtime увидят все игроки (включая нас самих). Возвращает id
+// созданной строки — он нужен, чтобы потом дописать в неё выигрыш.
+async function broadcastLiveBet(amount, gameLabel) {
     const tgUser = tg?.initDataUnsafe?.user;
     const nameFromUI = document.getElementById('username')?.textContent?.trim();
     const row = {
         telegram_id: tgUser?.id || null,
         name: nameFromUI || 'Игрок',
         amount: roundMoney(amount),
-        game: gameLabel,
-        balance_before: (balanceBefore != null) ? roundMoney(balanceBefore) : null,
-        balance_after: (balanceAfter != null) ? roundMoney(balanceAfter) : null
+        game: gameLabel
     };
 
     try {
@@ -592,33 +595,39 @@ async function broadcastLiveBet(amount, gameLabel, balanceBefore, balanceAfter) 
     // остальным) — локально ничего не дублируем.
 }
 
-// Вызывается при выигрыше (Мины/Краш — на "Забрать", Кирка — когда сломалась,
-// Колесо — по итогу спина). Пишет результат в БД всегда (это нужно для
-// точной статистики в разделе "Операции" админ-панели), а публичная лента
-// на главном экране сама решает, показывать ли конкретную запись — см.
-// isLiveTickerWin()/isLiveTickerItem(), которые всё ещё сверяются с
-// LIVE_BET_WIN_THRESHOLD на этапе рендера. opts.force сохранён для
-// обратной совместимости вызовов, но больше ни на что не влияет.
-async function resolveLiveBetWin(liveBetId, betAmount, winAmount, opts) {
-    if (!liveBetId || !betAmount || betAmount <= 0 || !winAmount) return;
+// Вызывается по завершении КАЖДОЙ ставки (Мины/Краш — на "Забрать" или при
+// проигрыше, Кирка/Колесо — по итогу раунда, каким бы он ни был). Всегда
+// дописывает время окончания (resolved_at) и результат — это и есть данные
+// для глобальной вкладки "Действия" (начало ставки → её конец). Бегущая
+// строка LIVE WINS по-прежнему показывает только заметные выигрыши — это
+// решается отдельно, через isLiveTickerWin(), а не здесь.
+async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
+    if (!liveBetId) return;
 
-    const multiplier = winAmount / betAmount;
-    const winPatch = { win_amount: roundMoney(winAmount), multiplier: roundMoney(multiplier) };
+    const bet = Number(betAmount) || 0;
+    const amount = Number(winAmount) || 0;
+    const multiplier = bet > 0 ? amount / bet : 0;
 
+    const patch = {
+        win_amount: roundMoney(amount),
+        multiplier: roundMoney(multiplier),
+        result: amount > 0 ? 'win' : 'loss',
+        resolved_at: new Date().toISOString()
+    };
 
     // Показываем стрелку "ставка → выигрыш" у автора ставки сразу же, не
     // дожидаясь ответа сервера — так это гарантированно видно на своём
     // экране, даже если запись в БД по какой-то причине задержится.
-    patchLiveBetLocally(liveBetId, winPatch);
+    patchLiveBetLocally(liveBetId, patch);
 
     try {
         const { error } = await supabase
             .from(LIVE_BETS_TABLE)
-            .update(winPatch)
+            .update(patch)
             .eq('id', liveBetId);
-        if (error) console.error('Не удалось обновить выигрыш в live_bets:', error);
+        if (error) console.error('Не удалось обновить live_bets:', error);
     } catch (e) {
-        console.error('Не удалось обновить выигрыш в live_bets:', e);
+        console.error('Не удалось обновить live_bets:', e);
     }
     // Остальным игрокам обновление принесёт Realtime-подписка (UPDATE) —
     // при условии, что запись успешно сохранилась в БД.
@@ -1304,7 +1313,7 @@ async function startMinesGame() {
 
     minesGame.active = true;
     minesGame.bet = bet;
-    minesGame.liveBetId = await broadcastLiveBet(bet, 'Мины', roundMoney(currentBalance + bet), currentBalance);
+    minesGame.liveBetId = await broadcastLiveBet(bet, 'Мины');
     minesGame.gemsFound = 0;
     minesGame.revealed = Array(25).fill(false);
     minesGame.field = Array(25).fill('gem');
@@ -1424,6 +1433,13 @@ async function cashoutMines() {
 
 function endMinesGame(isWin) {
     minesGame.active = false;
+
+    // Проигрыш (взорвалась бомба) тоже фиксируем как завершённое действие —
+    // с временем окончания, для вкладки "Действия". При выигрыше это уже
+    // делает resolveLiveBetWin() из cashoutMines().
+    if (!isWin) {
+        resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, 0);
+    }
 
     for (let i = 0; i < 25; i++) {
         const tile = document.getElementById(`tile-${i}`);
@@ -1856,6 +1872,13 @@ function tickCrash() {
 function endCrashRound() {
     cancelAnimationFrame(crashAnimHandle);
 
+    // Проигрыш (не успел забрать до краша) тоже фиксируем как завершённое
+    // действие — с временем окончания, для вкладки "Действия". При выигрыше
+    // это уже делает resolveLiveBetWin() из cashOutCrash().
+    if (crashGame.betPlaced && !crashGame.cashedOut) {
+        resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, 0);
+    }
+
     // Раскрываем секретный ключ (соль) этого раунда — теперь можно
     // проверить, что SHA256(ключ) равен хешу, показанному ДО раунда.
     revealCrashRoundKey();
@@ -1968,7 +1991,7 @@ async function placeCrashBet() {
 
     crashGame.bet = bet;
     crashGame.betPlaced = true;
-    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш', roundMoney(currentBalance + bet), currentBalance);
+    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш');
     crashGame.cashedOut = false;
     crashGame.isProcessing = false;
     unlockEconomy();
@@ -2833,7 +2856,7 @@ async function startPickaxeGame() {
     setUIBalance(currentBalance);
 
     resetMineWorld();
-    const liveBetId = await broadcastLiveBet(bet, 'Кирка', roundMoney(currentBalance + bet), currentBalance);
+    const liveBetId = await broadcastLiveBet(bet, 'Кирка');
 
     // 1. Вращение рулетки — как открытие кейса: лента быстро прокручивается
     // и тормозит ровно на выпавшей (уже определённой заранее) кирке.
@@ -3518,7 +3541,7 @@ async function spinWheel() {
 
     wheelSpinning = true;
     button.innerHTML = '<span>↻ Вращение...</span>';
-    const liveBetId = await broadcastLiveBet(totalBet, 'Колесо', roundMoney(currentBalance + totalBet), currentBalance);
+    const liveBetId = await broadcastLiveBet(totalBet, 'Колесо');
 
     const result = document.getElementById('wheelResult');
     const resultValue = document.getElementById('resultValue');
@@ -3990,206 +4013,27 @@ function applyPromoCode() {
 
 function openAdminPanel() {
     showPage('adminPage');
-    switchAdminTab('players');
+    setAdminTab('players');
+    loadAdminPlayers();
 }
 
-// Переключение разделов админ-панели (Игроки / Операции / Действия / Заготовки).
-// Список разделов вынесен в массив, чтобы при добавлении нового раздела было
-// достаточно добавить один элемент сюда + секцию/кнопку в index.html.
-const ADMIN_TABS = ['players', 'operations', 'actions', 'presets'];
+// Переключение вкладок админ-панели: "Игроки" (существующий список) и
+// "Действия" (глобальная лента ставок → результатов по всем играм).
+function setAdminTab(tab) {
+    const isActions = tab === 'actions';
 
-function switchAdminTab(tab) {
-    ADMIN_TABS.forEach(t => {
-        const sectionId = 'adminTab' + t.charAt(0).toUpperCase() + t.slice(1);
-        const section = document.getElementById(sectionId);
-        const btn = document.querySelector('.admin-tab-btn[data-admin-tab="' + t + '"]');
-        if (section) section.classList.toggle('hidden', t !== tab);
-        if (btn) btn.classList.toggle('active', t === tab);
-    });
+    document.getElementById('adminPlayersView')?.classList.toggle('hidden', isActions);
+    document.getElementById('adminActionsView')?.classList.toggle('hidden', !isActions);
+    document.getElementById('adminTabPlayersBtn')?.classList.toggle('active', !isActions);
+    document.getElementById('adminTabActionsBtn')?.classList.toggle('active', isActions);
 
-    if (tab === 'players') {
-        loadAdminPlayers();
-    } else if (tab === 'operations') {
-        loadAdminOperations();
+    if (isActions) {
+        renderActionsFeed();
+        loadActionsFeed().then(() => {
+            if (!document.getElementById('adminActionsView')?.classList.contains('hidden')) renderActionsFeed();
+        });
     }
 }
-window.switchAdminTab = switchAdminTab;
-
-/* =========================
-   АДМИН-ПАНЕЛЬ: раздел "Операции" — лента последних ставок по всем
-   играм (Мины, Краш, Кирка, Колесо, Айс Арена). Данные берутся из той
-   же таблицы live_bets, которую уже читает лента на главном экране —
-   отдельная RPC тут не нужна, так как live_bets открыта на select всем
-   (см. комментарий над LIVE_BETS_TABLE выше). Карточка разворачивается
-   по тапу и показывает баланс до/после списания ставки — эти два поля
-   пишутся в broadcastLiveBet() в момент постановки ставки.
-
-   Поддерживает: постраничную загрузку (по 50 записей), поиск по
-   telegram_id игрока и фильтр по результату ставки (все/выигрыш/проигрыш).
-========================= */
-const ADMIN_OPERATIONS_PAGE_SIZE = 50;
-
-let adminOpsState = {
-    page: 0,          // 0-indexed текущая страница
-    totalCount: 0,     // всего записей, подходящих под текущий фильтр/поиск
-    filter: 'all',     // 'all' | 'win' | 'loss'
-    searchId: ''        // строка из поля поиска (telegram_id)
-};
-
-function adminOpsTotalPages() {
-    return Math.max(1, Math.ceil(adminOpsState.totalCount / ADMIN_OPERATIONS_PAGE_SIZE));
-}
-
-// Пересобирает запрос к live_bets с учётом текущих фильтра/поиска/страницы.
-// { count: 'exact' } нужен, чтобы знать общее число страниц для кнопок
-// "Вперёд"/"Назад" и текста "Страница X из Y".
-async function loadAdminOperations(resetToFirstPage) {
-    if (resetToFirstPage) adminOpsState.page = 0;
-
-    const list = document.getElementById('adminOperationsList');
-    if (!list) return;
-
-    list.innerHTML = '<p class="wheel-subtitle">Загрузка…</p>';
-
-    try {
-        let query = supabase
-            .from(LIVE_BETS_TABLE)
-            .select('id, telegram_id, name, game, amount, win_amount, multiplier, balance_before, balance_after, created_at', { count: 'exact' });
-
-        if (adminOpsState.searchId) {
-            query = query.eq('telegram_id', adminOpsState.searchId);
-        }
-        if (adminOpsState.filter === 'win') {
-            query = query.not('win_amount', 'is', null);
-        } else if (adminOpsState.filter === 'loss') {
-            query = query.is('win_amount', null);
-        }
-
-        const from = adminOpsState.page * ADMIN_OPERATIONS_PAGE_SIZE;
-        const to = from + ADMIN_OPERATIONS_PAGE_SIZE - 1;
-
-        const { data, error, count } = await query
-            .order('created_at', { ascending: false })
-            .range(from, to);
-
-        if (error) {
-            console.error('Ошибка загрузки операций:', error);
-            list.innerHTML = '<p class="wheel-subtitle">Не удалось загрузить операции.</p>';
-            return;
-        }
-
-        adminOpsState.totalCount = count || 0;
-        renderAdminOpsPagination();
-
-        if (!data || data.length === 0) {
-            list.innerHTML = '<p class="wheel-subtitle">Ничего не найдено.</p>';
-            return;
-        }
-
-        list.innerHTML = data.map(renderAdminOperationCard).join('');
-    } catch (e) {
-        console.error('Ошибка загрузки операций:', e);
-        list.innerHTML = '<p class="wheel-subtitle">Не удалось загрузить операции.</p>';
-    }
-}
-
-function adminOpsSearch() {
-    const input = document.getElementById('adminOpsSearchInput');
-    adminOpsState.searchId = input ? input.value.trim() : '';
-    loadAdminOperations(true);
-}
-
-function adminOpsClearSearch() {
-    const input = document.getElementById('adminOpsSearchInput');
-    if (input) input.value = '';
-    adminOpsState.searchId = '';
-    loadAdminOperations(true);
-}
-
-function adminOpsSetFilter(filter) {
-    adminOpsState.filter = filter;
-    document.querySelectorAll('.admin-ops-filter-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
-    });
-    loadAdminOperations(true);
-}
-
-function adminOpsPrevPage() {
-    if (adminOpsState.page <= 0) return;
-    adminOpsState.page--;
-    loadAdminOperations(false);
-}
-
-function adminOpsNextPage() {
-    if (adminOpsState.page >= adminOpsTotalPages() - 1) return;
-    adminOpsState.page++;
-    loadAdminOperations(false);
-}
-
-function renderAdminOpsPagination() {
-    const el = document.getElementById('adminOpsPagination');
-    if (!el) return;
-    const totalPages = adminOpsTotalPages();
-    const current = adminOpsState.page + 1;
-    el.innerHTML = `
-        <button class="admin-ops-page-btn" onclick="adminOpsPrevPage()" ${current <= 1 ? 'disabled' : ''}>‹ Назад</button>
-        <span class="admin-ops-page-text">Стр. ${current} из ${totalPages}</span>
-        <button class="admin-ops-page-btn" onclick="adminOpsNextPage()" ${current >= totalPages ? 'disabled' : ''}>Вперёд ›</button>
-    `;
-}
-window.adminOpsSearch = adminOpsSearch;
-window.adminOpsClearSearch = adminOpsClearSearch;
-window.adminOpsSetFilter = adminOpsSetFilter;
-window.adminOpsPrevPage = adminOpsPrevPage;
-window.adminOpsNextPage = adminOpsNextPage;
-
-function renderAdminOperationCard(op) {
-    const safeId = 'op_' + String(op.id);
-    const name = op.name || 'Игрок';
-    const game = op.game || '—';
-    const amount = roundMoney(op.amount || 0).toFixed(2);
-    const hasWin = op.win_amount != null;
-    const multText = (op.multiplier != null) ? ('x' + Number(op.multiplier).toFixed(2)) : '—';
-    const winText = hasWin ? roundMoney(op.win_amount).toFixed(2) + ' $' : '—';
-    const balBefore = (op.balance_before != null) ? roundMoney(op.balance_before).toFixed(2) + ' $' : '—';
-    const balAfter = (op.balance_after != null) ? roundMoney(op.balance_after).toFixed(2) + ' $' : '—';
-    const timeText = op.created_at
-        ? new Date(op.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : '—';
-
-    // Результат ставки бейджем в правом углу: выигрыш (зелёный кеф) или
-    // просто сумма ставки, если раунд ещё не завершён/проигран.
-    const resultBadge = hasWin
-        ? `<div class="admin-op-badge admin-op-badge-win">${multText}</div>`
-        : `<div class="admin-op-badge">${amount} $</div>`;
-
-    return `
-        <div class="admin-op-card" onclick="toggleAdminOperation('${safeId}')">
-            <div class="admin-op-top">
-                <div>
-                    <div class="admin-player-name">${escapeHtml(name)}</div>
-                    <div class="admin-player-meta">${escapeHtml(game)} · ${timeText}</div>
-                </div>
-                ${resultBadge}
-            </div>
-            <div id="${safeId}" class="admin-op-details hidden">
-                <div class="admin-op-detail-row"><span>Имя</span><strong>${escapeHtml(name)}</strong></div>
-                <div class="admin-op-detail-row"><span>Режим</span><strong>${escapeHtml(game)}</strong></div>
-                <div class="admin-op-detail-row"><span>Ставка</span><strong>${amount} $</strong></div>
-                <div class="admin-op-detail-row"><span>Пойманный кеф</span><strong>${multText}</strong></div>
-                <div class="admin-op-detail-row"><span>Выигрыш</span><strong>${winText}</strong></div>
-                <div class="admin-op-detail-row"><span>Баланс до ставки</span><strong>${balBefore}</strong></div>
-                <div class="admin-op-detail-row"><span>Баланс после ставки</span><strong>${balAfter}</strong></div>
-            </div>
-        </div>
-    `;
-}
-
-function toggleAdminOperation(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden');
-}
-window.toggleAdminOperation = toggleAdminOperation;
 
 // Тянет всех игроков через защищённую RPC admin_list_players — сервер
 // сам проверяет по wxs_admins, что вызывающий действительно админ, и
@@ -4510,6 +4354,7 @@ window.clampBetInputOnBlur = clampBetInputOnBlur;
 window.blockInvalidBetKeys = blockInvalidBetKeys;
 window.applyPromoCode = applyPromoCode;
 window.loadAdminPlayers = loadAdminPlayers;
+window.setAdminTab = setAdminTab;
 window.adminAdjustBalance = adminAdjustBalance;
 window.openCrashFairnessModal = openCrashFairnessModal;
 window.closeCrashFairnessModal = closeCrashFairnessModal;
@@ -5142,7 +4987,7 @@ async function placeIceArenaBet() {
         }
         currentBalance = debitResult.balance;
         setUIBalance(currentBalance);
-        broadcastLiveBet(bet, 'Айс Арена', roundMoney(currentBalance + bet), currentBalance);
+        broadcastLiveBet(bet, 'Айс Арена');
 
         const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
         const myAvatar = getMyIceArenaAvatar();
@@ -6059,6 +5904,191 @@ function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
     });
 })();
 
+/* ==========================================
+   ГЛОБАЛЬНАЯ ЛЕНТА ДЕЙСТВИЙ ИГРОКОВ ("Действия")
+   Собирает вместе ставки из live_bets (Мины/Краш/Кирка/Колесо — начало
+   ставки и её конец, выигрыш или проигрыш) и раунды Айс Арены (начало —
+   когда игрок присоединился, конец — когда раунд разрешился), сортирует
+   по времени и показывает единой лентой с точным временем начала/конца
+   каждого действия.
+========================== */
+const ACTIONS_FEED_MAX = 40;
+let actionsFeed = [];
+let actionsFeedLoading = null;
+
+function formatActionsTime(ts) {
+    return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatActionsDuration(startTs, endTs) {
+    const sec = Math.max(0, Math.round((endTs - startTs) / 1000));
+    if (sec < 60) return sec + 'с';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + 'м' + (s ? ' ' + s + 'с' : '');
+}
+
+async function loadActionsFeed() {
+    if (actionsFeedLoading) return actionsFeedLoading;
+
+    actionsFeedLoading = (async () => {
+        try {
+            const myId = myIceTelegramId();
+
+            const [{ data: liveBets, error: liveError }, { data: arenaRounds, error: arenaError }] = await Promise.all([
+                supabase
+                    .from(LIVE_BETS_TABLE)
+                    .select('id, telegram_id, name, amount, game, win_amount, multiplier, result, resolved_at, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(ACTIONS_FEED_MAX),
+                supabase
+                    .from(ICE_ARENA_ROUNDS_TABLE)
+                    .select('*')
+                    .not('winner_telegram_id', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(ACTIONS_FEED_MAX)
+            ]);
+
+            if (liveError) console.error('Действия (live_bets):', liveError);
+            if (arenaError) console.error('Действия (ice_arena_rounds):', arenaError);
+
+            // Ставки Мины/Краш/Кирка/Колесо — начало (created_at) и конец
+            // (resolved_at, пишется resolveLiveBetWin() при любом исходе).
+            const liveActions = (liveBets || []).map(b => {
+                const startTs = new Date(b.created_at).getTime();
+                const endTs = b.resolved_at ? new Date(b.resolved_at).getTime() : null;
+                return {
+                    id: 'live_' + b.id,
+                    source: 'live',
+                    game: b.game || 'Игра',
+                    name: b.name || 'Игрок',
+                    isUser: myId != null && Number(b.telegram_id) === Number(myId),
+                    amount: Number(b.amount) || 0,
+                    resultAmount: b.win_amount != null ? Number(b.win_amount) : null,
+                    multiplier: b.multiplier != null ? Number(b.multiplier) : null,
+                    result: b.result || null,
+                    startTs,
+                    endTs
+                };
+            });
+
+            // Айс Арена — начало для каждого игрока это момент его ставки
+            // (когда он зашёл в раунд), конец — момент, когда раунд разрешился
+            // (все ждали одинаково, пока не собрался банк/истекло время).
+            let arenaActions = [];
+            if ((arenaRounds || []).length) {
+                const roundIds = arenaRounds.map(r => r.id);
+                const { data: bets, error: betsError } = await supabase
+                    .from(ICE_ARENA_BETS_TABLE)
+                    .select('*')
+                    .in('round_id', roundIds);
+                if (betsError) console.error('Действия (ice_arena_bets):', betsError);
+
+                const betsByRound = {};
+                (bets || []).forEach(b => {
+                    const key = String(b.round_id);
+                    (betsByRound[key] = betsByRound[key] || []).push(b);
+                });
+
+                arenaRounds.forEach(r => {
+                    const endTs = r.resolved_at ? new Date(r.resolved_at).getTime() : null;
+                    const roundBets = betsByRound[String(r.id)] || [];
+                    roundBets.forEach(b => {
+                        const startTs = new Date(b.created_at || r.created_at).getTime();
+                        const isWinner = String(b.telegram_id) === String(r.winner_telegram_id);
+                        const payout = Number(r.payout) || 0;
+                        const stake = Number(b.amount) || 0;
+                        arenaActions.push({
+                            id: 'arena_' + r.id + '_' + b.telegram_id,
+                            source: 'arena',
+                            roundId: String(r.id),
+                            game: 'Айс Арена',
+                            name: b.name || 'Игрок',
+                            isUser: myId != null && Number(b.telegram_id) === Number(myId),
+                            amount: stake,
+                            resultAmount: isWinner ? payout : 0,
+                            multiplier: isWinner && stake > 0 ? payout / stake : null,
+                            result: isWinner ? 'win' : 'loss',
+                            startTs,
+                            endTs
+                        });
+                    });
+                });
+            }
+
+            actionsFeed = liveActions.concat(arenaActions)
+                .sort((a, b) => (b.endTs || b.startTs) - (a.endTs || a.startTs))
+                .slice(0, ACTIONS_FEED_MAX);
+        } catch (e) {
+            console.error('Не удалось загрузить ленту действий:', e);
+        } finally {
+            actionsFeedLoading = null;
+        }
+    })();
+
+    return actionsFeedLoading;
+}
+
+function renderActionsFeed() {
+    const list = document.getElementById('actionsList');
+    if (!list) return;
+
+    if (!actionsFeed.length) {
+        list.innerHTML = '<div class="ice-history-empty">Пока нет действий</div>';
+        return;
+    }
+
+    list.innerHTML = actionsFeed.map(a => {
+        // Раунды Айс Арены кликабельны — сразу открывают экран реплея этого
+        // раунда (как чипы кэфов под полем). У остальных игр реплея нет.
+        const clickAttr = a.source === 'arena' ? ' onclick="openArenaActionReplay(\'' + a.roundId + '\')"' : '';
+
+        const startStr = formatActionsTime(a.startTs);
+        const timeStr = a.endTs
+            ? (startStr + ' → ' + formatActionsTime(a.endTs) + ' (' + formatActionsDuration(a.startTs, a.endTs) + ')')
+            : (startStr + ' → идёт…');
+
+        let walletClass = 'pending';
+        let walletText = '—';
+        if (a.result === 'win') {
+            walletClass = '';
+            walletText = '💳 +' + (a.resultAmount || 0).toFixed(2) + '$';
+        } else if (a.result === 'loss') {
+            walletClass = 'loss';
+            walletText = '💳 -' + a.amount.toFixed(2) + '$';
+        }
+
+        const outcomeLabel = a.result === 'win' ? 'Победа' : (a.result === 'loss' ? 'Проигрыш' : 'В процессе');
+        const multLabel = a.multiplier != null ? '×' + a.multiplier.toFixed(2) : '—';
+
+        return '<div class="ice-history-row"' + clickAttr + '>' +
+            '<div class="ice-history-row-top">' +
+                '<div>' +
+                    '<span class="ice-history-row-game">' + escapeIceName(a.game) + '</span>' +
+                    '<span class="ice-history-row-time">' + timeStr + '</span>' +
+                '</div>' +
+                '<div class="ice-history-row-wallet ' + walletClass + '">' + walletText + '</div>' +
+            '</div>' +
+            '<div class="ice-history-row-body">' +
+                '<div class="ice-history-row-name">' + escapeIceName(a.name) + (a.isUser ? ' (Вы)' : '') + '</div>' +
+                '<div class="ice-history-row-stats">' +
+                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + a.amount.toFixed(2) + '$</span><span class="ice-history-row-stat-lbl">Ставка</span></div>' +
+                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + multLabel + '</span><span class="ice-history-row-stat-lbl">Кэф</span></div>' +
+                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + outcomeLabel + '</span><span class="ice-history-row-stat-lbl">Итог</span></div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+}
+
+// Клик по раунду Айс Арены в ленте действий (вкладка "Действия" в
+// админ-панели) — уходит со страницы админки на Айс Арену и сразу
+// показывает реплей этого раунда.
+function openArenaActionReplay(roundId) {
+    openIceArena();
+    setTimeout(() => openIceArenaHistoryDirect(roundId), 60);
+}
+
 loadIceArenaHistory();
 
 window.openIceArena = openIceArena;
@@ -6071,6 +6101,8 @@ window.openIceArenaHistoryDetail = openIceArenaHistoryDetail;
 window.openIceArenaHistoryDirect = openIceArenaHistoryDirect;
 window.showIceArenaHistoryList = showIceArenaHistoryList;
 window.replayIceArenaHistoryRound = replayIceArenaHistoryRound;
+
+window.openArenaActionReplay = openArenaActionReplay;
 
 window.applyBetFactor = applyBetFactor;
 window.applyBetMax = applyBetMax;
