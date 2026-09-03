@@ -1,10 +1,11 @@
 <!DOCTYPE html>
+<!-- WXS Ice Arena GLOBAL LOBBY — index.html | пакет WXS_IceArena_GLOBAL -->
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#090909">
-    <title>WXS Game</title>
+    <title>WXS Game · Ice Arena GLOBAL</title>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://telegram.org/js/telegram-widget.js?22"></script>
@@ -844,6 +845,30 @@
         </section>
 
         <section class="wheel-card share-invite-card">
+            <div class="promo-label">ОТПРАВИТЬ</div>
+            <h2 class="promo-title">Позвать друзей на лёд</h2>
+            <p class="wheel-subtitle" style="margin-bottom: 16px;">Заготовленное сообщение с картинкой и кнопкой — Telegram сам откроет «Share Message».</p>
+
+            <div class="share-preview-wrap">
+                <div class="share-preview-badge">Превью сообщения</div>
+                <div class="share-preview-via">via WXS GAME</div>
+                <div class="share-preview-bubble">
+                    <div class="share-preview-photo" role="img" aria-label="Превью картинки приглашения">
+                        <span class="share-preview-photo-emoji">🏒</span>
+                        <span class="share-preview-photo-title">ICE ARENA</span>
+                        <span class="share-preview-photo-sub">WXS GAME · лови куш на льду</span>
+                    </div>
+                    <div class="share-preview-text">
+                        🎁 Хочешь забрать банк на Ice Arena?<br><br>
+                        Залетай в WXS GAME, крути игры и поднимай вместе с друзьями. Лёд уже готов — удача на твоей стороне!
+                    </div>
+                    <button type="button" class="share-preview-inline-btn" onclick="openShareTestChrome()">
+                        ОТКРЫТЬ CHROME
+                    </button>
+                </div>
+            </div>
+
+            <p class="share-invite-hint">WXS GAME предлагает отправить это сообщение в выбранный чат.</p>
             <button class="main-action-btn share-invite-btn" id="shareInviteBtn" onclick="sharePreparedInvite()">
                 Отправить…
             </button>
@@ -862,46 +887,24 @@
             <div class="header-space"></div>
         </div>
 
-        <div class="admin-tabs-scroll">
-            <button class="admin-tab-btn active" data-admin-tab="players" onclick="switchAdminTab('players')">Игроки</button>
-            <button class="admin-tab-btn" data-admin-tab="operations" onclick="switchAdminTab('operations')">Операции</button>
-            <button class="admin-tab-btn" data-admin-tab="actions" onclick="switchAdminTab('actions')">Действия</button>
-            <button class="admin-tab-btn" data-admin-tab="presets" onclick="switchAdminTab('presets')">Заготовки</button>
+        <div class="balance-mode-toggle">
+            <button class="mode-btn active" id="adminTabPlayersBtn" onclick="setAdminTab('players')">Игроки</button>
+            <button class="mode-btn" id="adminTabActionsBtn" onclick="setAdminTab('actions')">Действия</button>
         </div>
 
-        <section id="adminTabPlayers" class="wheel-card admin-tab-section" style="text-align: left;">
+        <section class="wheel-card admin-tab-view" id="adminPlayersView" style="text-align: left;">
             <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminPlayers()">Обновить список</button>
             <div id="adminPlayersList" class="admin-players-list">
                 <p class="wheel-subtitle">Загрузка…</p>
             </div>
         </section>
 
-        <section id="adminTabOperations" class="wheel-card admin-tab-section hidden" style="text-align: left;">
-            <div class="admin-ops-search-row">
-                <input type="text" inputmode="numeric" id="adminOpsSearchInput" class="admin-ops-search-input" placeholder="Поиск по ID игрока">
-                <button class="promo-apply-btn admin-ops-search-btn" onclick="adminOpsSearch()">Найти</button>
-                <button class="admin-ops-clear-btn" onclick="adminOpsClearSearch()">✕</button>
-            </div>
-
-            <div class="admin-ops-filter-row">
-                <button class="admin-ops-filter-btn active" data-filter="all" onclick="adminOpsSetFilter('all')">Все</button>
-                <button class="admin-ops-filter-btn" data-filter="win" onclick="adminOpsSetFilter('win')">Выигрышные</button>
-                <button class="admin-ops-filter-btn" data-filter="loss" onclick="adminOpsSetFilter('loss')">Проигрышные</button>
-            </div>
-
-            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminOperations(true)">Обновить список</button>
-            <div id="adminOperationsList" class="admin-players-list">
-                <p class="wheel-subtitle">Загрузка…</p>
-            </div>
-            <div id="adminOpsPagination" class="admin-ops-pagination"></div>
-        </section>
-
-        <section id="adminTabActions" class="wheel-card admin-tab-section hidden" style="text-align: left;">
-            <p class="wheel-subtitle">Раздел «Действия» — служебные действия администратора появятся здесь.</p>
-        </section>
-
-        <section id="adminTabPresets" class="wheel-card admin-tab-section hidden" style="text-align: left;">
-            <p class="wheel-subtitle">Раздел «Заготовки» — готовые шаблоны сумм и сообщений появятся здесь.</p>
+        <!-- Действия: ставка → результат, с началом и концом по времени,
+             по всем играм (Мины/Краш/Кирка/Колесо/Айс Арена). Клик по
+             раунду Айс Арены сразу открывает его реплей. -->
+        <section class="wheel-card admin-tab-view hidden" id="adminActionsView" style="text-align: left;">
+            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadActionsFeed().then(renderActionsFeed)">Обновить список</button>
+            <div id="actionsList" class="ice-history-list"></div>
         </section>
     </main>
 
