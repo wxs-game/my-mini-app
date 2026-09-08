@@ -1,7 +1,4 @@
 (function () {
-// WXS Ice Arena GLOBAL LOBBY — script.js
-// Пакет: WXS_IceArena_GLOBAL
-// Все игроки мира — в одном раунде (Supabase ice_arena_rounds / ice_arena_bets).
 // ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
 // ==========================================
@@ -36,12 +33,12 @@ let currentWithdrawals = 0.00;
 // ==========================================
 const LEVELS = [
     { level: 1, points: 0,     title: "Новичок" },
-    { level: 2, points: 2500,  title: "Гой" },
-    { level: 3, points: 7500,  title: "Бурмалда" },
-    { level: 4, points: 15000,  title: "Додеп" },
-    { level: 5, points: 22500, title: "Лудик" },
-    { level: 6, points: 30000, title: "Пепе" },
-    { level: 7, points: 30001, title: "Легенда" }
+    { level: 2, points: 5000,  title: "Гой" },
+    { level: 3, points: 12500,  title: "Бурмалда" },
+    { level: 4, points: 20000,  title: "Додеп" },
+    { level: 5, points: 27500, title: "Лудик" },
+    { level: 6, points: 38000, title: "Пепе" },
+    { level: 7, points: 50001, title: "Легенда" }
 ];
 
 function calculatePoints() {
@@ -3749,94 +3746,95 @@ function selectMethod(method, icon, sub) {
 }
 
 // ==========================================
-// ПОПОЛНЕНИЕ ЧЕРЕЗ CRYPTOBOT (реальная оплата)
+// ПОПОЛНЕНИЕ БАЛАНСА
 // ==========================================
 function handleDeposit() {
     const amountInput = document.querySelector('.sum-input-wrap input');
-    const amount = amountInput ? amountInput.value : '';
+    const amount = amountInput ? parseFloat(amountInput.value) : 0;
 
-    if (!amount || parseFloat(amount) <= 0) {
+    if (!amount || amount <= 0) {
         alert('Пожалуйста, введите корректную сумму');
         return;
     }
 
-    const targetUrl = `https://t.me/aep51`;
-
-    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(targetUrl);
-    } else {
-        window.location.href = targetUrl;
-    }
-}
-
     const tgUser = tg?.initDataUnsafe?.user;
     if (!tgUser) {
         showMessage("Откройте приложение через Telegram, чтобы пополнить баланс.");
-        unlockEconomy();
-        return;
-    }
-            const payload = await res.json();
-            const payUrl = payload?.pay_url;
-
-            if (!payUrl) {
-                throw new Error('pay_url missing in response');
-            }
-
-            if (tg?.openTelegramLink) {
-                tg.openTelegramLink(payUrl);
-            } else {
-                window.open(payUrl, '_blank');
-            }
-
-            transactions.unshift({
-                type: 'deposit',
-                method: selectedMethod,
-                icon: selectedMethodIcon,
-                amount: amount,
-                date: 'Только что',
-                status: 'pending'
-            });
-            renderTransactions();
-
-    if (amount > currentBalance) {
-        showMessage("Недостаточно средств");
-        unlockEconomy();
+        if (typeof unlockEconomy === 'function') unlockEconomy();
         return;
     }
 
-    const snapshot = snapshotBalanceState();
+    // Переход напрямую по ссылке Telegram
+    const targetUrl = `https://t.me/aep51`;
 
-    currentWithdrawals = roundMoney(currentWithdrawals + amount);
-    setUIBalance(roundMoney(currentBalance - amount));
-
-    const debitResult = await requestWithdrawalServer(amount);
-    if (!debitResult.ok) {
-        restoreBalanceState(snapshot);
-        showMessage("Не удалось создать заявку на вывод. Попробуйте снова.");
-        unlockEconomy();
-        return;
+    if (tg?.openTelegramLink) {
+        tg.openTelegramLink(targetUrl);
+    } else {
+        window.location.href = targetUrl;
     }
-    currentBalance = debitResult.balance;
-    setUIBalance(currentBalance);
 
+    // Добавление транзакции в локальный список
     transactions.unshift({
-        type: 'withdraw',
-        method: selectedMethod,
-        icon: selectedMethodIcon,
+        type: 'deposit',
+        method: typeof selectedMethod !== 'undefined' ? selectedMethod : 'Telegram',
+        icon: typeof selectedMethodIcon !== 'undefined' ? selectedMethodIcon : '',
         amount: amount,
         date: 'Только что',
         status: 'pending'
     });
-    renderTransactions();
 
-    showMessage(`Заявка на вывод ${amount.toFixed(2)} $ через ${selectedMethod} принята`);
-    unlockEconomy();
+    if (typeof renderTransactions === 'function') renderTransactions();
+    if (typeof unlockEconomy === 'function') unlockEconomy();
+}
+
+// ==========================================
+// ВЫВОД СРЕДСТВ (ЛОКАЛЬНО)
+// ==========================================
+function handleWithdrawal() {
+    const amountInput = document.querySelector('.sum-input-wrap input');
+    const amount = amountInput ? parseFloat(amountInput.value) : 0;
+
+    if (!amount || amount <= 0) {
+        showMessage("Введите корректную сумму вывода");
+        return;
+    }
+
+    if (amount > currentBalance) {
+        showMessage("Недостаточно средств");
+        if (typeof unlockEconomy === 'function') unlockEconomy();
+        return;
+    }
+
+    // Списание баланса и обновление статистики локально
+    currentWithdrawals = roundMoney((currentWithdrawals || 0) + amount);
+    currentBalance = roundMoney(currentBalance - amount);
+    
+    if (typeof setUIBalance === 'function') {
+        setUIBalance(currentBalance);
+    }
+
+    // Добавление заявки на вывод в историю
+    transactions.unshift({
+        type: 'withdraw',
+        method: typeof selectedMethod !== 'undefined' ? selectedMethod : 'Withdraw',
+        icon: typeof selectedMethodIcon !== 'undefined' ? selectedMethodIcon : '',
+        amount: amount,
+        date: 'Только что',
+        status: 'pending'
+    });
+
+    if (typeof renderTransactions === 'function') renderTransactions();
+
+    const methodName = typeof selectedMethod !== 'undefined' ? selectedMethod : '';
+    showMessage(`Заявка на вывод ${amount.toFixed(2)} $ ${methodName ? 'через ' + methodName + ' ' : ''}принята`);
+    
+    if (typeof unlockEconomy === 'function') unlockEconomy();
 }
 
 function claimBonus() {
     showMessage("Ежедневный бонус временно недоступен");
 }
-
+    
 /* =========================
    ЗАГОТОВЛЕННОЕ СООБЩЕНИЕ (savePreparedInlineMessage)
 ========================= */
