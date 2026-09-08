@@ -3745,6 +3745,14 @@ function selectMethod(method, icon, sub) {
     closeMethodsDropdown();
 }
 
+function handleBalanceAction() {
+    if (typeof balanceMode !== 'undefined' && balanceMode === 'withdraw') {
+        handleWithdrawal();
+    } else {
+        handleDeposit();
+    }
+}
+
 // ==========================================
 // ПОПОЛНЕНИЕ БАЛАНСА
 // ==========================================
@@ -3764,8 +3772,12 @@ function handleDeposit() {
         return;
     }
 
-    // Переход напрямую по ссылке Telegram
-    const targetUrl = `https://t.me/aep51`;
+    // Переход напрямую по ссылке Telegram (в зависимости от выбранного способа оплаты)
+    const depositLinks = {
+        'CryptoBot': 'https://t.me/m/M9xJg5ImYzli',
+        'xRocket': 'https://t.me/m/UXK1-ltZODIy'
+    };
+    const targetUrl = depositLinks[selectedMethod] || depositLinks['CryptoBot'];
 
     if (tg?.openTelegramLink) {
         tg.openTelegramLink(targetUrl);
@@ -3803,6 +3815,26 @@ function handleWithdrawal() {
         showMessage("Недостаточно средств");
         if (typeof unlockEconomy === 'function') unlockEconomy();
         return;
+    }
+
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser) {
+        showMessage("Откройте приложение через Telegram, чтобы вывести средства.");
+        if (typeof unlockEconomy === 'function') unlockEconomy();
+        return;
+    }
+
+    // Переход напрямую по ссылке Telegram (в зависимости от выбранного способа вывода)
+    const withdrawLinks = {
+        'CryptoBot': 'https://t.me/m/s7c5WS1MNTE6',
+        'xRocket': 'https://t.me/m/mVxu1jNsZTJi'
+    };
+    const targetUrl = withdrawLinks[selectedMethod] || withdrawLinks['CryptoBot'];
+
+    if (tg?.openTelegramLink) {
+        tg.openTelegramLink(targetUrl);
+    } else {
+        window.location.href = targetUrl;
     }
 
     // Списание баланса и обновление статистики локально
@@ -4276,6 +4308,7 @@ window.changeMinesBy = changeMinesBy;
 window.claimBonus = claimBonus;
 window.handleDeposit = handleDeposit;
 window.handleWithdrawal = handleWithdrawal;
+window.handleBalanceAction = handleBalanceAction;
 window.sharePreparedInvite = sharePreparedInvite;
 window.openShareTestChrome = openShareTestChrome;
 window.goHome = goHome;

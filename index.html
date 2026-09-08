@@ -616,11 +616,11 @@
                         <span class="arrow" id="methodArrow">▼</span>
                     </div>
                     <div class="select-items" id="methodsDropdown">
-                        <div onclick="selectMethod('CryptoBot', 'images/cryptobot.png', 'Криптовалюта')">
+                        <div onclick="event.stopPropagation(); selectMethod('CryptoBot', 'images/cryptobot.png', 'Криптовалюта')">
                             <img src="images/cryptobot.png" alt="CryptoBot" style="width: 24px; height: 24px; object-fit: contain;"> 
                             <div><strong>CryptoBot</strong><small>Криптовалюта</small></div>
                         </div>
-                        <div onclick="selectMethod('xRocket', 'images/xrocket.png', 'Криптовалюта')">
+                        <div onclick="event.stopPropagation(); selectMethod('xRocket', 'images/xrocket.png', 'Криптовалюта')">
                             <img src="images/xrocket.png" alt="xRocket" style="width: 24px; height: 24px; object-fit: contain;"> 
                             <div><strong>xRocket</strong><small>Криптовалюта</small></div>
                         </div>
@@ -636,7 +636,7 @@
                 </div>
             </div>
 
-            <button class="main-action-btn" onclick="handleDeposit()">Пополнить</button>
+            <button class="main-action-btn" id="balanceAction" onclick="handleBalanceAction()">Пополнить</button>
         </section>
 
         <section class="history-box">
