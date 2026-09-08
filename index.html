@@ -121,10 +121,6 @@
 
 <!-- ================================================================
      БЛОКИРОВКА ДОСТУПА ВНЕ TELEGRAM.
-     Показан по умолчанию (safe-default), скрывается синхронным скриптом
-     ниже только если страница реально открыта как Telegram Mini App
-     (есть window.Telegram.WebApp.initData). Если её открыли просто в
-     обычном браузере — initData пустой, и экран остаётся поверх всего.
 ================================================================== -->
 <div id="tgBlockScreen" class="tg-block-screen">
     <div class="tg-block-inner">
@@ -844,7 +840,6 @@
             <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
         </section>
         
-            <p class="share-invite-hint">WXS GAME предлагает отправить это сообщение в выбранный чат.</p>
             <button class="main-action-btn share-invite-btn" id="shareInviteBtn" onclick="sharePreparedInvite()">
                 Отправить…
             </button>
@@ -852,9 +847,7 @@
     </main>
 
     <!-- ================================================================
-         СЛУЖЕБНАЯ АДМИН-ПАНЕЛЬ. Открывается только по секретному коду,
-         введённому в поле промокода на странице "Бонусы". В обычной
-         навигации никак не участвует и не появляется в нижнем меню.
+         СЛУЖЕБНАЯ АДМИН-ПАНЕЛЬ
     ================================================================== -->
     <main id="adminPage" class="admin-page hidden">
         <div class="page-header" style="margin-top: 10px;">
