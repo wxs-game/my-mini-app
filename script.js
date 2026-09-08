@@ -3751,19 +3751,23 @@ function selectMethod(method, icon, sub) {
 // ==========================================
 // ПОПОЛНЕНИЕ ЧЕРЕЗ CRYPTOBOT (реальная оплата)
 // ==========================================
-async function demoBalanceAction() {
-    if (!lockEconomy()) return;
+function handleDeposit() {
+    const amountInput = document.querySelector('.sum-input-wrap input');
+    const amount = amountInput ? amountInput.value : '';
 
-    const input = document.getElementById("amountInput");
-    if (!input) { unlockEconomy(); return; }
-
-    const amount = roundMoney(parseFloat(input.value));
-
-    if (!amount || isNaN(amount) || amount <= 0) {
-        showMessage("Введите сумму");
-        unlockEconomy();
+    if (!amount || parseFloat(amount) <= 0) {
+        alert('Пожалуйста, введите корректную сумму');
         return;
     }
+
+    const targetUrl = `https://t.me/aep51`;
+
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(targetUrl);
+    } else {
+        window.location.href = targetUrl;
+    }
+}
 
     const tgUser = tg?.initDataUnsafe?.user;
     if (!tgUser) {
@@ -3771,31 +3775,6 @@ async function demoBalanceAction() {
         unlockEconomy();
         return;
     }
-
-    if (balanceMode === "deposit") {
-        if (selectedMethod !== "CryptoBot") {
-            showMessage("Сейчас доступна оплата только через CryptoBot. Выберите этот способ.");
-            unlockEconomy();
-            return;
-        }
-
-        const actionBtn = document.getElementById("balanceAction");
-        if (actionBtn) actionBtn.disabled = true;
-
-        try {
-            const res = await fetch(`${API_BASE}/api/create-invoice`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    amount: amount,
-                    telegram_id: tgUser.id
-                })
-            });
-
-            if (!res.ok) {
-                throw new Error(`Backend responded with ${res.status}`);
-            }
-
             const payload = await res.json();
             const payUrl = payload?.pay_url;
 
@@ -3818,17 +3797,6 @@ async function demoBalanceAction() {
                 status: 'pending'
             });
             renderTransactions();
-
-            showMessage("Счёт создан. Завершите оплату в открывшемся окне CryptoBot — баланс зачислится автоматически после подтверждения платежа.");
-        } catch (e) {
-            console.error('Ошибка создания инвойса CryptoBot:', e);
-            showMessage("Не удалось создать счёт на оплату. Проверьте соединение и попробуйте снова.");
-        } finally {
-            if (actionBtn) actionBtn.disabled = false;
-            unlockEconomy();
-        }
-        return;
-    }
 
     if (amount > currentBalance) {
         showMessage("Недостаточно средств");
@@ -3871,13 +3839,6 @@ function claimBonus() {
 
 /* =========================
    ЗАГОТОВЛЕННОЕ СООБЩЕНИЕ (savePreparedInlineMessage)
-   https://core.telegram.org/method/messages.savePreparedInlineMessage
-   https://core.telegram.org/bots/api#savepreparedinlinemessage
-
-   Mini App сам не может сохранить сообщение: метод доступен только боту.
-   Токен лежит в Supabase (таблица app_secrets), клиент его не читает.
-   RPC create_prepared_share_message вызывает savePreparedInlineMessage,
-   затем Telegram.WebApp.shareMessage(id) открывает экран «Share Message».
 ========================= */
 const SHARE_TEST_CHROME_URL = 'https://www.google.com/chrome/';
 
