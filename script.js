@@ -6098,6 +6098,8 @@ window.replayIceArenaHistoryRound = replayIceArenaHistoryRound;
 window.openArenaActionReplay = openArenaActionReplay;
 
 window.applyBetFactor = applyBetFactor;
+window.loadActionsFeed = loadActionsFeed;
+window.renderActionsFeed = renderActionsFeed;
 window.applyBetMax = applyBetMax;
 
 })();
