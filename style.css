@@ -3980,3 +3980,110 @@ body.ice-history-modal-open {
     color: #ffc800;
     flex-shrink: 0;
 }
+
+/* ================================================================
+   КРАШ — список игроков текущего раунда (общий для всех, как в
+   Айс Арене): кто сейчас летит, кто уже забрал (и на сколько x),
+   кто проиграл.
+================================================================ */
+.crash-players-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding: 0 2px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #777777;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.crash-players-count {
+    background: rgba(255,255,255,0.08);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+.crash-players-list {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.crash-players-empty {
+    padding: 14px 10px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555555;
+}
+
+.crash-player-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #090909;
+    border: 1px solid #222222;
+    border-radius: 12px;
+    padding: 7px 10px;
+}
+
+.crash-player-row.crash-player-row-user {
+    border-color: rgba(255,200,0,0.5);
+}
+
+.crash-player-row-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+}
+
+.crash-player-row-name {
+    flex: 1;
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.crash-player-row-bet {
+    font-size: 12px;
+    font-weight: 800;
+    color: #999999;
+    flex-shrink: 0;
+}
+
+.crash-player-status {
+    font-size: 11.5px;
+    font-weight: 900;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.crash-player-status-live {
+    color: #4dd8ff;
+}
+
+.crash-player-status-win {
+    color: #2ecc71;
+}
+
+.crash-player-status-lost {
+    color: #e74c3c;
+}

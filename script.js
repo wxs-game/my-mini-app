@@ -132,7 +132,11 @@ function calculateCrashPoint(seed, salt) {
     return Math.min(crash, 1000.00);
 }
 
-// Переменные состояния раунда
+// Переменные состояния раунда — теперь это просто зеркало того, что лежит
+// в общей строке раунда (crashLobby.round), см. applyCrashRound() ниже.
+// Раунд один на ВСЕХ игроков сразу, поэтому ничего не генерируется на
+// каждом клиенте отдельно — только тем клиентом, который реально создаёт
+// новую строку в public.crash_rounds (см. generateCrashRoundSecrets()).
 let currentCrashState = {
     salt: '',
     hash: '',
@@ -140,32 +144,18 @@ let currentCrashState = {
     isFinished: false
 };
 
-// Вызывать ПЕРЕД началом раунда (возвращает коэффициент для анимации).
-async function prepareNextCrashRound() {
+// Генерирует hash/salt/crashPoint для НОВОГО раунда — вызывается только
+// тем клиентом, который в этот момент реально создаёт строку раунда в
+// Supabase (см. getOrCreateCrashRound() / maybeAdvanceCrash()).
+async function generateCrashRoundSecrets() {
     const salt = generateRandomSeed(32);
     const hash = await generateSHA256(salt);
     const crashPoint = calculateCrashPoint(hash, salt);
-
-    currentCrashState = {
-        salt: salt,
-        hash: hash,
-        crashPoint: crashPoint,
-        isFinished: false
-    };
-
-    const hashInput = document.getElementById('crashRoundHashInput');
-    if (hashInput) hashInput.value = hash;
-
-    // Новый раунд — новый секрет. Ключ прошлого (уже завершённого) раунда
-    // обязательно прячем здесь же, иначе он остаётся видимым в поле все
-    // время ожидания и полёта СЛЕДУЮЩЕГО раунда, создавая впечатление,
-    // будто текущий раунд уже "раскрыт" до его завершения.
-    hideCrashRoundKey();
-
-    return crashPoint;
+    return { salt, hash, crashPoint };
 }
 
-// Вызывать ПОСЛЕ завершения раунда (когда произошел краш)
+// Вызывать ПОСЛЕ завершения раунда (когда произошел краш) — просто
+// показывает уже известный (из строки раунда) секретный ключ в поле.
 function revealCrashRoundKey() {
     currentCrashState.isFinished = true;
 
@@ -1470,12 +1460,73 @@ function endMinesGame(isWin) {
 const CRASH_WAIT_MS = 5000;
 
 // Хранение ленты прошлых коэффициентов — переживает перезаход в приложение.
-const CRASH_HISTORY_STORAGE_KEY = 'wxsCrashHistory';
-const CRASH_HISTORY_TS_STORAGE_KEY = 'wxsCrashHistoryTs';
-const CRASH_HISTORY_MAX = 25; // сколько прошедших раундов видно в ленте
-// Средняя длительность одного раунда (пауза + полёт) — используется только
-// чтобы прикинуть, сколько раундов "прошло в фоне", пока приложение было закрыто.
-const CRASH_AVG_ROUND_MS = 12000;
+/* ================================================================
+   КРАШ — общий глобальный раунд (как Айс Арена)
+   Раунд один на ВСЕХ игроков: момент старта полёта, коэффициент
+   краша и таймер ожидания хранятся в Supabase, поэтому у всех
+   открытых приложений одновременно летит ОДНА И ТА ЖЕ ракета с
+   одинаковым исходом. Ниже поля ставки виден список игроков этого
+   раунда — кто сейчас летит, кто уже забрал (и на сколько x), а кто
+   проиграл — обновляется вживую через Supabase Realtime.
+
+   Один раз выполнить в Supabase → SQL Editor:
+
+   create table if not exists public.crash_rounds (
+       id uuid primary key default gen_random_uuid(),
+       game_number bigint generated always as identity,
+       status text not null default 'waiting',   -- waiting | flying | crashed
+       hash text not null,
+       salt text not null,
+       crash_point numeric not null,
+       waiting_ends_at timestamptz,
+       starts_at timestamptz,
+       crashed_at timestamptz,
+       created_at timestamptz not null default now()
+   );
+   create table if not exists public.crash_bets (
+       id bigint generated always as identity primary key,
+       round_id uuid not null references public.crash_rounds(id) on delete cascade,
+       telegram_id bigint not null,
+       name text not null,
+       avatar text,
+       amount numeric not null,
+       status text not null default 'active',     -- active | cashed_out | lost
+       cashout_mult numeric,
+       win_amount numeric,
+       created_at timestamptz not null default now(),
+       unique (round_id, telegram_id)
+   );
+
+   create unique index if not exists crash_one_active_round
+       on public.crash_rounds ((true))
+       where status in ('waiting', 'flying');
+
+   alter table public.crash_rounds enable row level security;
+   alter table public.crash_bets enable row level security;
+   create policy "crash_rounds_select" on public.crash_rounds for select using (true);
+   create policy "crash_rounds_insert" on public.crash_rounds for insert with check (true);
+   create policy "crash_rounds_update" on public.crash_rounds for update using (true) with check (true);
+   create policy "crash_bets_select" on public.crash_bets for select using (true);
+   create policy "crash_bets_insert" on public.crash_bets for insert with check (true);
+   create policy "crash_bets_update" on public.crash_bets for update using (true) with check (true);
+   alter publication supabase_realtime add table public.crash_rounds;
+   alter publication supabase_realtime add table public.crash_bets;
+
+   ВАЖНО про честность: salt и crash_point лежат в строке раунда с
+   момента её создания, а select-политика открыта всем (как и у Айс
+   Арены) — значит, теоретически их можно прочитать напрямую через
+   Supabase API до краша. Это тот же уровень доверия, что и у
+   остальных игр в этом файле (честность подтверждается постфактум
+   через SHA-256, а не прячется настоящим сервером). Если нужна
+   крипто-надёжная защита коэффициента до краша — понадобится
+   Postgres RPC / Edge Function, которая отдаёт crash_point только
+   после того, как раунд реально закрашился.
+================================================================ */
+
+const CRASH_ROUNDS_TABLE = 'crash_rounds';
+const CRASH_BETS_TABLE = 'crash_bets';
+const CRASH_HISTORY_MAX = 25;       // сколько прошедших раундов видно в ленте
+const CRASH_RESULT_HOLD_MS = 3000;  // пауза с картинкой взрыва перед новым раундом
 
 // Скорость роста коэффициента: x2 за 10 секунд полёта (исходный рост)
 const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
@@ -1484,19 +1535,35 @@ const CRASH_SLOW_START_MS = 6000;
 const CRASH_SLOW_START_TARGET = 1.5;
 
 let crashGame = {
-    phase: 'waiting',   // 'waiting' — приём ставок / пауза, 'flying' — полёт
+    phase: 'waiting',   // 'waiting' — приём ставок, 'flying' — полёт, 'crashed' — пауза с итогом
     crashPoint: 0,
     currentMult: 1.00,
     bet: 0,
     betPlaced: false,
     cashedOut: false,
-    startTime: 0,
+    liveBetId: null,     // id строки в live_bets (общая лента всех игр)
+    liveBetResolved: false,
+    myBetRowId: null,    // id своей строки в crash_bets (для апдейта при кэшауте)
+    startTime: 0,        // Date.now() момента старта полёта (общий для всех — из БД)
     phaseEndsAt: 0,
     isProcessing: false
 };
 
+// Общее состояние синхронизированного лобби краша — аналог iceArena.
+let crashLobby = {
+    round: null,
+    bets: [],           // мапленные ставки текущего раунда (для списка игроков)
+    channel: null,
+    pollInterval: null,
+    clockInterval: null,
+    reloadTimer: null,
+    advancing: false,
+    animatingRoundId: null,     // id раунда, чей "взрыв" уже отыгран локально
+    flyingStartedRoundId: null, // id раунда, чей "старт полёта" уже отыгран локально
+    sqlWarned: false
+};
+
 let crashAnimHandle = null;
-let crashTimerHandle = null;
 let crashLoopStarted = false;
 let crashHistory = [];      // последние коэффициенты, самый новый — первый
 let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
@@ -1540,7 +1607,9 @@ function getCrashDom() {
             trailLine: document.getElementById('crashTrailLine'),
             trailDot: document.getElementById('crashTrailDot'),
             topLeftMult: document.getElementById('crashMultTopLeft'),
-            historyList: document.getElementById('crashHistoryList')
+            historyList: document.getElementById('crashHistoryList'),
+            playersList: document.getElementById('crashPlayersList'),
+            playersCount: document.getElementById('crashPlayersCount')
         };
     }
     return crashDomCache;
@@ -1662,6 +1731,7 @@ window.addEventListener('orientationchange', syncCrashStageDims);
 function initCrashPage() {
     renderCrashHistory();
     renderCrashUI();
+    renderCrashPlayersList();
     initCrashRocketAnim();
     initCrashExplosionAnim();
     syncCrashStageDims();
@@ -1670,113 +1740,370 @@ function initCrashPage() {
     requestAnimationFrame(syncCrashStageDims);
 }
 
-function startCrashEngine() {
+// Чистая математика роста коэффициента от прошедшего времени — вынесена
+// отдельно, чтобы использовать и в tickCrash() (анимация), и в
+// maybeAdvanceCrash() (проверка "долетели ли уже до точки краша", без
+// привязки к текущему кадру requestAnimationFrame).
+function computeCrashMultAt(elapsedMs, crashPointCap) {
+    const elapsed = Math.max(0, elapsedMs);
+    let rawMult;
+    if (elapsed < CRASH_SLOW_START_MS) {
+        const p = elapsed / CRASH_SLOW_START_MS;
+        const eased = Math.pow(p, 3);
+        rawMult = 1 + (CRASH_SLOW_START_TARGET - 1) * eased;
+    } else {
+        const elapsedAfter = elapsed - CRASH_SLOW_START_MS;
+        rawMult = CRASH_SLOW_START_TARGET * Math.exp(CRASH_GROWTH_PER_MS * elapsedAfter);
+    }
+    const floored = Math.floor(rawMult * 100) / 100;
+    return crashPointCap != null ? Math.min(crashPointCap, floored) : floored;
+}
+
+/* =========================
+   СИНХРОНИЗАЦИЯ ОБЩЕГО РАУНДА (Supabase)
+========================= */
+
+// Запускается один раз при старте приложения (см. DOMContentLoaded ниже) —
+// раунды крутятся всё время, пока хотя бы у одного игрока открыто
+// приложение, независимо от того, на какой странице он сейчас находится
+// (ровно как уже сделано для Айс Арены).
+async function startCrashEngine() {
     if (crashLoopStarted) return;
     crashLoopStarted = true;
-    loadOrSeedCrashHistory();
+
+    await loadCrashHistoryFromServer();
     renderCrashHistory();
-    beginWaitingPhase();
+
+    await refreshCrashState();
+    startCrashClock();
+
+    if (!crashLobby.pollInterval) {
+        crashLobby.pollInterval = setInterval(refreshCrashState, 1000);
+    }
+    if (crashLobby.channel) return;
+    try {
+        crashLobby.channel = supabase
+            .channel('crash_global')
+            .on('postgres_changes', { event: '*', schema: 'public', table: CRASH_ROUNDS_TABLE }, () => scheduleCrashReload())
+            .on('postgres_changes', { event: '*', schema: 'public', table: CRASH_BETS_TABLE }, () => scheduleCrashReload())
+            .subscribe();
+    } catch (e) {
+        console.error('Crash realtime:', e);
+    }
 }
 
-function beginWaitingPhase() {
-    crashGame.phase = 'waiting';
-    crashGame.currentMult = 1.00;
-    crashGame.betPlaced = false;
-    crashGame.cashedOut = false;
-    crashGame.bet = 0;
-    crashGame.phaseEndsAt = Date.now() + CRASH_WAIT_MS;
+function scheduleCrashReload() {
+    if (crashLobby.reloadTimer) clearTimeout(crashLobby.reloadTimer);
+    crashLobby.reloadTimer = setTimeout(() => {
+        crashLobby.reloadTimer = null;
+        refreshCrashState();
+    }, 80);
+}
 
-    // Публикуем хеш нового раунда сразу в начале 5-сек ожидания (commit
-    // честной игры до того, как раунд полетит). Коэффициент краша уже
-    // зашит в currentCrashState.crashPoint и будет использован в
-    // beginFlyingPhase() — так итог раунда реально соответствует хешу.
-    prepareNextCrashRound();
+// Локальный "тик" каждые 250 мс — обновляет обратный отсчёт на экране
+// ожидания и подталкивает переходы фаз (waiting→flying, crashed→waiting)
+// без ожидания следующего опроса сервера, ровно как updateIceArenaClock().
+function startCrashClock() {
+    if (crashLobby.clockInterval) return;
+    crashLobby.clockInterval = setInterval(() => {
+        const round = crashLobby.round;
+        if (crashGame.phase === 'waiting') renderCrashUI();
+        if (!round || crashLobby.advancing) return;
+
+        if (round.status === 'waiting' && round.waiting_ends_at &&
+            Date.now() >= new Date(round.waiting_ends_at).getTime()) {
+            maybeAdvanceCrash(round);
+        } else if (round.status === 'crashed' && round.crashed_at &&
+            Date.now() - new Date(round.crashed_at).getTime() >= CRASH_RESULT_HOLD_MS) {
+            maybeAdvanceCrash(round);
+        }
+    }, 250);
+}
+
+function myCrashTelegramId() {
+    return tg?.initDataUnsafe?.user?.id ?? null;
+}
+
+function mapCrashBetsToPlayers(bets) {
+    const myId = myCrashTelegramId();
+    return (bets || []).map(b => ({
+        id: b.id,
+        telegramId: Number(b.telegram_id),
+        name: b.name,
+        avatar: b.avatar,
+        amount: Number(b.amount),
+        status: b.status || 'active',   // active | cashed_out | lost
+        cashoutMult: b.cashout_mult != null ? Number(b.cashout_mult) : null,
+        winAmount: b.win_amount != null ? Number(b.win_amount) : null,
+        isUser: myId != null && Number(b.telegram_id) === Number(myId)
+    }));
+}
+
+async function refreshCrashState() {
+    try {
+        const { data: rounds, error } = await supabase
+            .from(CRASH_ROUNDS_TABLE)
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (error) {
+            console.error('Crash rounds:', error);
+            if (String(error.message || '').includes('does not exist') || error.code === '42P01' || error.code === 'PGRST205') {
+                if (!crashLobby.sqlWarned) {
+                    crashLobby.sqlWarned = true;
+                    showMessage('Краш: выполните SQL из комментария в script.js в Supabase (таблицы раунда ещё не созданы).');
+                }
+            }
+            return;
+        }
+
+        let round = rounds && rounds[0];
+        if (!round) {
+            round = await getOrCreateCrashRound();
+            if (!round) return;
+        }
+
+        const { data: bets, error: betsErr } = await supabase
+            .from(CRASH_BETS_TABLE)
+            .select('*')
+            .eq('round_id', round.id)
+            .order('created_at', { ascending: true });
+
+        if (betsErr) {
+            console.error('Crash bets:', betsErr);
+            return;
+        }
+
+        applyCrashRound(round, bets || []);
+        await maybeAdvanceCrash(round);
+    } catch (e) {
+        console.error('Crash state:', e);
+    }
+}
+
+async function getOrCreateCrashRound() {
+    const { data: active } = await supabase
+        .from(CRASH_ROUNDS_TABLE)
+        .select('*')
+        .in('status', ['waiting', 'flying'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    if (active && active[0]) return active[0];
+
+    const secrets = await generateCrashRoundSecrets();
+    const { data: created, error } = await supabase
+        .from(CRASH_ROUNDS_TABLE)
+        .insert({
+            status: 'waiting',
+            hash: secrets.hash,
+            salt: secrets.salt,
+            crash_point: secrets.crashPoint,
+            waiting_ends_at: new Date(Date.now() + CRASH_WAIT_MS).toISOString()
+        })
+        .select()
+        .single();
+
+    if (!error && created) return created;
+
+    const { data: retry } = await supabase
+        .from(CRASH_ROUNDS_TABLE)
+        .select('*')
+        .in('status', ['waiting', 'flying'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    return retry && retry[0] ? retry[0] : null;
+}
+
+// Применяет строку раунда из БД к локальному состоянию экрана — вызывается
+// у КАЖДОГО открытого клиента при каждом опросе/realtime-событии, поэтому
+// у всех в итоге одна и та же картинка.
+function applyCrashRound(round, bets) {
+    const prevId = crashLobby.round?.id;
+    crashLobby.round = round;
+    crashLobby.bets = mapCrashBetsToPlayers(bets);
+
+    // Блок "доказуемой честности" — хеш виден всегда, ключ (salt) только
+    // после краша этого раунда.
+    currentCrashState = {
+        salt: round.status === 'crashed' ? (round.salt || '') : '',
+        hash: round.hash || '',
+        crashPoint: Number(round.crash_point) || 1,
+        isFinished: round.status === 'crashed'
+    };
+    const hashInput = document.getElementById('crashRoundHashInput');
+    if (hashInput) hashInput.value = currentCrashState.hash;
+    const keyInput = document.getElementById('crashRoundKeyInput');
+    if (keyInput) keyInput.value = currentCrashState.salt;
+
+    if (prevId && prevId !== round.id) {
+        // Начался НОВЫЙ раунд — сбрасываем локальный след своей ставки.
+        crashGame.bet = 0;
+        crashGame.betPlaced = false;
+        crashGame.cashedOut = false;
+        crashGame.liveBetId = null;
+        crashGame.liveBetResolved = false;
+        crashGame.myBetRowId = null;
+    }
+
+    // Подхватываем свою уже сделанную в этом раунде ставку — например,
+    // если игрок перезашёл в приложение посреди ожидания/полёта.
+    const mine = crashLobby.bets.find(b => b.isUser);
+    if (mine) {
+        crashGame.bet = mine.amount;
+        crashGame.betPlaced = true;
+        crashGame.cashedOut = mine.status !== 'active';
+        crashGame.myBetRowId = mine.id;
+    }
+
+    if (round.status === 'waiting') {
+        crashGame.phase = 'waiting';
+        crashGame.crashPoint = Number(round.crash_point) || 1;
+        crashGame.phaseEndsAt = round.waiting_ends_at
+            ? new Date(round.waiting_ends_at).getTime()
+            : Date.now() + CRASH_WAIT_MS;
+    } else if (round.status === 'flying') {
+        crashGame.phase = 'flying';
+        crashGame.crashPoint = Number(round.crash_point) || 1;
+        crashGame.startTime = round.starts_at ? new Date(round.starts_at).getTime() : Date.now();
+        if (crashLobby.flyingStartedRoundId !== round.id) {
+            crashLobby.flyingStartedRoundId = round.id;
+            beginFlyingPhaseVisual();
+        }
+    } else if (round.status === 'crashed') {
+        crashGame.phase = 'crashed';
+        crashGame.crashPoint = Number(round.crash_point) || 1;
+        if (crashLobby.animatingRoundId !== round.id) {
+            crashLobby.animatingRoundId = round.id;
+            endCrashRoundVisual(round);
+        }
+    }
 
     renderCrashUI();
+    renderCrashPlayersList();
+}
 
-    clearInterval(crashTimerHandle);
-    crashTimerHandle = setInterval(() => {
-        const msLeft = crashGame.phaseEndsAt - Date.now();
-        if (msLeft <= 0) {
-            clearInterval(crashTimerHandle);
-            beginFlyingPhase();
-        } else {
-            renderCrashUI();
+// Пытается сдвинуть раунд на следующую фазу. Вызывается у КАЖДОГО открытого
+// клиента (по таймеру и после каждого опроса) — переход реально применится
+// только у того, кто первым успеет с условным UPDATE (условие "eq status"
+// защищает от гонки, как и в Айс Арене).
+async function maybeAdvanceCrash(round) {
+    if (!round || crashLobby.advancing) return;
+
+    if (round.status === 'waiting') {
+        if (!round.waiting_ends_at) return;
+        if (Date.now() < new Date(round.waiting_ends_at).getTime()) return;
+
+        crashLobby.advancing = true;
+        try {
+            await supabase.from(CRASH_ROUNDS_TABLE)
+                .update({ status: 'flying', starts_at: new Date().toISOString() })
+                .eq('id', round.id)
+                .eq('status', 'waiting');
+        } catch (e) {
+            console.error('Crash advance (waiting→flying):', e);
+        } finally {
+            crashLobby.advancing = false;
         }
-    }, 100);
-}
-
-function generateCrashPoint() {
-    const houseEdge = 0.05;
-    const r = Math.random();
-    if (r < houseEdge) return 1.00;
-    const point = (1 - houseEdge) / (1 - r);
-    return Math.max(1.00, Math.floor(point * 100) / 100);
-}
-
-// Сохраняет текущую ленту коэффициентов и момент сохранения — чтобы при
-// следующем заходе можно было понять, сколько раундов "прошло без нас".
-function saveCrashHistory() {
-    try {
-        localStorage.setItem(CRASH_HISTORY_STORAGE_KEY, JSON.stringify(crashHistory));
-        localStorage.setItem(CRASH_HISTORY_TS_STORAGE_KEY, String(Date.now()));
-    } catch (e) {
-        // localStorage недоступен (приватный режим и т.п.) — просто не сохраняем
-    }
-}
-
-// При первом заходе — сразу генерирует полную ленту "прошедших" раундов, чтобы
-// не было пусто. При повторном заходе — подгружает сохранённую ленту и
-// досимулирует раунды, которые должны были пройти за время отсутствия
-// (имитация того, что игра "крутится" 24/7, даже когда никто не играет).
-function loadOrSeedCrashHistory() {
-    let stored = [];
-    let storedTs = null;
-
-    try {
-        const raw = localStorage.getItem(CRASH_HISTORY_STORAGE_KEY);
-        if (raw) stored = JSON.parse(raw) || [];
-        const rawTs = localStorage.getItem(CRASH_HISTORY_TS_STORAGE_KEY);
-        if (rawTs) storedTs = parseInt(rawTs, 10);
-    } catch (e) {
-        stored = [];
-        storedTs = null;
+        scheduleCrashReload();
+        return;
     }
 
-    if (!Array.isArray(stored) || stored.length === 0) {
-        // Ничего не сохранено — первый визит. Генерируем стартовую ленту,
-        // будто раунды уже шли до нас.
-        crashHistory = Array.from({ length: CRASH_HISTORY_MAX }, () => generateCrashPoint());
-    } else {
-        crashHistory = stored.slice(0, CRASH_HISTORY_MAX);
+    if (round.status === 'flying') {
+        const startMs = round.starts_at ? new Date(round.starts_at).getTime() : Date.now();
+        const localMult = computeCrashMultAt(Date.now() - startMs, null);
+        if (localMult < Number(round.crash_point)) return; // ещё не долетели
 
-        if (storedTs && !isNaN(storedTs)) {
-            const elapsedMs = Date.now() - storedTs;
-            const backfillCount = Math.min(
-                CRASH_HISTORY_MAX,
-                Math.max(0, Math.floor(elapsedMs / CRASH_AVG_ROUND_MS))
-            );
-            for (let i = 0; i < backfillCount; i++) {
-                crashHistory.unshift(generateCrashPoint());
+        crashLobby.advancing = true;
+        try {
+            const { data, error } = await supabase.from(CRASH_ROUNDS_TABLE)
+                .update({ status: 'crashed', crashed_at: new Date().toISOString() })
+                .eq('id', round.id)
+                .eq('status', 'flying')
+                .select();
+
+            // Раунд закрашили именно мы — заодно помечаем всех, кто не успел
+            // забрать выигрыш, как проигравших (для списка игроков у ВСЕХ,
+            // даже если их приложение к этому моменту уже закрыто).
+            if (!error && data && data.length) {
+                await supabase.from(CRASH_BETS_TABLE)
+                    .update({ status: 'lost', win_amount: 0 })
+                    .eq('round_id', round.id)
+                    .eq('status', 'active');
             }
-            if (crashHistory.length > CRASH_HISTORY_MAX) {
-                crashHistory.length = CRASH_HISTORY_MAX;
-            }
+        } catch (e) {
+            console.error('Crash advance (flying→crashed):', e);
+        } finally {
+            crashLobby.advancing = false;
         }
+        scheduleCrashReload();
+        return;
     }
 
-    saveCrashHistory();
+    if (round.status === 'crashed') {
+        const crashedAt = round.crashed_at ? new Date(round.crashed_at).getTime() : 0;
+        if (!crashedAt || Date.now() - crashedAt < CRASH_RESULT_HOLD_MS) return;
+
+        crashLobby.advancing = true;
+        try {
+            const secrets = await generateCrashRoundSecrets();
+            const { error } = await supabase.from(CRASH_ROUNDS_TABLE).insert({
+                status: 'waiting',
+                hash: secrets.hash,
+                salt: secrets.salt,
+                crash_point: secrets.crashPoint,
+                waiting_ends_at: new Date(Date.now() + CRASH_WAIT_MS).toISOString()
+            });
+            // 23505 — гонка: кто-то другой уже успел создать новый раунд,
+            // это нормально и не является ошибкой.
+            if (error && error.code !== '23505') console.error('Crash next round:', error);
+        } catch (e) {
+            console.error('Crash advance (crashed→waiting):', e);
+        } finally {
+            crashLobby.advancing = false;
+        }
+        scheduleCrashReload();
+    }
 }
 
-function beginFlyingPhase() {
-    crashGame.phase = 'flying';
-    // Коэффициент краша берём из уже опубликованного в начале ожидания
-    // хеша (currentCrashState), а не генерируем заново — иначе показанный
-    // игроку хеш никак не будет связан с реальным результатом раунда.
-    crashGame.crashPoint = currentCrashState.crashPoint;
+/* =========================
+   ИСТОРИЯ ПРОШЕДШИХ РАУНДОВ (общая, из Supabase)
+========================= */
+
+async function loadCrashHistoryFromServer() {
+    try {
+        const { data, error } = await supabase
+            .from(CRASH_ROUNDS_TABLE)
+            .select('crash_point, created_at')
+            .eq('status', 'crashed')
+            .order('created_at', { ascending: false })
+            .limit(CRASH_HISTORY_MAX);
+
+        if (error) {
+            console.error('Crash history:', error);
+            return;
+        }
+        crashHistory = (data || []).map(r => Number(r.crash_point));
+    } catch (e) {
+        console.error('Crash history:', e);
+    }
+}
+
+function pushCrashHistoryPoint(point) {
+    crashHistory.unshift(point);
+    if (crashHistory.length > CRASH_HISTORY_MAX) crashHistory.length = CRASH_HISTORY_MAX;
+}
+
+/* =========================
+   ВИЗУАЛЬНЫЕ ФАЗЫ ПОЛЁТА/КРАША
+========================= */
+
+function beginFlyingPhaseVisual() {
     crashGame.currentMult = 1.00;
-    crashGame.startTime = performance.now();
     crashLastHeavyUpdate = 0;
+    crashGame.liveBetResolved = false;
 
     syncCrashStageDims();
 
@@ -1799,14 +2126,13 @@ function beginFlyingPhase() {
         dom.topLeftMult.style.display = 'block';
     }
 
-    // Разовые переключения состояния экрана на весь полёт — раньше
-    // выполнялись заново в каждом кадре renderCrashUI без необходимости.
     if (dom.countdownEl) dom.countdownEl.style.display = 'none';
     if (dom.centerInfoEl) dom.centerInfoEl.style.opacity = '0';
     if (dom.rocketEl) dom.rocketEl.style.opacity = '1';
     if (dom.betInput) dom.betInput.disabled = true;
 
     renderCrashUI();
+    cancelAnimationFrame(crashAnimHandle);
     tickCrash();
 }
 
@@ -1830,25 +2156,17 @@ function explosionShake(el, duration = 500, magnitude = 20) {
 }
 
 function tickCrash() {
-    const now = performance.now();
-    const elapsed = now - crashGame.startTime;
-
-    let rawMult;
-    if (elapsed < CRASH_SLOW_START_MS) {
-        const p = elapsed / CRASH_SLOW_START_MS;
-        const eased = Math.pow(p, 3);
-        rawMult = 1 + (CRASH_SLOW_START_TARGET - 1) * eased;
-    } else {
-        const elapsedAfter = elapsed - CRASH_SLOW_START_MS;
-        rawMult = CRASH_SLOW_START_TARGET * Math.exp(CRASH_GROWTH_PER_MS * elapsedAfter);
+    const round = crashLobby.round;
+    if (!round || round.status !== 'flying') {
+        cancelAnimationFrame(crashAnimHandle);
+        return;
     }
 
-    crashGame.currentMult = Math.min(
-        crashGame.crashPoint,
-        Math.floor(rawMult * 100) / 100
-    );
+    const elapsed = Date.now() - crashGame.startTime;
+    crashGame.currentMult = computeCrashMultAt(elapsed, crashGame.crashPoint);
 
-    let heavy = true;
+    const now = performance.now();
+    let heavy;
     if (now - crashLastHeavyUpdate >= CRASH_HEAVY_UPDATE_INTERVAL_MS) {
         crashLastHeavyUpdate = now;
         heavy = true;
@@ -1859,38 +2177,39 @@ function tickCrash() {
     renderCrashUI(heavy);
 
     if (crashGame.currentMult >= crashGame.crashPoint) {
-        endCrashRound();
+        // Долетели до точки краша первыми на этом клиенте — пробуем
+        // зафиксировать это в общей БД. Взрыв реально проигрывается для
+        // ВСЕХ только когда applyCrashRound() увидит status: 'crashed'
+        // (через realtime/опрос) — так у всех картинка синхронна.
+        maybeAdvanceCrash(round);
         return;
     }
 
     crashAnimHandle = requestAnimationFrame(tickCrash);
 }
 
-function endCrashRound() {
-    cancelAnimationFrame(crashAnimHandle);
+function endCrashRoundVisual(round) {
+    const dom = getCrashDom();
+    const crashPoint = Number(round.crash_point) || crashGame.crashPoint;
 
-    // Проигрыш (не успел забрать до краша) тоже фиксируем как завершённое
-    // действие — с временем окончания, для вкладки "Действия". При выигрыше
-    // это уже делает resolveLiveBetWin() из cashOutCrash().
-    if (crashGame.betPlaced && !crashGame.cashedOut) {
+    cancelAnimationFrame(crashAnimHandle);
+    crashGame.currentMult = crashPoint;
+
+    // Если ставка была сделана этим игроком и он не успел забрать —
+    // дописываем результат в общую ленту "Действия"/LIVE WINS (только
+    // свою запись — её liveBetId знает только этот клиент).
+    if (crashGame.betPlaced && !crashGame.cashedOut && !crashGame.liveBetResolved && crashGame.liveBetId) {
+        crashGame.liveBetResolved = true;
         resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, 0);
     }
 
-    // Раскрываем секретный ключ (соль) этого раунда — теперь можно
-    // проверить, что SHA256(ключ) равен хешу, показанному ДО раунда.
-    revealCrashRoundKey();
-
-    lastCrashPoint = crashGame.crashPoint;
-    crashHistory.unshift(crashGame.crashPoint);
-    if (crashHistory.length > CRASH_HISTORY_MAX) crashHistory.length = CRASH_HISTORY_MAX;
+    lastCrashPoint = crashPoint;
+    pushCrashHistoryPoint(crashPoint);
     renderCrashHistory();
-    saveCrashHistory();
 
     if (window.tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
-
-    const dom = getCrashDom();
 
     if (crashRocketAnim) crashRocketAnim.pause();
     if (dom.rocketEl) dom.rocketEl.style.opacity = '0';
@@ -1903,7 +2222,7 @@ function endCrashRound() {
         dom.trailDot.classList.add('crash-trail-crashed');
         dom.trailDot.style.opacity = '1';
     }
-    
+
     setTimeout(() => {
         if (dom.trailLine) dom.trailLine.style.opacity = '0';
         if (dom.trailDot) dom.trailDot.style.opacity = '0';
@@ -1936,7 +2255,7 @@ function endCrashRound() {
 
     if (dom.multEl) dom.multEl.style.color = '#e74c3c';
     if (dom.topLeftMult) {
-        dom.topLeftMult.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        dom.topLeftMult.textContent = crashPoint.toFixed(2) + 'x';
         dom.topLeftMult.classList.add('crashed');
         dom.topLeftMult.style.display = 'block';
     }
@@ -1946,11 +2265,15 @@ function endCrashRound() {
     }
 
     explosionShake(dom.stageEl, 500, 20);
-    setTimeout(beginWaitingPhase, 3000);
 }
 
+/* =========================
+   СТАВКА / КЭШАУТ
+========================= */
+
 async function placeCrashBet() {
-    if (crashGame.phase !== 'waiting' || crashGame.betPlaced) return;
+    const round = crashLobby.round;
+    if (!round || round.status !== 'waiting' || crashGame.betPlaced) return;
     if (crashGame.isProcessing) return;
     if (!lockEconomy()) return;
 
@@ -1988,11 +2311,30 @@ async function placeCrashBet() {
 
     crashGame.bet = bet;
     crashGame.betPlaced = true;
-    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш');
     crashGame.cashedOut = false;
+    crashGame.liveBetResolved = false;
+    crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш');
+
+    const myId = myCrashTelegramId();
+    if (myId != null) {
+        const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
+        const myAvatar = getMyIceArenaAvatar();
+        const { data, error } = await supabase.from(CRASH_BETS_TABLE).insert({
+            round_id: round.id,
+            telegram_id: myId,
+            name: myName,
+            avatar: myAvatar,
+            amount: bet,
+            status: 'active'
+        }).select('id').single();
+        if (error) console.error('Crash bet insert:', error);
+        else crashGame.myBetRowId = data?.id ?? null;
+    }
+
     crashGame.isProcessing = false;
     unlockEconomy();
     renderCrashUI();
+    scheduleCrashReload();
 }
 
 async function cashOutCrash() {
@@ -2024,11 +2366,19 @@ async function cashOutCrash() {
     setUIBalance(currentBalance);
 
     crashGame.cashedOut = true;
+    crashGame.liveBetResolved = true;
     crashGame.isProcessing = false;
 
     if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
     resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
+
+    if (crashGame.myBetRowId != null) {
+        supabase.from(CRASH_BETS_TABLE)
+            .update({ status: 'cashed_out', cashout_mult: mult, win_amount: winAmount })
+            .eq('id', crashGame.myBetRowId)
+            .then(({ error }) => { if (error) console.error('Crash bet cashout update:', error); });
+    }
 
     renderCrashUI();
     unlockEconomy();
@@ -2054,6 +2404,10 @@ function setCrashMaxBet() {
     applyBetMax(getCrashDom().betInput);
 }
 
+/* =========================
+   ОТРИСОВКА
+========================= */
+
 function renderCrashHistory() {
     const dom = getCrashDom();
     if (!dom.historyList) return;
@@ -2064,9 +2418,58 @@ function renderCrashHistory() {
     }).join('');
 }
 
+function renderCrashPlayersList() {
+    const dom = getCrashDom();
+    if (!dom.playersList) return;
+
+    if (dom.playersCount) dom.playersCount.textContent = String(crashLobby.bets.length);
+
+    if (!crashLobby.bets.length) {
+        dom.playersList.innerHTML = '<div class="crash-players-empty">Пока никто не поставил в этом раунде</div>';
+        return;
+    }
+
+    // Сортировка: сначала те, кто ещё летит, потом забравшие, потом
+    // проигравшие; внутри группы — по размеру ставки.
+    const rank = { active: 0, cashed_out: 1, lost: 2 };
+    const sorted = [...crashLobby.bets].sort((a, b) => {
+        return (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || b.amount - a.amount;
+    });
+
+    dom.playersList.innerHTML = sorted.map(p => {
+        let statusHtml;
+        if (p.status === 'cashed_out') {
+            const multTxt = p.cashoutMult != null ? p.cashoutMult.toFixed(2) + 'x' : '';
+            statusHtml = `<span class="crash-player-status crash-player-status-win">✅ ${multTxt} +${(p.winAmount ?? 0).toFixed(2)}$</span>`;
+        } else if (p.status === 'lost') {
+            statusHtml = '<span class="crash-player-status crash-player-status-lost">💥 Проиграл</span>';
+        } else {
+            statusHtml = '<span class="crash-player-status crash-player-status-live">🚀 В игре</span>';
+        }
+
+        return (
+            '<div class="crash-player-row' + (p.isUser ? ' crash-player-row-user' : '') + '">' +
+                '<div class="crash-player-row-avatar">' + iceAvatarHtml(p.avatar) + '</div>' +
+                '<div class="crash-player-row-name">' + escapeIceName(p.name) + (p.isUser ? ' (Вы)' : '') + '</div>' +
+                '<div class="crash-player-row-bet">' + p.amount.toFixed(2) + '$</div>' +
+                statusHtml +
+            '</div>'
+        );
+    }).join('');
+}
+
 function renderCrashUI(heavy = true) {
     const dom = getCrashDom();
     if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
+
+    if (crashGame.phase === 'crashed') {
+        dom.statusEl.textContent = `Крах на ${crashGame.crashPoint.toFixed(2)}x · Следующий раунд скоро`;
+        dom.multEl.textContent = crashGame.crashPoint.toFixed(2) + 'x';
+        dom.multEl.style.color = '#e74c3c';
+        dom.actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
+        dom.actionBtn.disabled = true;
+        return;
+    }
 
     if (crashGame.phase === 'waiting') {
         const secLeft = Math.max(0, Math.ceil((crashGame.phaseEndsAt - Date.now()) / 1000));
