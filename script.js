@@ -1993,8 +1993,13 @@ async function maybeAdvanceCrash(round) {
     if (!round || crashLobby.advancing) return;
 
     if (round.status === 'waiting') {
-        if (!round.waiting_ends_at) return;
-        if (Date.now() < new Date(round.waiting_ends_at).getTime()) return;
+        // Если по какой-то причине waiting_ends_at не заполнен (кривая/ручная
+        // запись в БД) — не зависаем в ожидании навсегда, а считаем таймер
+        // от created_at, чтобы раунд всё равно рано или поздно полетел.
+        const waitEndsMs = round.waiting_ends_at
+            ? new Date(round.waiting_ends_at).getTime()
+            : (round.created_at ? new Date(round.created_at).getTime() + CRASH_WAIT_MS : 0);
+        if (!waitEndsMs || Date.now() < waitEndsMs) return;
 
         crashLobby.advancing = true;
         try {
@@ -2043,7 +2048,12 @@ async function maybeAdvanceCrash(round) {
     }
 
     if (round.status === 'crashed') {
-        const crashedAt = round.crashed_at ? new Date(round.crashed_at).getTime() : 0;
+        // Если crashed_at не заполнен (кривая/ручная запись в БД) — не виснем
+        // в паузе после взрыва навсегда, а считаем момент краша от created_at,
+        // чтобы следующий раунд всё равно рано или поздно создался.
+        const crashedAt = round.crashed_at
+            ? new Date(round.crashed_at).getTime()
+            : (round.created_at ? new Date(round.created_at).getTime() : 0);
         if (!crashedAt || Date.now() - crashedAt < CRASH_RESULT_HOLD_MS) return;
 
         crashLobby.advancing = true;
