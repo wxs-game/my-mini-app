@@ -14,6 +14,62 @@ if (!isRealTelegramLaunch) {
 tg.ready();
 tg.expand();
 
+// ==========================================
+// ВИБРАЦИЯ (Telegram HapticFeedback)
+// Весь скрипт обёрнут в функцию, поэтому tg раньше не был виден как
+// window.tg — из-за этого вызовы window.tg?.HapticFeedback в Краше и
+// Айс Арене молча не работали. Теперь tg доступен и там.
+// ==========================================
+window.tg = tg;
+
+(function setupHaptics() {
+    const hf = tg && tg.HapticFeedback;
+
+    // Защита от "двойной" вибрации: если два impact-вызова приходят
+    // почти одновременно (глобальный клик + вибрация самой игры),
+    // второй отбрасывается.
+    if (hf && typeof hf.impactOccurred === 'function' && !hf.__wrapped) {
+        try {
+            const origImpact = hf.impactOccurred.bind(hf);
+            let lastImpactAt = 0;
+            hf.impactOccurred = function (style) {
+                const now = Date.now();
+                if (now - lastImpactAt < 45) return hf;
+                lastImpactAt = now;
+                try { origImpact(style); } catch (e) {}
+                return hf;
+            };
+            hf.__wrapped = true;
+        } catch (e) {}
+    }
+
+    // type: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'select' | 'success' | 'error' | 'warning'
+    window.haptic = function (type) {
+        type = type || 'light';
+        try {
+            if (hf) {
+                if (type === 'success' || type === 'error' || type === 'warning') hf.notificationOccurred(type);
+                else if (type === 'select') hf.selectionChanged();
+                else hf.impactOccurred(type);
+                return;
+            }
+            if (navigator.vibrate) navigator.vibrate(type === 'heavy' ? 30 : 12);
+        } catch (e) {}
+    };
+
+    // Вибрация на КАЖДЫЙ тап по кнопкам, плиткам игр, мин, цветам колеса,
+    // нижнему меню и любым элементам с onclick. Слушатель один, на уровне
+    // документа, поэтому работает и для элементов, которые создаются позже.
+    const CLICKABLE = 'button, a, [onclick], .game, .nav-item, .mines-tile, .mine-tile, .pct-btn, .action, label, select, input[type="checkbox"], input[type="radio"]';
+    document.addEventListener('click', function (e) {
+        const el = e.target && e.target.closest ? e.target.closest(CLICKABLE) : null;
+        if (!el) return;
+        if (el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+        window.haptic('light');
+    }, true);
+})();
+
+
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -577,7 +633,7 @@ async function loadLiveBetsHistory() {
 }
 
 // Вызывается сразу после успешного списания ставки в каждой игре
-// (Мины, Кирка, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
+// (Мины, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
 // через Realtime увидят все игроки (включая нас самих). Возвращает id
 // созданной строки — он нужен, чтобы потом дописать в неё выигрыш.
 async function broadcastLiveBet(amount, gameLabel) {
@@ -606,7 +662,7 @@ async function broadcastLiveBet(amount, gameLabel) {
 }
 
 // Вызывается по завершении КАЖДОЙ ставки (Мины/Краш — на "Забрать" или при
-// проигрыше, Кирка/Колесо — по итогу раунда, каким бы он ни был). Всегда
+// проигрыше, Колесо — по итогу раунда, каким бы он ни был). Всегда
 // дописывает время окончания (resolved_at) и результат — это и есть данные
 // для глобальной вкладки "Действия" (начало ставки → её конец). Бегущая
 // строка LIVE WINS по-прежнему показывает только заметные выигрыши — это
@@ -862,7 +918,7 @@ function roundMoneyDown(value) {
 }
 
 /* =========================
-   ЕДИНАЯ ЛОГИКА ПОЛЯ СТАВКИ (Мины / Краш / Кирка)
+   ЕДИНАЯ ЛОГИКА ПОЛЯ СТАВКИ (Мины / Краш)
    Кнопки ½ / x2 / MAX и защита поля от некорректных чисел
    работают одинаково во всех трёх играх.
 ========================= */
@@ -2638,944 +2694,418 @@ function renderCrashUI(heavy = true) {
 }
 
 /* =========================
-   ИГРА «КИРКА» (Infinite Mining Grid)
+   ИГРА «АПГРЕЙДЕР»
+   Колесо, формула и тайминг анимации — как в версии для Telegram-бота:
+   payout = ставка * (1 - 5%) / (шанс / 100). Фон колеса прозрачный —
+   страница остаётся с фоном приложения.
 ========================= */
 
-const PICKAXE_TYPES = [
-    { id: "wood",    name: "Деревянная", hp: 40,  weight: 50, emoji: "🪵" },
-    { id: "stone",   name: "Каменная",   hp: 70,  weight: 25, emoji: "🪨" },
-    { id: "copper",  name: "Медная",     hp: 100, weight: 13, emoji: "🥉" },
-    { id: "iron",    name: "Железная",   hp: 140, weight: 7,  emoji: "⚔️" },
-    { id: "gold",    name: "Золотая",    hp: 180, weight: 4,  emoji: "👑" },
-    { id: "diamond", name: "Алмазная",   hp: 240, weight: 1,  emoji: "💎" }
-];
+const UPG_HOUSE_EDGE = 0.05;
+const UPG_MIN_CHANCE = 1;
+const UPG_MAX_CHANCE = 90;
+const UPG_STEP = 5;
+const UPG_START = -40;       // где стрелка стоит до запуска
+const UPG_WINDUP = 12;       // замах назад, градусы
+const UPG_T = { pause: 400, windup: 600, spin: 6000, land: 390 };   // мс, как в боте
+const UPG_FONT = '"Carlito","Helvetica Neue",Arial,sans-serif';
+const UPG_ARROW = [[0, 0], [29, 15], [21, 4.6], [56, 4.6], [71, 12], [64, 0], [71, -12], [56, -4.6], [21, -4.6], [29, -15]];
 
-// Типы блоков. baseDur/depthStep — прочность руды: чем глубже, тем больше ударов
-// киркой нужно, чтобы её разрушить (и получить "+"). Трава и камень всегда
-// ломаются с одного удара и никогда не дают награду — только отнимают 1 HP.
-// ВАЖНО: у STONE/GRASS depthStep = Infinity — их прочность НИКОГДА не растёт
-// с глубиной (раньше depthStep был равен 1, из-за чего durability = 1+глубина,
-// и камень на глубине становился практически неразрушимым — кирка "залипала").
-const BLOCK_TYPES = {
-    AIR:     { id: 'air',     class: 'b-air',     multiplier: 0.00, baseDur: 0, depthStep: Infinity },
-    GRASS:   { id: 'grass',   class: 'b-grass',   multiplier: 0.00, baseDur: 1, depthStep: Infinity },
-    STONE:   { id: 'stone',   class: 'b-stone',   multiplier: 0.00, baseDur: 1, depthStep: Infinity },
-    COAL:    { id: 'coal',    class: 'b-coal',    multiplier: 0.02, baseDur: 2, depthStep: 40  },
-    COPPER:  { id: 'copper',  class: 'b-copper',  multiplier: 0.04, baseDur: 3, depthStep: 30  },
-    IRON:    { id: 'iron',    class: 'b-iron',    multiplier: 0.07, baseDur: 4, depthStep: 26  },
-    GOLD:    { id: 'gold',    class: 'b-gold',    multiplier: 0.11, baseDur: 5, depthStep: 22  },
-    LAPIS:   { id: 'lapis',   class: 'b-lapis',   multiplier: 0.15, baseDur: 5, depthStep: 20  },
-    EMERALD: { id: 'emerald', class: 'b-emerald', multiplier: 0.18, baseDur: 5, depthStep: 16  },
-    DIAMOND: { id: 'diamond', class: 'b-diamond', multiplier: 0.30, baseDur: 5, depthStep: 12  }
-};
-const ORE_IDS = ['coal', 'copper', 'iron', 'gold', 'lapis', 'emerald', 'diamond'];
+const upg = { chance: 50, busy: false, result: null, fade: 1, theta: UPG_START, glow: 0, scenes: {}, cv: null, ctx: null, size: 0, raf: 0 };
 
-/* =========================
-   КАРТИНКИ БЛОКОВ И КИРОК ИЗ ВНЕШНИХ ФАЙЛОВ (например, с GitHub)
-   ---------------------------------------------------------------
-   Никакой загрузки внутри приложения — картинки просто лежат у вас в
-   репозитории (или на любом хостинге) и подключаются по прямой ссылке.
-   Имя файла ДОЛЖНО совпадать с id блока/кирки — так игра понимает,
-   какая картинка к какому предмету относится.
-
-   Как подключить:
-   1. Залейте на GitHub PNG-файлы со следующими именами (имена блоков и
-      кирок специально сделаны разными — например, ore_stone.png и
-      pickaxe_stone.png, — чтобы они никогда не путались и не перезаписывали
-      друг друга, даже если вы храните всё в одной папке):
-
-        images/blocks/ore_grass.png     — трава
-        images/blocks/ore_stone.png     — камень
-        images/blocks/ore_coal.png      — уголь
-        images/blocks/ore_copper.png    — медь
-        images/blocks/ore_iron.png      — железо
-        images/blocks/ore_gold.png      — золото
-        images/blocks/ore_lapis.png     — лазурит
-        images/blocks/ore_emerald.png   — изумруд
-        images/blocks/ore_diamond.png   — алмаз
-
-        images/pickaxes/pickaxe_wood.png    — деревянная кирка
-        images/pickaxes/pickaxe_stone.png   — каменная кирка
-        images/pickaxes/pickaxe_copper.png  — медная кирка
-        images/pickaxes/pickaxe_iron.png    — железная кирка
-        images/pickaxes/pickaxe_gold.png    — золотая кирка
-        images/pickaxes/pickaxe_diamond.png — алмазная кирка
-
-   2. Ниже, в IMAGES_BASE_URL, укажите путь к папке images:
-        - если index.html и папка images лежат в одном репозитории и сайт
-          открывается прямо оттуда (например, GitHub Pages) — оставьте 'images'
-        - если хотите тянуть картинки напрямую из репозитория на GitHub без
-          GitHub Pages — впишите сюда прямую ссылку через raw.githubusercontent.com,
-          например:
-          'https://raw.githubusercontent.com/ИМЯ_ПОЛЬЗОВАТЕЛЯ/НАЗВАНИЕ_РЕПО/main/images'
-
-   Если для какого-то блока/кирки файл не найден (404) — игра автоматически
-   вернётся к стандартной нарисованной текстуре/эмодзи для этого предмета,
-   ничего не сломается.
-========================= */
-const IMAGES_BASE_URL = 'images';
-
-// Список id, для которых поддерживается своя картинка (воздух — не нужен)
-const CUSTOMIZABLE_BLOCK_IDS = Object.values(BLOCK_TYPES)
-    .map(t => t.id)
-    .filter(id => id !== 'air');
-
-function blockImageUrl(blockId) {
-    return `${IMAGES_BASE_URL}/blocks/ore_${blockId}.png`;
-}
-function pickaxeImageUrl(pickaxeId) {
-    return `${IMAGES_BASE_URL}/pickaxes/pickaxe_${pickaxeId}.png`;
+function upgCalc(bet, chance) {
+    const coef = (1 - UPG_HOUSE_EDGE) * 100 / chance;
+    return { payout: roundMoney(Math.floor(bet * coef * 100 + 1e-6) / 100), coef: roundMoney(coef) };
 }
 
-// Кэш результата загрузки: id -> рабочий url (если картинка нашлась) или null
-// (если файла нет/ошибка) или undefined (ещё не проверяли).
-const blockImageCache = {};
-const pickaxeImageCache = {};
-
-// Стандартные (заводские) названия — используются в подписях в игре
-// (например, во всплывающей надписи выигрыша над разрушенным блоком).
-const BLOCK_DEFAULT_NAMES = {
-    grass: 'Трава', stone: 'Камень', coal: 'Уголь', copper: 'Медь',
-    iron: 'Железо', gold: 'Золото', lapis: 'Лазурит', emerald: 'Изумруд', diamond: 'Алмаз'
-};
-
-function getBlockDisplayName(blockId) {
-    return BLOCK_DEFAULT_NAMES[blockId] || blockId;
-}
-
-function getPickaxeDisplayName(pickaxeObj) {
-    return pickaxeObj.name;
-}
-
-// Проверяет по одному разу на id, существует ли картинка по вычисленному
-// URL — грузит её через объект Image() (без единого запроса на каждый блок
-// в сетке: результат кэшируется, а браузер и сам закэширует сам файл).
-function preloadTypeImages() {
-    CUSTOMIZABLE_BLOCK_IDS.forEach(id => {
-        const url = blockImageUrl(id);
-        const img = new Image();
-        img.onload = () => {
-            blockImageCache[id] = url;
-            refreshAllRenderedBlockImages();
-        };
-        img.onerror = () => { blockImageCache[id] = null; };
-        img.src = url;
-    });
-
-    PICKAXE_TYPES.forEach(p => {
-        const url = pickaxeImageUrl(p.id);
-        const img = new Image();
-        img.onload = () => {
-            pickaxeImageCache[p.id] = url;
-            // Раньше здесь вызывался renderIdleReel(), который полностью
-            // пересоздавал барабан и перезапускал CSS-анимацию заново — это
-            // и было причиной рывков/лагов в превью-прокрутке (каждая из 6
-            // картинок кирок догружается в свой момент). Теперь картинка
-            // подставляется точечно, в уже существующие элементы, без
-            // сброса позиции и перезапуска анимации.
-            refreshAllRenderedPickaxeImages();
-        };
-        img.onerror = () => { pickaxeImageCache[p.id] = null; };
-        img.src = url;
-    });
-}
-
-// Применяет (или сбрасывает — если файла нет) картинку блока на конкретном
-// DOM-элементе. Не трогает сам класс блока (crack/hit-flash и т.д.) — просто
-// накладывает картинку поверх фона через отдельный CSS-класс.
-function applyCustomBlockImage(div, blockId) {
-    const url = blockImageCache[blockId];
-    if (url) {
-        div.style.backgroundImage = `url("${url}")`;
-        div.classList.add('custom-img');
-    } else {
-        div.style.backgroundImage = '';
-        div.classList.remove('custom-img');
+function upgMinBet(chance) {
+    for (let c = 10; c < 100000; c++) {
+        if (upgCalc(c / 100, chance).payout > c / 100) return c / 100;
     }
+    return MIN_BET;
 }
 
-// Применяет (или сбрасывает) картинку кирки на элементе-спрайте
-// (эмодзи-текст скрывается, вместо него — фон-изображение).
-function applyCustomPickaxeVisual(el, pickaxeObj) {
-    const url = pickaxeImageCache[pickaxeObj.id];
-    if (url) {
-        el.textContent = '';
-        el.style.backgroundImage = `url("${url}")`;
-        el.classList.add('custom-img');
-    } else {
-        el.style.backgroundImage = '';
-        el.classList.remove('custom-img');
-        el.textContent = pickaxeObj.emoji;
+// Исход — честный: победа с вероятностью ровно «шанс»%, криптостойкий генератор.
+function upgRoll(chance) {
+    const a = new Uint32Array(1);
+    crypto.getRandomValues(a);
+    return (a[0] % 100) < chance;
+}
+
+function upgBet() {
+    const v = parseFloat(document.getElementById('upgBetInput')?.value);
+    return isFinite(v) && v > 0 ? roundMoney(v) : 0;
+}
+
+const upgSmooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+const upgPt = (r, deg) => { const a = deg * Math.PI / 180; return [360 + r * Math.sin(a), 315 - r * Math.cos(a)]; };
+
+/* ---------- статичная сцена колеса (кэшируется по шансу) ---------- */
+function upgBuildScene(chance, hot) {
+    const S = upg.size / 720;
+    const c = document.createElement('canvas');
+    c.width = c.height = upg.size;
+    const x = c.getContext('2d');
+    x.setTransform(S, 0, 0, S, 0, 0);
+    const grad = (y1, y2, a, b) => { const g = x.createLinearGradient(0, y1, 0, y2); g.addColorStop(0, a); g.addColorStop(1, b); return g; };
+    const disc = (r, a, b) => { x.beginPath(); x.arc(360, 315, r, 0, Math.PI * 2); x.fillStyle = grad(315 - r, 315 + r, a, b); x.fill(); };
+
+    x.save();
+    x.shadowColor = 'rgba(0,0,0,0.55)'; x.shadowBlur = 28 * S; x.shadowOffsetY = 16 * S;
+    x.fillStyle = '#000'; x.beginPath(); x.arc(360, 315, 254, 0, Math.PI * 2); x.fill();
+    x.restore();
+
+    x.strokeStyle = 'rgb(150,152,168)'; x.lineWidth = 1.3;
+    for (let i = 0; i < 120; i++) {
+        const a = i * 3, [x1, y1] = upgPt(262, a), [x2, y2] = upgPt(254 + (i % 5 === 0 ? 17 : 12), a);
+        x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
     }
-}
+    disc(254, '#60606c', '#1e1e24');
+    disc(250.5, '#2c2c32', '#161618');
 
-// Точечно обновляет картинку уже отрисованных ячеек барабана (и в режиме
-// ожидания, и во время прокрутки) — без пересоздания DOM и без сброса
-// transform/анимации, чтобы подгрузка картинок не дёргала прокрутку.
-function refreshAllRenderedPickaxeImages() {
-    document.querySelectorAll('.pickaxe-reel-item[data-pickaxe-id]').forEach(el => {
-        const p = PICKAXE_TYPES.find(pt => pt.id === el.dataset.pickaxeId);
-        if (p) applyCustomPickaxeVisual(el, p);
-    });
-}
-
-// Перекрашивает уже отрисованные в DOM блоки шахты после того, как картинка
-// для их типа успешно подгрузилась (preloadTypeImages может завершиться уже
-// после того, как сетка отрисована).
-function refreshAllRenderedBlockImages() {
-    document.querySelectorAll('#mineGrid .mine-block[data-block-id]').forEach(div => {
-        applyCustomBlockImage(div, div.dataset.blockId);
-    });
-}
-
-// Пороги глубины и веса появления руды. Работает в 2 шага:
-//  1) baseSeedChance(rowIndex) — ОБЩИЙ шанс (%), что новая ячейка вообще
-//     станет затравкой руды (а не камнем). Он растёт с глубиной, но
-//     жёстко ограничен потолком — поэтому руды всегда заметно МЕНЬШЕ
-//     камня, даже в самой глубокой части шахты.
-//  2) если ячейка стала рудой — тип выбирается по весам (baseWeight) среди
-//     ярусов, уже открытых на этой глубине (rowIndex >= minRow). growth/maxMult
-//     увеличивают вес более дорогих ярусов по мере углубления ЗА порог их
-//     открытия — поэтому дорогая руда действительно чаще встречается ниже,
-//     а не просто "включается" на пороге и остаётся редкой навсегда.
-const ORE_TIERS = [
-    { id: 'diamond', minRow: 46, baseWeight: 1.0, growth: 0.05,  maxMult: 4.0 },
-    { id: 'emerald', minRow: 36, baseWeight: 1.6, growth: 0.045, maxMult: 3.4 },
-    { id: 'lapis',   minRow: 26, baseWeight: 2.4, growth: 0.035, maxMult: 2.8 },
-    { id: 'gold',    minRow: 20, baseWeight: 3.2, growth: 0.03,  maxMult: 2.4 },
-    { id: 'iron',    minRow: 16, baseWeight: 4.4, growth: 0.02,  maxMult: 2.0 },
-    { id: 'copper',  minRow: 9,  baseWeight: 6.5, growth: 0.012, maxMult: 1.6 },
-    { id: 'coal',    minRow: 4,  baseWeight: 8.5, growth: 0.006, maxMult: 1.3 }
-];
-// Вероятность того, что жила продолжится в соседнюю ячейку (вертикально/горизонтально) —
-// это и создаёт "скопления" (кластеры) руды. Размер каждой жилы дополнительно
-// жёстко ограничен ОБЩИМ бюджетом (см. generateRow) — 3-6 блоков максимум СУММАРНО
-// на всю жилу (включая любые её ответвления), а не на каждое направление отдельно,
-// поэтому рудники никогда не превращаются в огромные сплошные залежи.
-const VEIN_VERTICAL_CHANCE = 0.55;
-const VEIN_HORIZONTAL_CHANCE = 0.3;
-const VEIN_MIN_SIZE = 3;
-const VEIN_MAX_SIZE = 6;
-
-const GRID_COLS = 7;
-const BLOCK_SIZE = 44; // Должно совпадать с --block-size в style.css
-const SPRITE_SIZE = 38;
-// Падение замедлено ещё в 2 раза (итого ~8 раз медленнее исходных значений) —
-// кирка падает заметно медленнее, удары по блокам легче отслеживать глазами.
-const GRAVITY = 0.07;       // Ускорение свободного падения кирки (px/кадр²)
-const MAX_FALL_SPEED = 3;   // Максимальная скорость падения
-const BOUNCE_SPEED = -0.8;  // Лёгкий отскок при ударе о ещё не разрушенную руду
-const BOUNCE_MAX = -1.5;    // Верхний предел скорости отскока (реалистичное затухание)
-const BOUNCE_RESTITUTION = 0.5; // Доля скорости удара, возвращаемая при отскоке
-const START_FALL_SPEED = 0.3;
-const SQUASH_FRAMES = 12;   // Длительность визуального "сплющивания" кирки при ударе
-
-let mineGridMap = [];  // Массив блоков шахты (каждая ячейка — независимый объект с durability)
-let isPickaxeRunning = false;
-let pickaxePhysicsRAF = null;
-let pickaxeSpeedMult = 1;       // Множитель скорости текущего забега (1 = обычная, 2.5 = ускорено)
-let pickaxeSpeedUsed = false;   // "Ускорить" можно применить только один раз за забег
-let pickaxeSkipRequested = false; // Флаг: скип до 15% HP запрошен, но ещё не выполнен
-let pickaxeSkipUsed = false;    // "Скип" можно применить только один раз за забег
-
-function adjustPickaxeBet(factor) {
-    applyBetFactor(document.getElementById('pickaxeBetInput'), factor);
-}
-
-// Ускоряет текущий забег в 2.5 раза (гравитация/скорость падения/отскок).
-// Действует один раз за забег — после нажатия кнопка блокируется.
-function acceleratePickaxeGame() {
-    if (!isPickaxeRunning || pickaxeSpeedUsed) return;
-    pickaxeSpeedMult = 2.5;
-    pickaxeSpeedUsed = true;
-    const btn = document.getElementById('pickaxeSpeedBtn');
-    if (btn) btn.disabled = true;
-}
-
-// Мгновенно прокручивает забег вперёд до момента, когда у кирки останется
-// 15% HP от стартового запаса, дальше игра продолжается как обычно (анимированно).
-// Действует один раз за забег — после нажатия кнопка блокируется.
-function skipPickaxeGame() {
-    if (!isPickaxeRunning || pickaxeSkipUsed) return;
-    pickaxeSkipRequested = true;
-    pickaxeSkipUsed = true;
-    const btn = document.getElementById('pickaxeSkipBtn');
-    if (btn) btn.disabled = true;
-}
-
-function setPickaxeMaxBet() {
-    applyBetMax(document.getElementById('pickaxeBetInput'));
-}
-
-function openPickaxe() {
-    showPage("pickaxePage");
-    updateNav("games");
-    resetMineWorld();
-    // Барабан уже подготовлен и крутится с момента загрузки приложения
-    // (см. renderIdleReel() в DOMContentLoaded) — пересоздаём его здесь
-    // только если он почему-то ещё пуст, чтобы не дёргать/не сбрасывать
-    // уже идущую прокрутку при каждом повторном заходе на страницу.
-    const track = document.getElementById('pickaxeReelTrack');
-    if (!track || !track.children.length) {
-        renderIdleReel();
-    }
-}
-
-// Создаёт независимую ячейку блока (со своей прочностью), а не общую ссылку —
-// это нужно, чтобы каждую руду можно было "долбить" по несколько раз отдельно.
-// veinBudget — общий (расшаренный по ссылке) счётчик "сколько ещё блоков может
-// занять эта жила" — единый на все её ответвления (вертикальные и горизонтальные),
-// поэтому итоговый размер жилы гарантированно не превышает 3-6 блоков суммарно.
-function makeCell(type, rowIndex, veinBudget) {
-    const durability = type.id === 'air' ? 0 : (type.baseDur + Math.floor(rowIndex / type.depthStep));
-    return {
-        id: type.id,
-        class: type.class,
-        multiplier: type.multiplier,
-        isOre: ORE_IDS.includes(type.id),
-        durability,
-        maxDurability: durability,
-        veinBudget: veinBudget || null
+    const half = chance * 1.8, k = Math.PI / 180;
+    const sector = () => {
+        x.beginPath();
+        x.arc(360, 315, 250.5, (180 - half) * k - Math.PI / 2, (180 + half) * k - Math.PI / 2);
+        x.arc(360, 315, 180, (180 + half) * k - Math.PI / 2, (180 - half) * k - Math.PI / 2, true);
+        x.closePath();
     };
+    if (hot) {
+        x.save(); x.shadowColor = 'rgba(255,70,84,1)'; x.shadowBlur = 34 * S; x.fillStyle = '#ff4654';
+        sector(); x.fill(); x.restore();
+    }
+    sector();
+    x.fillStyle = hot ? grad(495, 569, '#ff6872', '#e22c3c') : grad(495, 569, '#f04854', '#c01c2e');
+    x.fill();
+
+    disc(180, '#1f1f24', '#121216');
+    x.beginPath(); x.arc(360, 315, 180, 0, Math.PI * 2); x.strokeStyle = '#34343c'; x.lineWidth = 1.6; x.stroke();
+
+    // плашка «ставка / выигрыш»
+    x.fillStyle = '#161618';
+    x.beginPath();
+    const [px0, py0, px1, py1, rr] = [62, 619, 658, 695, 18];
+    x.moveTo(px0 + rr, py0); x.arcTo(px1, py0, px1, py1, rr); x.arcTo(px1, py1, px0, py1, rr);
+    x.arcTo(px0, py1, px0, py0, rr); x.arcTo(px0, py0, px1, py0, rr); x.closePath(); x.fill();
+    x.strokeStyle = '#323238'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(360, 633); x.lineTo(360, 681); x.stroke();
+    return c;
 }
 
-// Общий шанс (%), что ячейка вообще станет затравкой руды на данной глубине.
-// Растёт с глубиной, но ограничен потолком (30%) — примерно 1/3 площади шахты
-// занята рудой, 2/3 — камнем (немного плотнее, чем "редкая" версия, но
-// рудники по-прежнему не превращаются в сплошную руду).
-function baseSeedChance(rowIndex) {
-    return Math.min(30, 12 + rowIndex * 0.12);
+function upgScene(chance) {
+    const key = chance + ':' + upg.size;
+    if (!upg.scenes[key]) {
+        if (Object.keys(upg.scenes).length >= 6) upg.scenes = {};
+        upg.scenes[key] = { base: upgBuildScene(chance, false), hot: upgBuildScene(chance, true) };
+    }
+    return upg.scenes[key];
 }
 
-// Выбирает "затравку" новой жилы руды для текущей глубины (или null → камень).
-// Шаг 1: решаем, будет ли эта ячейка рудой вообще (см. baseSeedChance).
-// Шаг 2: если да — выбираем ЧЕЙ тип по весам среди уже открытых на этой
-// глубине ярусов; вес дорогих ярусов растёт по мере углубления ЗА порог их
-// открытия (growth/maxMult), поэтому дорогая руда реально чаще встречается
-// ниже, а не просто "включается" на пороге.
-function pickOreSeed(rowIndex) {
-    if (Math.random() * 100 >= baseSeedChance(rowIndex)) return null;
+/* ---------- текст ---------- */
+function upgSpaced(x, text, cx, cy, size, color, sp) {
+    x.font = `700 ${size}px ${UPG_FONT}`; x.fillStyle = color; x.textBaseline = 'middle'; x.textAlign = 'left';
+    const chars = [...text], ws = chars.map(ch => x.measureText(ch).width);
+    let cur = cx - (ws.reduce((a, b) => a + b, 0) + sp * (chars.length - 1)) / 2;
+    chars.forEach((ch, i) => { x.fillText(ch, cur, cy); cur += ws[i] + sp; });
+}
 
-    const available = ORE_TIERS.filter(t => rowIndex >= t.minRow);
-    if (!available.length) return null;
+function upgFit(x, text, cx, cy, size, maxW, color) {
+    x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+    let s = size;
+    x.font = `700 ${s}px ${UPG_FONT}`;
+    while (s > 10 && x.measureText(text).width > maxW) { s--; x.font = `700 ${s}px ${UPG_FONT}`; }
+    x.fillText(text, cx, cy);
+}
 
-    let totalWeight = 0;
-    const weighted = available.map(t => {
-        const depthPast = rowIndex - t.minRow;
-        const w = t.baseWeight * Math.min(t.maxMult, 1 + depthPast * t.growth);
-        totalWeight += w;
-        return { id: t.id, w };
+function upgCenterText(x, kind, alpha, chance, payout) {
+    if (alpha <= 0) return;
+    x.save(); x.globalAlpha = alpha;
+    if (kind === 'win') {
+        upgFit(x, 'ПОБЕДА', 360, 293, 56, 300, '#6eeb8c');
+        upgFit(x, `+${payout.toFixed(2)} $`, 360, 353, 28, 306, '#ffd61e');
+    } else if (kind === 'lose') {
+        upgFit(x, 'МИМО', 360, 295, 64, 300, '#ebebf0');
+        upgSpaced(x, 'ПОПРОБУЙ ЕЩЁ', 360, 355, 15, '#7d7d87', 3);
+    } else {
+        upgFit(x, `${chance}%`, 360, 297, 80, 300, '#ffffff');
+        upgSpaced(x, 'ШАНС ПОБЕДЫ', 360, 359, 15, '#7d7d87', 3);
+    }
+    x.restore();
+}
+
+/* ---------- кадр ---------- */
+function upgDraw() {
+    const x = upg.ctx;
+    if (!x) return;
+    const S = upg.size / 720, chance = upg.chance;
+    const bet = upgBet() || MIN_BET;
+    const { payout } = upgCalc(bet, chance);
+
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.clearRect(0, 0, upg.size, upg.size);
+    const sc = upgScene(chance);
+    x.drawImage(sc.base, 0, 0);
+    if (upg.glow > 0.01) { x.globalAlpha = Math.min(1, upg.glow); x.drawImage(sc.hot, 0, 0); x.globalAlpha = 1; }
+    x.setTransform(S, 0, 0, S, 0, 0);
+
+    if (upg.result) {
+        upgCenterText(x, null, 1 - upg.fade, chance, payout);
+        upgCenterText(x, upg.result, upg.fade, chance, payout);
+    } else {
+        upgCenterText(x, null, 1, chance, payout);
+    }
+
+    upgSpaced(x, 'СТАВКА', 211, 639, 13, '#8c8c96', 1);
+    upgSpaced(x, 'ВЫИГРЫШ', 509, 639, 13, '#8c8c96', 1);
+    upgFit(x, `${bet.toFixed(2)} $`, 211, 667, 28, 258, '#ffffff');
+    upgFit(x, `${payout.toFixed(2)} $`, 509, 667, 28, 258, '#ffd61e');
+
+    // золотой хвост рисок за стрелкой
+    x.strokeStyle = '#ffd61e'; x.lineWidth = 1.8;
+    for (let i = 0; i < 120; i++) {
+        const behind = ((((upg.theta - i * 3 + 180) % 360) + 360) % 360) - 180;
+        const w = behind >= 0 ? Math.max(0, 1 - behind / 46) : Math.max(0, 1 + behind / 12);
+        if (w * w < 0.05) continue;
+        const a = i * 3, [x1, y1] = upgPt(262, a), [x2, y2] = upgPt(254 + (i % 5 === 0 ? 24 : 19), a);
+        x.globalAlpha = w * w;
+        x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
+    }
+    x.globalAlpha = 1;
+
+    // стрелка
+    const t = upg.theta * Math.PI / 180, ux = Math.sin(t), uy = -Math.cos(t), vx = Math.cos(t), vy = Math.sin(t);
+    x.beginPath();
+    UPG_ARROW.forEach(([lx, ly], i) => {
+        const r = 182 + lx, px = 360 + ux * r + vx * ly, py = 315 + uy * r + vy * ly;
+        if (i) x.lineTo(px, py); else x.moveTo(px, py);
     });
+    x.closePath();
+    x.lineJoin = 'round'; x.lineWidth = 4.4; x.strokeStyle = '#1e1e22'; x.stroke();
+    x.fillStyle = '#ffd000'; x.fill();
+}
 
-    let r = Math.random() * totalWeight;
-    for (const item of weighted) {
-        r -= item.w;
-        if (r <= 0) return item.id;
+/* ---------- анимация вращения ---------- */
+function upgPickTarget(lo, hi) {
+    const len = hi - lo, m = Math.min(4, len * 0.35);
+    let t;
+    if (Math.random() < 0.55) {
+        const d = Math.min(m + Math.random() * 4, len / 2);
+        t = Math.random() < 0.5 ? lo + d : hi - d;
+    } else {
+        t = lo + m + Math.random() * (len - 2 * m);
     }
-    return weighted[weighted.length - 1].id;
+    return ((t % 360) + 360) % 360;
 }
 
-function generateRow(rowIndex) {
-    const row = [];
-    for (let c = 0; c < GRID_COLS; c++) {
-        if (rowIndex === 0) {
-            row.push(makeCell(BLOCK_TYPES.GRASS, rowIndex, null));
-            continue;
-        }
+function upgAnimate(win, chance) {
+    const half = chance * 1.8;
+    const [lo, hi] = win ? [180 - half, 180 + half] : [180 + half, 180 - half + 360];
+    const origin = UPG_START - UPG_WINDUP;
+    const final = (Math.random() < 0.5 ? 3 : 4) * 360 + upgPickTarget(lo, hi);
+    const { pause, windup, spin, land } = UPG_T;
+    const total = pause + windup + spin + land;
 
-        // Скопления руды: если сосед сверху/слева — руда, у которой ЕЩЁ ОСТАЛСЯ
-        // общий бюджет жилы (veinBudget.remaining > 0), есть шанс, что жила
-        // продолжится сюда тем же типом. Как только бюджет исчерпан — жила
-        // гарантированно обрывается ВО ВСЕХ направлениях (бюджет один на всю
-        // жилу, а не отдельно на каждую ветку), поэтому итоговый размер
-        // скопления не превышает 3-6 блоков. Если продолжения нет — обычная
-        // случайная "затравка" новой жилы по глубине, либо камень.
-        const aboveCell = (mineGridMap[rowIndex - 1] || [])[c];
-        const leftCell = row[c - 1];
-        let oreId = null;
-        let veinBudget = null;
-
-        const aboveCanContinue = aboveCell && aboveCell.isOre && aboveCell.veinBudget && aboveCell.veinBudget.remaining > 0;
-        const leftCanContinue = leftCell && leftCell.isOre && leftCell.veinBudget && leftCell.veinBudget.remaining > 0;
-
-        if (aboveCanContinue && Math.random() < VEIN_VERTICAL_CHANCE) {
-            oreId = aboveCell.id;
-            veinBudget = aboveCell.veinBudget;
-            veinBudget.remaining--;
-        } else if (leftCanContinue && Math.random() < VEIN_HORIZONTAL_CHANCE) {
-            oreId = leftCell.id;
-            veinBudget = leftCell.veinBudget;
-            veinBudget.remaining--;
-        } else {
-            oreId = pickOreSeed(rowIndex);
-            if (oreId) {
-                // Новая жила: сразу выдаём ей общий случайный "бюджет" размера
-                // 3-6 блоков суммарно (эта ячейка + остаток на продолжение).
-                const veinSize = VEIN_MIN_SIZE + Math.floor(Math.random() * (VEIN_MAX_SIZE - VEIN_MIN_SIZE + 1));
-                veinBudget = { remaining: veinSize - 1 };
-            }
-        }
-
-        if (oreId) {
-            row.push(makeCell(BLOCK_TYPES[oreId.toUpperCase()], rowIndex, veinBudget));
-        } else {
-            row.push(makeCell(BLOCK_TYPES.STONE, rowIndex, null));
-        }
-    }
-    return row;
-}
-
-function blockCellEl(row, col) {
-    return document.querySelector(`.mine-block[data-row="${row}"][data-col="${col}"]`);
-}
-
-// Задаёт случайные CSS-переменные смещения текстуры, чтобы соседние блоки
-// одного типа не выглядели как один и тот же повторяющийся тайл (реалистичность).
-function applyBlockTexture(div) {
-    div.style.setProperty('--tx', Math.floor(Math.random() * 26) + 'px');
-    div.style.setProperty('--ty', Math.floor(Math.random() * 26) + 'px');
-    div.style.setProperty('--tr', (Math.random() * 8 - 4).toFixed(1) + 'deg');
-    div.style.setProperty('--tb', (0.9 + Math.random() * 0.2).toFixed(2));
-}
-
-function appendRowsDOM(fromIndex, rows) {
-    const gridEl = document.getElementById('mineGrid');
-    const frag = document.createDocumentFragment();
-    rows.forEach((row, i) => {
-        const rIdx = fromIndex + i;
-        row.forEach((block, cIdx) => {
-            const div = document.createElement('div');
-            div.className = `mine-block ${block.class}`;
-            div.dataset.row = rIdx;
-            div.dataset.col = cIdx;
-            div.dataset.blockId = block.id;
-            if (block.isOre) div.dataset.ore = "1";
-            applyBlockTexture(div);
-            applyCustomBlockImage(div, block.id);
-            frag.appendChild(div);
-        });
-    });
-    gridEl.appendChild(frag);
-}
-
-function ensureRowsUpTo(rowIndex) {
-    const need = rowIndex + 15 - mineGridMap.length;
-    if (need <= 0) return;
-    const newRows = [];
-    const startIdx = mineGridMap.length;
-    for (let i = 0; i < need; i++) {
-        const r = generateRow(mineGridMap.length);
-        mineGridMap.push(r);
-        newRows.push(r);
-    }
-    appendRowsDOM(startIdx, newRows);
-}
-
-function resetMineWorld() {
-    const gridEl = document.getElementById('mineGrid');
-    const worldEl = document.getElementById('mineWorld');
-    const sprite = document.getElementById('activePickaxeSprite');
-
-    if (pickaxePhysicsRAF) {
-        cancelAnimationFrame(pickaxePhysicsRAF);
-        pickaxePhysicsRAF = null;
-    }
-
-    gridEl.innerHTML = '';
-    worldEl.style.transform = `translate(-50%, 0px)`;
-    sprite.classList.add('hidden');
-    sprite.style.transform = 'translate(-50%, 0) rotate(0deg)';
-
-    mineGridMap = [];
-    for (let r = 0; r < 20; r++) {
-        mineGridMap.push(generateRow(r));
-    }
-    renderGridDOM();
-
-    const hudHp = document.getElementById('hudHp');
-    const hudWin = document.getElementById('hudWin');
-    const hudDepth = document.getElementById('hudDepth');
-    if (hudHp) hudHp.textContent = '0';
-    if (hudWin) hudWin.textContent = '0.00 $';
-    if (hudDepth) hudDepth.textContent = '0';
-}
-
-function renderGridDOM() {
-    const gridEl = document.getElementById('mineGrid');
-    gridEl.innerHTML = '';
-
-    mineGridMap.forEach((row, rIdx) => {
-        row.forEach((block, cIdx) => {
-            const div = document.createElement('div');
-            div.className = `mine-block ${block.class}`;
-            div.dataset.row = rIdx;
-            div.dataset.col = cIdx;
-            div.dataset.blockId = block.id;
-            if (block.isOre) div.dataset.ore = "1";
-            applyBlockTexture(div);
-            applyCustomBlockImage(div, block.id);
-            gridEl.appendChild(div);
-        });
-    });
-}
-
-function getPickaxeByWeight() {
-    const totalWeight = PICKAXE_TYPES.reduce((s, p) => s + p.weight, 0);
-    let rand = Math.random() * totalWeight;
-    for (const p of PICKAXE_TYPES) {
-        if (rand < p.weight) return p;
-        rand -= p.weight;
-    }
-    return PICKAXE_TYPES[0];
-}
-
-/* =========================
-   БАРАБАН ВЫБОРА КИРКИ ("кейс")
-   - renderIdleReel(): режим ожидания — лента медленно и БЕСКОНЕЧНО крутится
-     по кругу (превью, ещё не открыто).
-   - spinPickaxeReel(): режим открытия — длинная лента с случайными кирками
-     быстро прокручивается и плавно тормозит ровно на выпавшей кирке под
-     указателем, как открытие кейса.
-   Ширина ячейки (REEL_ITEM_WIDTH) должна совпадать с .pickaxe-reel-item в CSS.
-========================= */
-const REEL_ITEM_WIDTH = 64;
-
-function makeReelItemEl(p) {
-    const div = document.createElement('div');
-    div.className = 'pickaxe-reel-item';
-    div.dataset.pickaxeId = p.id;
-    applyCustomPickaxeVisual(div, p);
-    return div;
-}
-
-// Режим ожидания: зацикленная медленная прокрутка (превью кейса до открытия).
-function renderIdleReel() {
-    const viewport = document.getElementById('pickaxeReelViewport');
-    const track = document.getElementById('pickaxeReelTrack');
-    const nameLabel = document.getElementById('pickaxeName');
-    if (!track) return;
-
-    track.style.transition = 'none';
-    track.style.animation = 'none';
-    track.innerHTML = '';
-
-    // Несколько копий полного набора кирок подряд — чтобы прокрутка на ширину
-    // одного набора выглядела как бесшовная бесконечная петля.
-    const REPEATS = 4;
-    const frag = document.createDocumentFragment();
-    for (let i = 0; i < REPEATS; i++) {
-        PICKAXE_TYPES.forEach(p => frag.appendChild(makeReelItemEl(p)));
-    }
-    track.appendChild(frag);
-
-    // Трек позиционируется через left:50%, поэтому при transform:translateX(0)
-    // первая кирка начинается ровно от ЦЕНТРА вьюпорта — вся левая половина
-    // оставалась пустой (это и было причиной "разрывов"/пропавших кирок в
-    // начале). Стартуем сразу со сдвигом на половину ширины вьюпорта, чтобы
-    // лента с первого кадра была заполнена целиком, без пустот.
-    const viewportWidth = (viewport && viewport.clientWidth) || 320;
-    const startOffset = Math.ceil(viewportWidth / 2);
-    track.style.transform = `translateX(-${startOffset}px)`;
-
-    void track.offsetWidth; // форсируем reflow, чтобы анимация стартовала чисто
-
-    const setWidth = PICKAXE_TYPES.length * REEL_ITEM_WIDTH;
-    track.style.setProperty('--idle-loop-start', `-${startOffset}px`);
-    track.style.setProperty('--idle-loop-shift', `-${startOffset + setWidth}px`);
-    track.style.animation = `pickaxeIdleScroll ${(PICKAXE_TYPES.length * 1.3).toFixed(1)}s linear infinite`;
-
-    if (nameLabel) nameLabel.textContent = '';
-}
-
-// Режим открытия: настоящая "кейс"-прокрутка с торможением на выпавшей кирке.
-// Возвращает Promise, который резолвится, когда лента полностью остановилась.
-function spinPickaxeReel(finalPickaxe) {
     return new Promise(resolve => {
-        const track = document.getElementById('pickaxeReelTrack');
-        const nameLabel = document.getElementById('pickaxeName');
-        if (!track) { resolve(); return; }
+        let done = false, prev = UPG_START, prevT = 0, lastK = null, lastTick = 0;
+        const t0 = performance.now();
 
-        track.style.animation = 'none';
-        track.style.transition = 'none';
-
-        // Длинная лента: много случайных кирок "пролетают" мимо, финальная
-        // (выигранная) кирка стоит на заранее выбранной позиции недалеко от
-        // конца ленты — именно на ней лента и остановится под указателем.
-        const TOTAL_ITEMS = 46;
-        const TARGET_INDEX = TOTAL_ITEMS - 6;
-        const frag = document.createDocumentFragment();
-        for (let i = 0; i < TOTAL_ITEMS; i++) {
-            const p = (i === TARGET_INDEX) ? finalPickaxe : PICKAXE_TYPES[Math.floor(Math.random() * PICKAXE_TYPES.length)];
-            frag.appendChild(makeReelItemEl(p));
-        }
-        track.innerHTML = '';
-        track.appendChild(frag);
-        track.style.transform = 'translateX(0px)';
-        void track.offsetWidth;
-
-        if (nameLabel) nameLabel.textContent = '';
-
-        // Трек стоит на left:50%, поэтому чтобы центр выигрышной ячейки
-        // совпал с центром вьюпорта (и с указателем-селектором), нужно
-        // сдвинуть трек ещё и на половину ширины ячейки. Раньше здесь был
-        // случайный "казино"-джиттер, из-за которого лента тормозила мимо
-        // центра — теперь кирка всегда останавливается ровно по центру.
-        const targetOffset = -(TARGET_INDEX * REEL_ITEM_WIDTH + REEL_ITEM_WIDTH / 2);
-
-        // rAF x2, чтобы браузер гарантированно применил transition ПОСЛЕ
-        // сброса transform выше (иначе транзишен может "съесться" в один кадр).
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                track.style.transition = 'transform 3.2s cubic-bezier(0.12, 0.85, 0.15, 1)';
-                track.style.transform = `translateX(${targetOffset}px)`;
-            });
-        });
-
-        const onEnd = (e) => {
-            if (e.target !== track || e.propertyName !== 'transform') return;
-            track.removeEventListener('transitionend', onEnd);
-            if (nameLabel) nameLabel.textContent = `${getPickaxeDisplayName(finalPickaxe)} (${finalPickaxe.hp} HP)`;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            cancelAnimationFrame(upg.raf);
+            upg.theta = final; upg.glow = 1; upg.result = win ? 'win' : 'lose'; upg.fade = 1;
+            upgDraw();
             resolve();
         };
-        track.addEventListener('transitionend', onEnd);
+
+        const step = (now) => {
+            if (done) return;
+            const t = now - t0;
+            let theta, calm = 1;
+            if (t < pause) {
+                theta = UPG_START;
+            } else if (t < pause + windup) {
+                theta = UPG_START - UPG_WINDUP * upgSmooth((t - pause) / windup);
+            } else if (t < pause + windup + spin) {
+                const u = (t - pause - windup) / spin;
+                theta = origin + (final - origin) * (1 - Math.pow(1 - u, 3)) * upgSmooth(u / 0.05);
+                const speed = Math.abs(theta - prev) * 30 / Math.max(8, t - prevT);   // °/кадр при 30 мс
+                calm = upgSmooth(1 - speed / 8);
+                const k = Math.floor(theta / 3);                                      // «тик» на каждой риске
+                if (lastK !== null && k !== lastK && now - lastTick > 75) { window.haptic('select'); lastTick = now; }
+                lastK = k;
+            } else {
+                theta = final;
+            }
+            const gap = Math.abs((((theta % 360) + 360) % 360) - 180);
+            let glow = upgSmooth(1 - gap / (half + 24)) * 0.85 * calm;
+            if (t >= pause + windup + spin) {
+                const f = upgSmooth((t - pause - windup - spin) / land);
+                glow += (1 - glow) * f;
+                upg.result = win ? 'win' : 'lose'; upg.fade = f;
+            }
+            upg.theta = theta; upg.glow = glow;
+            prev = theta; prevT = t;
+            upgDraw();
+            if (t >= total) finish(); else upg.raf = requestAnimationFrame(step);
+        };
+        upg.raf = requestAnimationFrame(step);
+        setTimeout(finish, total + 400);     // страховка, если rAF «заснул» в фоне
     });
 }
 
-async function startPickaxeGame() {
-    if (isPickaxeRunning) return;
-    if (!lockEconomy()) return;
-
-    const betInput = document.getElementById('pickaxeBetInput');
-    const bet = roundMoney(parseFloat(betInput.value));
-
-    if (!bet || isNaN(bet) || bet < 0.10) {
-        showMessage("Минимальная ставка — 0.10 $!");
-        unlockEconomy();
-        return;
-    }
-    if (bet > currentBalance) {
-        showMessage("Недостаточно средств!");
-        unlockEconomy();
-        return;
-    }
-
-    isPickaxeRunning = true;
-    document.getElementById('pickaxeActionBtn').disabled = true;
-    pickaxeSpeedMult = 1;
-    pickaxeSpeedUsed = false;
-    pickaxeSkipRequested = false;
-    pickaxeSkipUsed = false;
-    const speedBtn = document.getElementById('pickaxeSpeedBtn');
-    const skipBtn = document.getElementById('pickaxeSkipBtn');
-    if (speedBtn) speedBtn.disabled = false;
-    if (skipBtn) skipBtn.disabled = false;
-
-    // Списание баланса — считает и проверяет сервер (place_bet)
-    const snapshot = snapshotBalanceState();
-    currentTurnover = roundMoney(currentTurnover + bet);
-    currentBetsCount++;
-    setUIBalance(roundMoney(currentBalance - bet));
-
-    const debitResult = await placeBetServer(bet, 'Кирка');
-    if (!debitResult.ok) {
-        restoreBalanceState(snapshot);
-        showMessage("Ошибка сети при списании.");
-        isPickaxeRunning = false;
-        document.getElementById('pickaxeActionBtn').disabled = false;
-        unlockEconomy();
-        return;
-    }
-    currentBalance = debitResult.balance;
-    setUIBalance(currentBalance);
-
-    resetMineWorld();
-    const liveBetId = await broadcastLiveBet(bet, 'Кирка');
-
-    // 1. Вращение рулетки — как открытие кейса: лента быстро прокручивается
-    // и тормозит ровно на выпавшей (уже определённой заранее) кирке.
-    const picked = getPickaxeByWeight();
-    await spinPickaxeReel(picked);
-    runMiningPhysics(picked, bet, liveBetId);
+/* ---------- интерфейс ---------- */
+function upgInit() {
+    if (upg.cv) return;
+    const cv = document.getElementById('upgCanvas');
+    if (!cv) return;
+    upg.cv = cv;
+    upg.size = Math.round(600 * Math.min(window.devicePixelRatio || 1, 2));
+    cv.width = cv.height = upg.size;
+    upg.ctx = cv.getContext('2d');
 }
 
-// Бросок кирки вниз с гравитацией: она разгоняется, врезается в блоки,
-// отскакивает от ещё не разрушенной прочной руды и продолжает падать
-// после того как блок сломан. Трава/камень ломаются с 1 удара без награды,
-// руда — по её прочности (зависит от глубины), награда начисляется только
-// в момент полного разрушения блока.
-function runMiningPhysics(pickaxe, bet, liveBetId) {
-    let hp = pickaxe.hp;
-    let accumulatedMultiplier = 0;
+function upgRefresh(resetResult = true) {
+    if (resetResult) { upg.result = null; upg.fade = 1; upg.glow = 0; upg.theta = UPG_START; }
+    document.querySelectorAll('.upg-chance-row .pct-btn').forEach(b =>
+        b.classList.toggle('active', Number(b.dataset.chance) === upg.chance));
+    const chanceInput = document.getElementById('upgChanceInput');
+    if (chanceInput && document.activeElement !== chanceInput) chanceInput.value = upg.chance;
 
-    let curCol = Math.floor(GRID_COLS / 2); // Стартовая колонка — центр
-    let posY = 0;        // Пиксельная позиция кирки по вертикали (растёт только вниз)
-    let vy = START_FALL_SPEED;
-    let rotation = 0;
-    let brokenRow = 0; // ниже этой строки всё уже пройдено кабиной
-    let cameraY = 0;    // Плавная, МОНОТОННАЯ камера — никогда не откатывается назад,
-                         // поэтому отскок от прочной руды не выглядит как "полёт вверх"
-    let squashTimer = 0; // кадры, оставшиеся до конца эффекта "сплющивания" при ударе
+    const bet = upgBet() || MIN_BET;
+    const { payout, coef } = upgCalc(bet, upg.chance);
+    const info = document.getElementById('upgInfo');
+    if (info) {
+        info.textContent = payout > bet
+            ? `Коэффициент x${coef.toFixed(2)} · при победе +${roundMoney(payout - bet).toFixed(2)} $`
+            : `При шансе ${upg.chance}% минимальная ставка — ${upgMinBet(upg.chance).toFixed(2)} $`;
+    }
+    if (resetResult) {
+        const res = document.getElementById('upgResult');
+        if (res) { res.textContent = ''; res.className = 'upg-result'; }
+    }
+    upgDraw();
+}
 
-    const sprite = document.getElementById('activePickaxeSprite');
-    const worldEl = document.getElementById('mineWorld');
-    const viewportEl = document.getElementById('mineViewport');
-    const hudHp = document.getElementById('hudHp');
-    const hudWin = document.getElementById('hudWin');
-    const hudDepth = document.getElementById('hudDepth');
+function openUpgrader() {
+    showPage('upgraderPage');
+    updateNav('games');
+    upgInit();
+    if (!upg.busy) upgRefresh(true);
+}
 
-    applyCustomPickaxeVisual(sprite, pickaxe);
-    sprite.classList.remove('hidden');
-    hudHp.textContent = hp;
-    hudWin.textContent = "0.00 $";
-    hudDepth.textContent = "0";
+function upgSetChance(c) {
+    if (upg.busy) return;
+    c = parseInt(c, 10);
+    if (!isFinite(c)) return;
+    upg.chance = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, c));
+    upgRefresh(true);
+}
 
-    const runControls = document.getElementById('pickaxeRunControls');
-    const actionBtn = document.getElementById('pickaxeActionBtn');
-    if (runControls) runControls.classList.remove('hidden');
-    if (actionBtn) actionBtn.classList.add('hidden');
+function upgAdjustChance(delta) { upgSetChance(upg.chance + delta); }
 
-    const maxHp = pickaxe.hp;
-    const skipThresholdHp = Math.ceil(maxHp * 0.15); // Порог для кнопки "Скип" — 15% от стартового HP
+function upgBetFactor(f) {
+    if (upg.busy) return;
+    applyBetFactor(document.getElementById('upgBetInput'), f);
+    upgRefresh(true);
+}
 
-    // posX хранится как смещение от центра колонки (в px, для колонки curCol)
-    let xOffset = 0; // текущее смещение спрайта от центра его колонки (для эффекта покачивания)
+function upgBetMax() {
+    if (upg.busy) return;
+    applyBetMax(document.getElementById('upgBetInput'));
+    upgRefresh(true);
+}
 
-    const finish = async () => {
-        cancelAnimationFrame(pickaxePhysicsRAF);
-        pickaxePhysicsRAF = null;
-        sprite.classList.add('hidden');
-        if (runControls) runControls.classList.add('hidden');
-        if (actionBtn) actionBtn.classList.remove('hidden');
+function upgOnBetInput() {
+    if (upg.busy) return;
+    upgRefresh(true);
+}
 
-        // Итоговая выплата округляется ВНИЗ (не в пользу игрока) — если накопленный
-        // множитель даёт, например, 1.2347x от ставки, дробные центы свыше двух
-        // знаков отбрасываются, а не округляются вверх.
-        const totalWin = roundMoneyDown(bet * accumulatedMultiplier);
-        let creditFailed = false;
-        if (totalWin > 0) {
-            const winSnapshot = snapshotBalanceState();
-            currentTotalWin = roundMoney(currentTotalWin + totalWin);
+function upgOnChanceInput(commit) {
+    if (upg.busy) return;
+    const input = document.getElementById('upgChanceInput');
+    const v = parseInt(input.value, 10);
+    if (isFinite(v) && (commit || (v >= UPG_MIN_CHANCE && v <= UPG_MAX_CHANCE))) {
+        upg.chance = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, v));
+        upgRefresh(true);
+    }
+    if (commit) input.value = upg.chance;
+}
+
+function upgRelease() {
+    upg.busy = false;
+    isBetProcessing = false;
+    unlockEconomy();
+    const btn = document.getElementById('upgPlayBtn');
+    if (btn) { btn.disabled = false; btn.textContent = 'ИГРАТЬ'; }
+    document.getElementById('upgraderPage')?.classList.remove('upg-locked');
+}
+
+async function playUpgrader() {
+    if (upg.busy || isBetProcessing) return;
+    const bet = upgBet(), chance = upg.chance;
+    if (bet < MIN_BET) return showMessage('Минимальная ставка — 0.10 $!');
+    if (bet > currentBalance) return showMessage('Недостаточно средств на балансе!');
+    const { payout, coef } = upgCalc(bet, chance);
+    if (payout <= bet) return showMessage(`При шансе ${chance}% минимальная ставка — ${upgMinBet(chance).toFixed(2)} $. Увеличьте ставку или уменьшите шанс.`);
+    if (!lockEconomy()) return;
+
+    upg.busy = true;
+    isBetProcessing = true;
+    const btn = document.getElementById('upgPlayBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Вращение...'; }
+    document.getElementById('upgraderPage')?.classList.add('upg-locked');
+
+    try {
+        const snapshot = snapshotBalanceState();
+        currentTurnover = roundMoney(currentTurnover + bet);
+        currentBetsCount++;
+        setUIBalance(roundMoney(currentBalance - bet));
+
+        const debit = await placeBetServer(bet, 'Апгрейдер');
+        if (!debit.ok) {
+            restoreBalanceState(snapshot);
+            showMessage('Не удалось списать ставку. Проверьте соединение и попробуйте снова.');
+            return;
+        }
+        currentBalance = debit.balance;
+        setUIBalance(currentBalance);
+
+        const liveBetId = await broadcastLiveBet(bet, 'Апгрейдер');
+        const win = upgRoll(chance);
+
+        // Деньги проводим сразу (как в боте), а на экране баланс и итог
+        // раскрываются только когда колесо остановилось.
+        let credited = 0;
+        if (win) {
+            const winSnap = snapshotBalanceState();
+            currentTotalWin = roundMoney(currentTotalWin + payout);
             currentWinsCount++;
-            setUIBalance(roundMoney(currentBalance + totalWin));
-
-            const creditResult = await resolveWinServerWithRetry(totalWin, accumulatedMultiplier);
-            if (!creditResult.ok) {
-                restoreBalanceState(winSnapshot);
-                creditFailed = true;
+            if (coef > currentMaxWin) currentMaxWin = coef;
+            const cr = await resolveWinServerWithRetry(payout, coef);
+            if (!cr.ok) {
+                restoreBalanceState(winSnap);
+                showMessage('Ошибка сети: выигрыш не был зачислен. Обратитесь в поддержку и укажите время игры.');
             } else {
-                currentBalance = creditResult.balance;
-                setUIBalance(currentBalance);
+                credited = payout;
+                currentBalance = cr.balance;
             }
         }
 
-        if (creditFailed) {
-            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку, если баланс не обновится.");
-        } else {
-            showMessage(`Кирка сломалась! Итоговый выигрыш: +${totalWin.toFixed(2)}$ (${accumulatedMultiplier.toFixed(2)}x)`);
-            resolveLiveBetWin(liveBetId, bet, totalWin);
+        upg.result = null; upg.fade = 1; upg.glow = 0; upg.theta = UPG_START;
+        const res = document.getElementById('upgResult');
+        if (res) { res.textContent = ''; res.className = 'upg-result'; }
+        await upgAnimate(win, chance);
+
+        setUIBalance(currentBalance);
+        resolveLiveBetWin(liveBetId, bet, credited);
+        window.haptic(credited > 0 ? 'success' : 'error');
+        if (res) {
+            res.textContent = credited > 0 ? `Победа! +${credited.toFixed(2)} $ (x${coef.toFixed(2)})` : 'Не повезло. Попробуйте ещё раз';
+            res.className = 'upg-result ' + (credited > 0 ? 'win' : 'lose');
         }
-
-        isPickaxeRunning = false;
-        document.getElementById('pickaxeActionBtn').disabled = false;
-        unlockEconomy();
-        renderIdleReel(); // барабан снова медленно крутится в режиме ожидания
-    };
-
-    // Всплывающая надпись с приростом выигрыша над разрушенным блоком руды —
-    // визуально показывает, что каждый "иксовый" блок сразу засчитывается в вин,
-    // и подписывает, какая именно руда сломалась (с учётом своего названия).
-    const spawnWinPopup = (rowIdx, colIdx, multGain, blockId) => {
-        if (!multGain) return;
-        const popup = document.createElement('div');
-        popup.className = 'mine-win-popup';
-        popup.textContent = `+${roundMoney(bet * multGain).toFixed(2)}$ ${getBlockDisplayName(blockId)}`;
-        popup.style.left = `${colIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
-        popup.style.top = `${rowIdx * BLOCK_SIZE}px`;
-        worldEl.appendChild(popup);
-        setTimeout(() => popup.remove(), 700);
-    };
-
-    // Короткая пыль/осколки в момент удара — усиливает ощущение реального разрушения.
-    const spawnImpactDust = (rowIdx, colIdx, big) => {
-        const dust = document.createElement('div');
-        dust.className = big ? 'mine-impact-dust dust-big' : 'mine-impact-dust';
-        dust.style.left = `${colIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
-        dust.style.top = `${rowIdx * BLOCK_SIZE + BLOCK_SIZE / 2}px`;
-        worldEl.appendChild(dust);
-        setTimeout(() => dust.remove(), 420);
-    };
-
-    const registerHit = (rowIdx, colIdx) => {
-        ensureRowsUpTo(rowIdx + 1);
-        const cell = mineGridMap[rowIdx][colIdx];
-        if (!cell || cell.id === 'air' || cell.durability <= 0) return { solid: false };
-
-        hp--;
-        cell.durability--;
-        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred(cell.durability <= 0 ? "medium" : "light");
-
-        const el = blockCellEl(rowIdx, colIdx);
-
-        if (cell.durability <= 0) {
-            // Блок разрушен с этого удара — засчитываем "+", если это руда.
-            // Запоминаем исходный id ДО его сброса на 'air', чтобы правильно
-            // подписать название руды во всплывающей надписи.
-            const brokenBlockId = cell.id;
-            accumulatedMultiplier += cell.multiplier;
-            cell.id = 'air';
-            cell.class = 'b-air';
-            if (el) {
-                el.classList.add('block-break-anim');
-                // Гарантированное 100%-е исчезновение блока: элемент НЕ удаляется
-                // из DOM (это сломало бы раскладку CSS grid, которая опирается
-                // на порядок элементов), но полностью сбрасывается — включая
-                // data-ore и кастомную картинку, которые раньше могли "просвечивать"
-                // через ::before/::after даже после смены класса на b-air.
-                setTimeout(() => {
-                    el.className = 'mine-block b-air';
-                    el.dataset.blockId = 'air';
-                    el.removeAttribute('data-ore');
-                    el.style.backgroundImage = '';
-                    el.style.removeProperty('--tb');
-                }, 220);
-            }
-            spawnImpactDust(rowIdx, colIdx, true);
-            spawnWinPopup(rowIdx, colIdx, cell.multiplier, brokenBlockId);
-            return { solid: true, broken: true };
-        } else {
-            // Ещё держится — трещины, вспышка удара, отскок; награды пока нет
-            if (el) {
-                const stage = Math.min(3, Math.ceil(((cell.maxDurability - cell.durability) / cell.maxDurability) * 3));
-                el.classList.remove('crack-1', 'crack-2', 'crack-3');
-                el.classList.add(`crack-${stage}`);
-                el.classList.remove('block-hit-flash');
-                void el.offsetWidth; // рестарт CSS-анимации при повторных ударах
-                el.classList.add('block-hit-flash');
-            }
-            spawnImpactDust(rowIdx, colIdx, false);
-            return { solid: true, broken: false };
-        }
-    };
-
-    const updateHud = () => {
-        hudHp.textContent = Math.max(0, hp);
-        hudWin.textContent = `${(bet * accumulatedMultiplier).toFixed(2)} $ (${accumulatedMultiplier.toFixed(2)}x)`;
-        hudDepth.textContent = String(brokenRow);
-
-        // Скип бесполезен, если HP уже на уровне 15% или ниже — блокируем кнопку
-        if (!pickaxeSkipUsed && hp <= skipThresholdHp) {
-            pickaxeSkipUsed = true;
-            const skipBtn = document.getElementById('pickaxeSkipBtn');
-            if (skipBtn) skipBtn.disabled = true;
-        }
-    };
-
-    // Один шаг симуляции (один "кадр" физики): гравитация, падение, обработка
-    // столкновений с блоками. Вынесен отдельно от рендера, чтобы скип мог
-    // прокрутить много шагов подряд без отрисовки каждого кадра.
-    const physicsStep = () => {
-        if (hp <= 0) return;
-
-        const gravity = GRAVITY * pickaxeSpeedMult;
-        const maxFall = MAX_FALL_SPEED * pickaxeSpeedMult;
-        const bounceSpeed = BOUNCE_SPEED * pickaxeSpeedMult;
-        const bounceMax = BOUNCE_MAX * pickaxeSpeedMult;
-
-        // Гравитация — скорость падения растёт со временем (реальная физика)
-        vy = Math.min(vy + gravity, maxFall);
-        posY += vy;
-        rotation += 10 + Math.min(18, Math.abs(vy) * 1.6);
-
-        let targetRow = Math.floor((posY + SPRITE_SIZE / 2) / BLOCK_SIZE);
-        ensureRowsUpTo(targetRow + 1);
-
-        // Проходим по строкам, в которые кирка успела провалиться за этот кадр
-        while (targetRow > brokenRow && hp > 0) {
-            const rowToHit = brokenRow;
-            const result = registerHit(rowToHit, curCol);
-
-            if (result.solid && !result.broken) {
-                // Ударилась о прочную руду — отскакивает вверх пропорционально скорости
-                // удара (коэффициент восстановления, как у настоящего упругого отскока),
-                // дальше не проходит в этом кадре, потом падает снова под гравитацией.
-                posY = rowToHit * BLOCK_SIZE - 0.5;
-                vy = Math.max(bounceMax, Math.min(bounceSpeed, -Math.abs(vy) * BOUNCE_RESTITUTION));
-                squashTimer = SQUASH_FRAMES; // визуальное сплющивание в момент контакта
-                targetRow = brokenRow; // остаёмся на месте
-                break;
-            }
-
-            // Блок разрушен (или был воздухом) — кирка проходит дальше
-            brokenRow = rowToHit + 1;
-
-            if (result.broken) {
-                // Небольшой случайный снос в сторону — как при реальном ударе
-                const dir = Math.random();
-                if (dir < 0.28 && curCol > 0) curCol--;
-                else if (dir > 0.72 && curCol < GRID_COLS - 1) curCol++;
-            }
-
-            if (hp <= 0) break;
-        }
-
-        // Лёгкое покачивание кирки при полёте (визуальная "реальная физика")
-        xOffset = Math.sin(rotation * Math.PI / 180) * 3;
-
-        // Сплющивание ("squash & stretch") в момент удара о блок — плавно
-        // затухает за SQUASH_FRAMES кадров.
-        if (squashTimer > 0) squashTimer--;
-    };
-
-    // Отрисовка текущего состояния (спрайт, камера, HUD) — вызывается один раз
-    // за видимый кадр, даже если physicsStep() был вызван много раз подряд (скип).
-    const renderFrame = () => {
-        let scaleX = 1, scaleY = 1;
-        if (squashTimer > 0) {
-            const p = squashTimer / SQUASH_FRAMES; // 1 → 0
-            scaleX = 1 + 0.4 * p;
-            scaleY = 1 - 0.4 * p;
-        }
-
-        const colCenterOffset = (curCol - Math.floor(GRID_COLS / 2)) * BLOCK_SIZE;
-        sprite.style.transform =
-            `translate(calc(-50% + ${colCenterOffset + xOffset}px), ${posY}px) rotate(${rotation}deg) scale(${scaleX}, ${scaleY})`;
-
-        // Камера плавно следует за киркой по пикселям, но НИКОГДА не откатывается
-        // назад — иначе короткие отскоки от прочной руды выглядят как "падение вверх".
-        const viewportH = viewportEl ? viewportEl.clientHeight : 330;
-        const followThreshold = viewportH * 0.35;
-        const desiredCameraY = Math.max(0, posY - followThreshold);
-        if (desiredCameraY > cameraY) {
-            cameraY += (desiredCameraY - cameraY) * 0.15;
-        }
-        worldEl.style.transform = `translate(-50%, -${cameraY}px)`;
-
-        updateHud();
-    };
-
-    const tick = () => {
-        if (hp <= 0) { finish(); return; }
-
-        if (pickaxeSkipRequested) {
-            // Мгновенно прокручиваем симуляцию (без покадровой отрисовки), пока
-            // HP не упадёт до 15% от стартового запаса или забег не закончится.
-            // Ограничение по числу шагов — просто защита от бесконечного цикла.
-            let safety = 20000;
-            while (hp > skipThresholdHp && hp > 0 && safety-- > 0) {
-                physicsStep();
-            }
-            pickaxeSkipRequested = false; // разовое действие — дальше снова обычная анимация
-        } else {
-            physicsStep();
-        }
-
-        if (hp <= 0) { finish(); return; }
-
-        renderFrame();
-        pickaxePhysicsRAF = requestAnimationFrame(tick);
-    };
-
-    pickaxePhysicsRAF = requestAnimationFrame(tick);
+    } finally {
+        upgRelease();
+    }
 }
 
 /* =========================
@@ -3619,7 +3149,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "pickaxePage", "adminPage", "iceArenaPage"];
+    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "adminPage", "iceArenaPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4640,7 +4170,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.Telegram.WebApp.expand();
     }
 
-    preloadTypeImages();
     await loadUserData();
     updateLevelUI();
     goHome();
@@ -4650,10 +4179,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyDesign();
     startCrashEngine();
 
-    // Запускаем превью-барабан кирки сразу при старте приложения (страница
-    // ещё скрыта — display:none), чтобы к моменту, когда пользователь
-    // впервые откроет "Кирку", лента уже была подготовлена и не дёргалась.
-    renderIdleReel();
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
 
@@ -4757,6 +4282,14 @@ window.openBonus = openBonus;
 window.openCrash = openCrash;
 window.openGamesMenu = openGamesMenu;
 window.openMines = openMines;
+window.openUpgrader = openUpgrader;
+window.playUpgrader = playUpgrader;
+window.upgSetChance = upgSetChance;
+window.upgAdjustChance = upgAdjustChance;
+window.upgBetFactor = upgBetFactor;
+window.upgBetMax = upgBetMax;
+window.upgOnBetInput = upgOnBetInput;
+window.upgOnChanceInput = upgOnChanceInput;
 window.openProfile = openProfile;
 window.openWheel = openWheel;
 window.resetActiveBet = resetActiveBet;
@@ -4773,12 +4306,6 @@ window.toggleProfileCustomizer = toggleProfileCustomizer;
 window.clickMinesTile = clickMinesTile;
 window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
-window.openPickaxe = openPickaxe;
-window.startPickaxeGame = startPickaxeGame;
-window.adjustPickaxeBet = adjustPickaxeBet;
-window.setPickaxeMaxBet = setPickaxeMaxBet;
-window.acceleratePickaxeGame = acceleratePickaxeGame;
-window.skipPickaxeGame = skipPickaxeGame;
 window.clampBetInputOnBlur = clampBetInputOnBlur;
 window.blockInvalidBetKeys = blockInvalidBetKeys;
 window.applyPromoCode = applyPromoCode;
@@ -6335,7 +5862,7 @@ function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
 
 /* ==========================================
    ГЛОБАЛЬНАЯ ЛЕНТА ДЕЙСТВИЙ ИГРОКОВ ("Действия")
-   Собирает вместе ставки из live_bets (Мины/Краш/Кирка/Колесо — начало
+   Собирает вместе ставки из live_bets (Мины/Краш/Колесо — начало
    ставки и её конец, выигрыш или проигрыш) и раунды Айс Арены (начало —
    когда игрок присоединился, конец — когда раунд разрешился), сортирует
    по времени и показывает единой лентой с точным временем начала/конца
@@ -6381,7 +5908,7 @@ async function loadActionsFeed() {
             if (liveError) console.error('Действия (live_bets):', liveError);
             if (arenaError) console.error('Действия (ice_arena_rounds):', arenaError);
 
-            // Ставки Мины/Краш/Кирка/Колесо — начало (created_at) и конец
+            // Ставки Мины/Краш/Колесо — начало (created_at) и конец
             // (resolved_at, пишется resolveLiveBetWin() при любом исходе).
             const liveActions = (liveBets || []).map(b => {
                 const startTs = new Date(b.created_at).getTime();
