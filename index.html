@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<!-- WXS Ice Arena GLOBAL LOBBY — index.html | пакет WXS_IceArena_GLOBAL -->
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#090909">
-    <title>WXS Game · Ice Arena GLOBAL</title>
+    <title>WXS Game</title>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://telegram.org/js/telegram-widget.js?22"></script>
@@ -236,8 +235,11 @@
 
         <section class="games-section" id="gamesListSection">
             <div class="games">
-                <button class="game" onclick="openPickaxe()">
-                    <img class="game-image pickaxe-img" src="images/pickaxe_game.png" alt="Кирка" draggable="false">
+                <button class="game" onclick="openUpgrader()">
+                    <div class="game-image ice-arena-tile upg-tile">
+                        <span class="ice-arena-tile-icon">🚀</span>
+                        <span class="ice-arena-tile-label">Апгрейдер</span>
+                    </div>
                 </button>
                 <button class="game" onclick="openMines()">
                     <img class="game-image mines-img" src="images/mines_game.png" alt="Мины" draggable="false">
@@ -258,67 +260,53 @@
         </section>
     </main>
 
-<!-- ==================== КИРКА ==================== -->
-<main id="pickaxePage" class="pickaxe-page hidden">
+<!-- ==================== АПГРЕЙДЕР ==================== -->
+<main id="upgraderPage" class="upgrader-page hidden">
     <div class="page-header" style="margin-top: 10px;">
         <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
-        <h1>Кирка</h1>
+        <h1>Апгрейдер</h1>
         <div class="header-space"></div>
     </div>
 
-    <section class="wheel-card">
-        <!-- Барабан рулетки кирки: в режиме ожидания медленно крутится по кругу
-             (как превью кейса), а при запуске игры прокручивается как настоящий
-             кейс — быстро, с торможением, и останавливается на выпавшей кирке. -->
-        <div id="pickaxeRoulette" class="pickaxe-roulette">
-            <div class="pickaxe-reel-wrap">
-                <div class="pickaxe-reel-viewport" id="pickaxeReelViewport">
-                    <div class="pickaxe-reel-track" id="pickaxeReelTrack"></div>
-                </div>
-                <div class="pickaxe-reel-selector"></div>
-            </div>
-            <div id="pickaxeName" class="pickaxe-name"></div>
-        </div>
+    <section class="wheel-card upg-card">
+        <canvas id="upgCanvas" class="upg-canvas" aria-label="Колесо апгрейдера"></canvas>
+        <div id="upgResult" class="upg-result"></div>
+        <div id="upgInfo" class="upg-info"></div>
 
-        <!-- Игровой экран шахты (Бесконечный скролл) -->
-        <div id="mineViewport" class="mine-viewport">
-            <div id="mineWorld" class="mine-world">
-                <div id="mineGrid" class="mine-grid-canvas"></div>
-                <div id="activePickaxeSprite" class="pickaxe-sprite hidden">⛏️</div>
-            </div>
-            <!-- Информационный оверлей поверх шахты -->
-            <div class="mine-hud">
-                <div class="hud-item">❤️ <span id="hudHp">0</span></div>
-                <div class="hud-item">⛏️ <span id="hudDepth">0</span> м</div>
-                <div class="hud-item">💰 <span id="hudWin">0.00 $</span></div>
-            </div>
-        </div>
-
-        <!-- Панель ставки -->
-        <div class="pickaxe-controls-panel" style="margin-top: 12px;">
-            <div class="ctrl-box" style="margin-bottom: 0;">
-                <div class="mines-bet-header">
-                    <label>СУММА СТАВКИ</label>
-                    <div class="card-input-wrap">
-                        <input type="number" id="pickaxeBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
-                        <span class="currency-symbol">$</span>
-                    </div>
-                </div>
-                <div class="ctrl-btns-row" style="margin-top: 10px;">
-                    <button class="pct-btn" onclick="adjustPickaxeBet(0.5)">½</button>
-                    <button class="pct-btn" onclick="adjustPickaxeBet(2)">x2</button>
-                    <button class="pct-btn" onclick="setPickaxeMaxBet()">MAX</button>
+        <div class="upg-panel">
+            <div class="mines-bet-header">
+                <label>СУММА СТАВКИ</label>
+                <div class="card-input-wrap">
+                    <input type="number" id="upgBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" oninput="upgOnBetInput()" onblur="clampBetInputOnBlur(event); upgOnBetInput()" onkeydown="blockInvalidBetKeys(event)">
+                    <span class="currency-symbol">$</span>
                 </div>
             </div>
-
-            <button class="mines-main-btn" id="pickaxeActionBtn" onclick="startPickaxeGame()" style="margin-top: 12px; width: 100%;">
-                БРОСИТЬ КИРКУ
-            </button>
-
-            <div class="pickaxe-run-controls hidden" id="pickaxeRunControls">
-                <button class="pickaxe-speed-btn" id="pickaxeSpeedBtn" onclick="acceleratePickaxeGame()"><img class="btn-icon" src="images/speed.png" alt="" draggable="false"> УСКОРИТЬ</button>
-                <button class="pickaxe-speed-btn" id="pickaxeSkipBtn" onclick="skipPickaxeGame()"><img class="btn-icon" src="images/skip.png" alt="" draggable="false"> СКИП</button>
+            <div class="ctrl-btns-row" style="margin-top: 10px;">
+                <button class="pct-btn" onclick="upgBetFactor(0.5)">½</button>
+                <button class="pct-btn" onclick="upgBetFactor(2)">x2</button>
+                <button class="pct-btn" onclick="upgBetMax()">MAX</button>
             </div>
+
+            <div class="mines-bet-header" style="margin-top: 16px;">
+                <label>ШАНС ПОБЕДЫ</label>
+                <div class="card-input-wrap">
+                    <input type="number" id="upgChanceInput" value="50" min="1" max="90" step="1" inputmode="numeric" oninput="upgOnChanceInput(false)" onblur="upgOnChanceInput(true)" onkeydown="blockInvalidBetKeys(event)">
+                    <span class="currency-symbol">%</span>
+                </div>
+            </div>
+            <div class="upg-chance-row">
+                <button class="pct-btn" data-chance="10" onclick="upgSetChance(10)">10%</button>
+                <button class="pct-btn" data-chance="25" onclick="upgSetChance(25)">25%</button>
+                <button class="pct-btn" data-chance="50" onclick="upgSetChance(50)">50%</button>
+                <button class="pct-btn" data-chance="75" onclick="upgSetChance(75)">75%</button>
+                <button class="pct-btn" data-chance="90" onclick="upgSetChance(90)">90%</button>
+            </div>
+            <div class="ctrl-btns-row" style="margin-top: 6px; grid-template-columns: 1fr 1fr;">
+                <button class="pct-btn" onclick="upgAdjustChance(-5)">−5%</button>
+                <button class="pct-btn" onclick="upgAdjustChance(5)">+5%</button>
+            </div>
+
+            <button class="mines-main-btn" id="upgPlayBtn" onclick="playUpgrader()" style="margin-top: 14px; width: 100%;">ИГРАТЬ</button>
         </div>
     </section>
 </main>
@@ -847,7 +835,6 @@
             <button class="main-action-btn share-invite-btn" id="shareInviteBtn" onclick="sharePreparedInvite()">
                 Отправить…
             </button>
-        </section>
     </main>
 
     <!-- ================================================================
@@ -873,7 +860,7 @@
         </section>
 
         <!-- Действия: ставка → результат, с началом и концом по времени,
-             по всем играм (Мины/Краш/Кирка/Колесо/Айс Арена). Клик по
+             по всем играм (Мины/Краш/Колесо/Айс Арена). Клик по
              раунду Айс Арены сразу открывает его реплей. -->
         <section class="wheel-card admin-tab-view hidden" id="adminActionsView" style="text-align: left;">
             <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadActionsFeed().then(renderActionsFeed)">Обновить список</button>
