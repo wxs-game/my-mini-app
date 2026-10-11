@@ -1699,14 +1699,7 @@ function initCrashRocketAnim() {
     const dom = getCrashDom();
     if (!dom.rocketEl || crashRocketAnim) return;
 
-    let animationData = null;
-    if (window.ROCKET_DATA_CHUNKS && window.ROCKET_DATA_CHUNKS.length) {
-        try {
-            animationData = JSON.parse(window.ROCKET_DATA_CHUNKS.join(''));
-        } catch (e) {
-            animationData = null;
-        }
-    }
+    const animationData = getLottieData('ROCKET');
 
     if (typeof lottie === 'undefined' || !animationData) {
         dom.rocketEl.textContent = '🚀';
@@ -1735,14 +1728,7 @@ function initCrashExplosionAnim() {
     const dom = getCrashDom();
     if (!dom.explosionEl || crashExplosionAnim) return;
 
-    let animationData = null;
-    if (window.EXPLOSION_DATA_CHUNKS && window.EXPLOSION_DATA_CHUNKS.length) {
-        try {
-            animationData = JSON.parse(window.EXPLOSION_DATA_CHUNKS.join(''));
-        } catch (e) {
-            animationData = null;
-        }
-    }
+    const animationData = getLottieData('EXPLOSION');
 
     if (typeof lottie === 'undefined' || !animationData) {
         dom.explosionEl.textContent = '💥';
@@ -1918,12 +1904,17 @@ function mapCrashBetsToPlayers(bets) {
     }));
 }
 
+let lastCrashBetsRaw = [];
+
 async function refreshCrashState() {
     try {
-        const { data: rounds, error } = await supabase
+        // 1. Сначала ищем АКТИВНЫЙ раунд (waiting/flying), а не просто самый свежий
+        let round = null;
+        const { data: active, error } = await supabase
             .from(CRASH_ROUNDS_TABLE)
             .select('*')
-            .order('created_at', { ascending: false })
+            .in('status', ['waiting', 'flying'])
+            .order('created_at', { ascending: true })
             .limit(1);
 
         if (error) {
@@ -1936,14 +1927,27 @@ async function refreshCrashState() {
             }
             return;
         }
+        round = active && active[0];
 
-        let round = rounds && rounds[0];
+        // 2. Активного нет — берём последний завершённый (для паузы после краша)
+        if (!round) {
+            const { data: last } = await supabase
+                .from(CRASH_ROUNDS_TABLE)
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(1);
+            round = last && last[0];
+        }
+
+        // 3. Раундов вообще нет — создаём первый
         if (!round) {
             round = await getOrCreateCrashRound();
             if (!round) return;
         }
 
-        const { data: bets, error: betsErr } = await supabase
+        // 4. Ставки: если запрос упал, игра всё равно идёт со старым списком
+        let bets = lastCrashBetsRaw;
+        const { data: betsData, error: betsErr } = await supabase
             .from(CRASH_BETS_TABLE)
             .select('*')
             .eq('round_id', round.id)
@@ -1951,10 +1955,12 @@ async function refreshCrashState() {
 
         if (betsErr) {
             console.error('Crash bets:', betsErr);
-            return;
+        } else {
+            bets = betsData || [];
+            lastCrashBetsRaw = bets;
         }
 
-        applyCrashRound(round, bets || []);
+        applyCrashRound(round, bets);
         await maybeAdvanceCrash(round);
     } catch (e) {
         console.error('Crash state:', e);
@@ -2333,18 +2339,19 @@ function endCrashRoundVisual(round) {
         dom.explosionEl.style.opacity = '1';
         dom.explosionEl.style.display = 'block';
         if (crashExplosionAnim) {
-    // контейнер только что стал видимым — пересчитываем размер холста
-    crashExplosionAnim.resize();
-    requestAnimationFrame(() => {
-        crashExplosionAnim.resize();
-        if (crashExplosionTotalFrames > 0) {
-            const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
-            crashExplosionAnim.playSegments([0, endFrame], true);
-        } else {
-            crashExplosionAnim.goToAndPlay(0, true);
+            // контейнер только что стал видимым — пересчитываем размер холста
+            crashExplosionAnim.resize();
+            requestAnimationFrame(() => {
+                crashExplosionAnim.resize();
+                if (crashExplosionTotalFrames > 0) {
+                    const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
+                    crashExplosionAnim.playSegments([0, endFrame], true);
+                } else {
+                    crashExplosionAnim.goToAndPlay(0, true);
+                }
+            });
         }
-    });
-}
+    }
 
     if (dom.multEl) dom.multEl.style.color = '#e74c3c';
     if (dom.topLeftMult) {
@@ -4169,6 +4176,10 @@ function saveProfileCustomization() {
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Mini App запущен!");
 
+    let resolveCrashReady;
+    const crashReady = new Promise(r => { resolveCrashReady = r; });
+    const assetsReady = preloadAppAssets([crashReady]);
+
     if (window.Telegram?.WebApp) {
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
@@ -4181,7 +4192,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     iceArena.watching = true;
     startIceArenaLobby();
     applyDesign();
-    startCrashEngine();
+    startCrashEngine().finally(resolveCrashReady);
 
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -4217,50 +4228,123 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (blockCombo) e.preventDefault();
     });
 
-    hideAppLoader();
+    hideAppLoader(assetsReady);
 });
 
-// Управляет экраном загрузки: плавно "подкручивает" прогресс-бар, пока
-// страница реально грузится (картинки, шрифты и т.д. через 'load'), держит
-// минимум minVisibleMs на экране, чтобы не мелькало на быстром интернете,
-// а в конце резко "свайпает" весь экран загрузки вверх и убирает из DOM.
-function hideAppLoader() {
+/* =========================
+   ПРЕДЗАГРУЗКА РЕСУРСОВ ПРИ СТАРТЕ (во время экрана загрузки)
+========================= */
+
+// Все картинки, которые используются в приложении (и в HTML, и из JS).
+// Добавляете новую картинку в проект — допишите её сюда.
+const PRELOAD_IMAGES = [
+    'images/bomb.png',
+    'images/gem.png',
+    'images/tether.png',
+    'images/cryptobot.png',
+    'images/xrocket.png',
+    'images/copy.png',
+    'images/lock.png',
+    'images/key.png',
+    'images/rocket_game.png',
+    'images/mines_game.png',
+    'images/dream_catcher_game.png'
+];
+
+const PRELOAD_TASK_TIMEOUT_MS = 8000;   // один зависший файл не должен вешать загрузку
+let appLoadProgress = 0;                // 0..1, читает экран загрузки
+window.__preloadedImages = [];          // держим ссылки, чтобы браузер не выкинул из кэша
+
+function preloadImage(src) {
+    return new Promise(resolve => {
+        const img = new Image();
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(); } };
+        img.onload = () => {
+            // decode() заранее раскодирует картинку, чтобы не было мигания при первом показе
+            if (img.decode) img.decode().then(finish, finish); else finish();
+        };
+        img.onerror = finish;               // нет файла — просто идём дальше
+        img.src = src;
+        window.__preloadedImages.push(img);
+        setTimeout(finish, PRELOAD_TASK_TIMEOUT_MS);
+    });
+}
+
+// Lottie-данные ракеты/взрыва склеиваются из кусков и парсятся ОДИН раз —
+// это самая тяжёлая операция, поэтому делаем её на экране загрузки.
+function getLottieData(kind) {   // kind: 'ROCKET' | 'EXPLOSION'
+    const cacheKey = '__LOTTIE_' + kind;
+    if (window[cacheKey] !== undefined) return window[cacheKey];
+    let data = null;
+    const chunks = window[kind + '_DATA_CHUNKS'];
+    if (chunks && chunks.length) {
+        try { data = JSON.parse(chunks.join('')); } catch (e) { data = null; }
+    }
+    window[cacheKey] = data;
+    return data;
+}
+
+// extraTasks — доп. промисы (например, первый запрос состояния краша).
+function preloadAppAssets(extraTasks = []) {
+    const tasks = [
+        ...PRELOAD_IMAGES.map(preloadImage),
+        (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).catch(() => {}),
+        new Promise(resolve => setTimeout(() => {
+            getLottieData('ROCKET');
+            getLottieData('EXPLOSION');
+            resolve();
+        }, 0)),
+        ...extraTasks.map(p => Promise.race([
+            Promise.resolve(p).catch(() => {}),
+            new Promise(r => setTimeout(r, 6000))
+        ]))
+    ];
+
+    let done = 0;
+    const total = tasks.length;
+    appLoadProgress = 0;
+    return Promise.all(tasks.map(t => t.then(() => {
+        done++;
+        appLoadProgress = done / total;
+    })));
+}
+
+function hideAppLoader(assetsReady) {
     const loader = document.getElementById('appLoader');
     const fill = document.getElementById('appLoaderProgressFill');
     if (!loader) return;
 
     const minVisibleMs = 900;
+    const maxVisibleMs = 15000;   // страховка: не держим экран загрузки вечно
     const startedAt = Date.now();
 
-    // Прогресс сам по себе не привязан к реальным байтам — плавно ползёт
-    // к ~92%, имитируя "движение" загрузки, и не более, пока не готово.
-    let progress = 6;
+    // Полоса теперь показывает РЕАЛЬНЫЙ прогресс предзагрузки (плавно догоняет)
+    let shown = 6;
     const progressTimer = setInterval(() => {
-        const step = (92 - progress) * 0.06 + 0.4;
-        progress = Math.min(92, progress + step);
-        if (fill) fill.style.width = progress + '%';
-    }, 120);
+        const target = 6 + 90 * appLoadProgress;
+        shown += (target - shown) * 0.25;
+        if (fill) fill.style.width = shown + '%';
+    }, 80);
 
-    const finishLoading = () => {
-        const elapsed = Date.now() - startedAt;
-        const remaining = Math.max(0, minVisibleMs - elapsed);
+    const windowLoaded = document.readyState === 'complete'
+        ? Promise.resolve()
+        : new Promise(r => window.addEventListener('load', r, { once: true }));
+
+    const everythingReady = Promise.all([windowLoaded, assetsReady || Promise.resolve()]);
+    const safetyTimeout = new Promise(r => setTimeout(r, maxVisibleMs));
+
+    Promise.race([everythingReady, safetyTimeout]).then(() => {
+        const remaining = Math.max(0, minVisibleMs - (Date.now() - startedAt));
         setTimeout(() => {
             clearInterval(progressTimer);
-            if (fill) fill.style.width = '100%'; // добиваем полосу до конца
-
-            // Небольшая пауза, чтобы глаз успел увидеть 100%, затем — резкий свайп вверх
+            if (fill) fill.style.width = '100%';
             setTimeout(() => {
                 loader.classList.add('app-loader-hidden');
                 setTimeout(() => loader.remove(), 220);
             }, 100);
         }, remaining);
-    };
-
-    if (document.readyState === 'complete') {
-        finishLoading();
-    } else {
-        window.addEventListener('load', finishLoading, { once: true });
-    }
+    });
 }
 
 // Экспорт функций в глобальную область для onclick-обработчиков в HTML
