@@ -2333,14 +2333,18 @@ function endCrashRoundVisual(round) {
         dom.explosionEl.style.opacity = '1';
         dom.explosionEl.style.display = 'block';
         if (crashExplosionAnim) {
-            if (crashExplosionTotalFrames > 0) {
-                const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
-                crashExplosionAnim.playSegments([0, endFrame], true);
-            } else {
-                crashExplosionAnim.goToAndPlay(0, true);
-            }
+    // контейнер только что стал видимым — пересчитываем размер холста
+    crashExplosionAnim.resize();
+    requestAnimationFrame(() => {
+        crashExplosionAnim.resize();
+        if (crashExplosionTotalFrames > 0) {
+            const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
+            crashExplosionAnim.playSegments([0, endFrame], true);
+        } else {
+            crashExplosionAnim.goToAndPlay(0, true);
         }
-    }
+    });
+}
 
     if (dom.multEl) dom.multEl.style.color = '#e74c3c';
     if (dom.topLeftMult) {
