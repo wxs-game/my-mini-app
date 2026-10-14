@@ -3541,14 +3541,23 @@ body.ice-history-modal-open {
 /* ================================================================
    КРАШ — список игроков текущего раунда (общий для всех, как в
    Айс Арене): кто сейчас летит, кто уже забрал (и на сколько x),
-   кто проиграл.
+   кто проиграл. Оформлен отдельным боксом внутри карточки игры.
 ================================================================ */
+.crash-players-box {
+    margin: 16px 0;
+    padding: 14px 12px 12px;
+    background: #0b0b0b;
+    border: 1px solid #222222;
+    border-radius: 20px;
+    text-align: left;
+}
+
 .crash-players-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 10px;
-    padding: 0 2px;
+    margin: 0 0 12px;
+    padding: 0 4px;
     font-size: 11px;
     font-weight: 800;
     color: #777777;
@@ -3565,12 +3574,12 @@ body.ice-history-modal-open {
 }
 
 .crash-players-list {
-    margin-top: 8px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    max-height: 220px;
+    gap: 8px;
+    max-height: 240px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .crash-players-empty {
@@ -3584,65 +3593,124 @@ body.ice-history-modal-open {
 .crash-player-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: #090909;
-    border: 1px solid #222222;
-    border-radius: 12px;
-    padding: 7px 10px;
+    gap: 10px;
+    min-width: 0;
+    background: #151515;
+    border: 1px solid #242424;
+    border-radius: 14px;
+    padding: 8px 10px;
 }
 
+/* Игрок (я) — подсвечен жёлтым */
 .crash-player-row.crash-player-row-user {
-    border-color: rgba(255,200,0,0.5);
+    background: rgba(255, 200, 0, 0.10);
+    border-color: rgba(255, 200, 0, 0.60);
+}
+
+.crash-player-row-user .crash-player-row-name {
+    color: #ffc800;
 }
 
 .crash-player-row-avatar {
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 15px;
     background: rgba(255,255,255,0.08);
     overflow: hidden;
 }
 
+/* min-width: 0 — без него flex-элемент не сжимается и длинное имя не обрезается */
+.crash-player-row-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
 .crash-player-row-name {
-    flex: 1;
     font-size: 12.5px;
     font-weight: 800;
     color: #ffffff;
+    line-height: 1.25;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .crash-player-row-bet {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
-    color: #999999;
-    flex-shrink: 0;
+    color: #8a8a8a;
+    line-height: 1.2;
 }
 
 .crash-player-status {
-    font-size: 11.5px;
-    font-weight: 900;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    min-width: 74px;
+    padding: 4px 10px;
+    border-radius: 11px;
+    border: 1px solid transparent;
     white-space: nowrap;
-    margin-left: 4px;
+    line-height: 1.15;
+}
+
+.crash-status-main {
+    font-size: 12px;
+    font-weight: 900;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.crash-status-sub {
+    font-size: 10.5px;
+    font-weight: 800;
+    opacity: 0.9;
+}
+
+/* Забрал — зелёная «плашка» с иксом и суммой выигрыша */
+.crash-player-status-win {
+    color: #2ecc71;
+    background: rgba(46, 204, 113, 0.14);
+    border-color: rgba(46, 204, 113, 0.45);
+    box-shadow: 0 0 12px rgba(46, 204, 113, 0.15);
+}
+
+.crash-player-status-lost {
+    color: #ff5a5a;
+    background: rgba(231, 76, 60, 0.12);
+    border-color: rgba(231, 76, 60, 0.35);
 }
 
 .crash-player-status-live {
     color: #4dd8ff;
+    background: rgba(77, 216, 255, 0.10);
+    border-color: rgba(77, 216, 255, 0.30);
 }
 
-.crash-player-status-win {
-    color: #2ecc71;
+.crash-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4dd8ff;
+    box-shadow: 0 0 6px #4dd8ff;
+    animation: crashLiveDotPulse 1s ease-in-out infinite;
 }
 
-.crash-player-status-lost {
-    color: #e74c3c;
+@keyframes crashLiveDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.7); }
 }
 
 
