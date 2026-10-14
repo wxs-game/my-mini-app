@@ -2759,7 +2759,7 @@ const UPG_T = { pause: 400, windup: 600, spin: 6000, land: 390 };   // мс, к�
 const UPG_FONT = '"Carlito","Helvetica Neue",Arial,sans-serif';
 const UPG_ARROW = [[0, 0], [29, 15], [21, 4.6], [56, 4.6], [71, 12], [64, 0], [71, -12], [56, -4.6], [21, -4.6], [29, -15]];
 
-const upg = { chance: 50, busy: false, result: null, fade: 1, theta: UPG_START, glow: 0, scenes: {}, cv: null, ctx: null, size: 0, raf: 0 };
+const upg = { chance: 50, busy: false, result: null, fade: 1, theta: UPG_START, glow: 0, scenes: {}, cv: null, ctx: null, size: 0, raf: 0, fadeRaf: 0 };
 
 function upgCalc(bet, chance) {
     const coef = (1 - UPG_HOUSE_EDGE) * 100 / chance;
@@ -2946,15 +2946,22 @@ function upgPickTarget(lo, hi) {
 }
 
 function upgAnimate(win, chance) {
+    cancelAnimationFrame(upg.fadeRaf);
     const half = chance * 1.8;
     const [lo, hi] = win ? [180 - half, 180 + half] : [180 + half, 180 - half + 360];
-    const origin = UPG_START - UPG_WINDUP;
-    const final = (Math.random() < 0.5 ? 3 : 4) * 360 + upgPickTarget(lo, hi);
+    // Стартуем оттуда, куда стрелка упала в прошлом раунде (а не из исходной точки)
+    const startTh = ((upg.theta % 360) + 360) % 360;
+    const origin = startTh - UPG_WINDUP;
+    const target = upgPickTarget(lo, hi);
+    const delta = (((target - startTh) % 360) + 360) % 360;
+    const final = startTh + (Math.random() < 0.5 ? 3 : 4) * 360 + delta;
     const { pause, windup, spin, land } = UPG_T;
     const total = pause + windup + spin + land;
+    const spinStart = pause + windup;
+    const g0 = upg.glow, f0 = upg.fade;      // свечение и итог прошлого раунда — гасим плавно
 
     return new Promise(resolve => {
-        let done = false, prev = UPG_START, prevT = 0, lastK = null, lastTick = 0;
+        let done = false, prev = startTh, prevT = 0, lastK = null, lastTick = 0;
         const t0 = performance.now();
 
         const finish = () => {
@@ -2971,11 +2978,11 @@ function upgAnimate(win, chance) {
             const t = now - t0;
             let theta, calm = 1;
             if (t < pause) {
-                theta = UPG_START;
-            } else if (t < pause + windup) {
-                theta = UPG_START - UPG_WINDUP * upgSmooth((t - pause) / windup);
-            } else if (t < pause + windup + spin) {
-                const u = (t - pause - windup) / spin;
+                theta = startTh;
+            } else if (t < spinStart) {
+                theta = startTh - UPG_WINDUP * upgSmooth((t - pause) / windup);
+            } else if (t < spinStart + spin) {
+                const u = (t - spinStart) / spin;
                 theta = origin + (final - origin) * (1 - Math.pow(1 - u, 3)) * upgSmooth(u / 0.05);
                 const speed = Math.abs(theta - prev) * 30 / Math.max(8, t - prevT);   // °/кадр при 30 мс
                 calm = upgSmooth(1 - speed / 8);
@@ -2985,10 +2992,22 @@ function upgAnimate(win, chance) {
             } else {
                 theta = final;
             }
+
             const gap = Math.abs((((theta % 360) + 360) % 360) - 180);
-            let glow = upgSmooth(1 - gap / (half + 24)) * 0.85 * calm;
-            if (t >= pause + windup + spin) {
-                const f = upgSmooth((t - pause - windup - spin) / land);
+            const ramp = upgSmooth((t - spinStart) / 600);       // свечение зажигается заново только в полёте
+            let glow = upgSmooth(1 - gap / (half + 24)) * 0.85 * calm * ramp;
+
+            if (t < spinStart) {
+                // замах: прошлое свечение плавно гаснет
+                glow = g0 * (1 - upgSmooth(t / spinStart));
+                if (upg.result) {
+                    const k = upgSmooth(Math.min(1, t / 500));
+                    upg.fade = f0 * (1 - k);
+                    if (k >= 1) { upg.result = null; upg.fade = 1; }
+                }
+            }
+            if (t >= spinStart + spin) {
+                const f = upgSmooth((t - spinStart - spin) / land);
                 glow += (1 - glow) * f;
                 upg.result = win ? 'win' : 'lose'; upg.fade = f;
             }
@@ -3014,7 +3033,7 @@ function upgInit() {
 }
 
 function upgRefresh(resetResult = true) {
-    if (resetResult) { upg.result = null; upg.fade = 1; upg.glow = 0; upg.theta = UPG_START; }
+    if (resetResult) upgFadeOut();     // стрелка остаётся где упала, свечение гаснет плавно
     document.querySelectorAll('.upg-chance-row .pct-btn').forEach(b =>
         b.classList.toggle('active', Number(b.dataset.chance) === upg.chance));
     const chanceInput = document.getElementById('upgChanceInput');
@@ -3028,11 +3047,36 @@ function upgRefresh(resetResult = true) {
             ? `Коэффициент x${coef.toFixed(2)} · при победе +${roundMoney(payout - bet).toFixed(2)} $`
             : `При шансе ${upg.chance}% минимальная ставка — ${upgMinBet(upg.chance).toFixed(2)} $`;
     }
-    if (resetResult) {
-        const res = document.getElementById('upgResult');
-        if (res) { res.textContent = ''; res.className = 'upg-result'; }
-    }
+    if (resetResult) upgHideResultText();
     upgDraw();
+}
+
+// Плавно гасит свечение кольца и итог прошлого раунда (без резкого сброса)
+function upgFadeOut(ms = 450) {
+    cancelAnimationFrame(upg.fadeRaf);
+    if (upg.busy) return;
+    const g0 = upg.glow, f0 = upg.result ? upg.fade : 0;
+    if (g0 < 0.01 && !upg.result) { upg.glow = 0; upg.fade = 1; return; }
+    const t0 = performance.now();
+    const step = (now) => {
+        const k = upgSmooth((now - t0) / ms);
+        upg.glow = g0 * (1 - k);
+        if (upg.result) upg.fade = f0 * (1 - k);
+        upgDraw();
+        if (k < 1) upg.fadeRaf = requestAnimationFrame(step);
+        else { upg.result = null; upg.fade = 1; upg.glow = 0; upgDraw(); }
+    };
+    upg.fadeRaf = requestAnimationFrame(step);
+}
+
+let upgResTimer = 0;
+function upgHideResultText() {
+    const res = document.getElementById('upgResult');
+    if (!res || !res.textContent) return;
+    res.style.transition = 'opacity .35s ease';
+    res.style.opacity = '0';
+    clearTimeout(upgResTimer);
+    upgResTimer = setTimeout(() => { res.textContent = ''; res.className = 'upg-result'; }, 360);
 }
 
 function openUpgrader() {
@@ -3140,15 +3184,16 @@ async function playUpgrader() {
             }
         }
 
-        upg.result = null; upg.fade = 1; upg.glow = 0; upg.theta = UPG_START;
         const res = document.getElementById('upgResult');
-        if (res) { res.textContent = ''; res.className = 'upg-result'; }
+        upgHideResultText();      // старый итог плавно гаснет, кольцо и стрелка — внутри upgAnimate
         await upgAnimate(win, chance);
 
         setUIBalance(currentBalance);
         resolveLiveBetWin(liveBetId, bet, credited);
         window.haptic(credited > 0 ? 'success' : 'error');
         if (res) {
+            clearTimeout(upgResTimer);
+            res.style.opacity = '1';
             res.textContent = credited > 0 ? `Победа! +${credited.toFixed(2)} $ (x${coef.toFixed(2)})` : 'Не повезло. Попробуйте ещё раз';
             res.className = 'upg-result ' + (credited > 0 ? 'win' : 'lose');
         }
@@ -4224,7 +4269,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.Telegram.WebApp.expand();
     }
 
-    await loadUserData();
+    console.log('[init] загрузка профиля из Supabase...');
+    // Если Supabase не отвечает — через 8 сек всё равно открываем приложение
+    await Promise.race([
+        loadUserData().catch(e => console.error('[init] loadUserData упала:', e)),
+        new Promise(r => setTimeout(() => { console.warn('[init] Supabase не ответил за 8 сек'); r(); }, 8000))
+    ]);
+    console.log('[init] профиль готов, открываем главную');
     updateLevelUI();
     goHome();
     initLiveBetsFeed();
