@@ -15,6 +15,97 @@ tg.ready();
 tg.expand();
 
 // ==========================================
+// ЗАЩИТА ИНТЕРФЕЙСА: без боковых свайпов, без "оттягивания",
+// без выделения текста
+// ==========================================
+(function setupTouchGuards() {
+    // Telegram: запрет закрытия приложения свайпом вниз
+    try { if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes(); } catch (e) {}
+
+    const asElement = (n) => (n && n.nodeType === 1) ? n : (n && n.parentElement) || null;
+    const isEditable = (n) => {
+        const el = asElement(n);
+        return !!(el && el.closest && el.closest('input, textarea, [contenteditable="true"]'));
+    };
+
+    // --- Запрет выделения текста (кроме полей ввода) ---
+    document.addEventListener('selectstart', (e) => {
+        if (!isEditable(e.target)) e.preventDefault();
+    }, true);
+    document.addEventListener('dragstart', (e) => e.preventDefault());
+    document.addEventListener('selectionchange', () => {
+        const a = document.activeElement;
+        if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+        const sel = window.getSelection && window.getSelection();
+        if (sel && !sel.isCollapsed) sel.removeAllRanges();
+    });
+
+    // --- Страница никогда не должна быть сдвинута по горизонтали ---
+    const resetHScroll = () => {
+        if (window.scrollX !== 0) {
+            window.scrollTo({ left: 0, top: window.scrollY, behavior: 'instant' });
+        }
+    };
+    window.addEventListener('scroll', resetHScroll, { passive: true });
+    document.addEventListener('focusout', () => setTimeout(resetHScroll, 60));
+
+    // --- Блок боковых свайпов и "резинки" сверху/снизу ---
+    let sx = 0, sy = 0;
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            sx = e.touches[0].clientX;
+            sy = e.touches[0].clientY;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        const dx = t.clientX - sx;
+        const dy = t.clientY - sy;
+        if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+
+        const horizontal = Math.abs(dx) > Math.abs(dy);
+
+        // Если палец на внутреннем прокручиваемом блоке (лента, список, модалка),
+        // и он ещё может ехать в эту сторону — не мешаем.
+        let el = asElement(e.target);
+        while (el && el !== document.body && el !== document.documentElement) {
+            const cs = getComputedStyle(el);
+            if (horizontal) {
+                if (/(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1) {
+                    const atLeft = el.scrollLeft <= 0;
+                    const atRight = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+                    if (!((dx > 0 && atLeft) || (dx < 0 && atRight))) return;
+                    break;
+                }
+            } else {
+                if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1) {
+                    const atTop = el.scrollTop <= 0;
+                    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+                    if (!((dy > 0 && atTop) || (dy < 0 && atBottom))) return;
+                    break;
+                }
+            }
+            el = el.parentElement;
+        }
+
+        if (horizontal) {
+            if (e.cancelable) e.preventDefault();
+            return;
+        }
+
+        // Вертикально: блокируем только когда страница уже у верха/низа (нет "оттягивания")
+        const se = document.scrollingElement || document.documentElement;
+        const pageAtTop = se.scrollTop <= 0;
+        const pageAtBottom = se.scrollTop + window.innerHeight >= se.scrollHeight - 1;
+        if ((dy > 0 && pageAtTop) || (dy < 0 && pageAtBottom)) {
+            if (e.cancelable) e.preventDefault();
+        }
+    }, { passive: false });
+})();
+
+// ==========================================
 // 2. ВИБРАЦИЯ (Telegram HapticFeedback)
 // ==========================================
 window.tg = tg;

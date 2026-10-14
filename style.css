@@ -1,4 +1,3 @@
-========================================== */
 /* ==========================================
    СБРОС И БАЗОВЫЕ НАСТРОЙКИ (RESET & BASE)
 ========================================== */
@@ -8,6 +7,8 @@
     padding: 0;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 html {
@@ -3728,4 +3729,74 @@ body.ice-history-modal-open {
 }
 .upg-stack .upg-layer:not(.upg-canvas) {
     pointer-events: none;
+}
+
+
+/* ==========================================
+   ЗАЩИТА: не съезжает, не свайпается по горизонтали,
+   не выделяется текст, нет автозума в полях ввода
+========================================== */
+html, body {
+    width: 100%;
+    max-width: 100%;
+    overscroll-behavior: none;
+    touch-action: pan-y;
+}
+
+body {
+    position: relative;
+}
+
+/* Всё, что выходит за экран по ширине (zoom колеса/арены и т.п.), обрезается —
+   страницу нельзя сдвинуть влево-вправо. clip (в отличие от hidden)
+   не ломает sticky-шапку. */
+.app {
+    overflow-x: clip;
+}
+
+/* Внутренние ленты (Live Wins, история краша, коэффициенты, история арены)
+   по-прежнему листаются пальцем по горизонтали */
+.live-wins-scroll,
+.crash-history-scroll,
+.mines-coef-bar,
+.ice-history-strip {
+    touch-action: pan-x pan-y;
+    overscroll-behavior-x: contain;
+}
+
+/* Нельзя выделять текст нигде */
+*, *::before, *::after {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+::selection {
+    background: transparent;
+    color: inherit;
+}
+
+/* Исключение: в полях ввода выделение должно быть включено,
+   иначе на iOS в них невозможно печатать */
+input, textarea {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* iOS/Telegram приближает (зумит) экран и сдвигает его влево, когда
+   фокусируешься на поле со шрифтом меньше 16px. Делаем 16px. */
+.card-input-wrap input,
+.mines-bet-header .card-input-wrap input,
+.promo-input,
+.admin-amount-input,
+.ctrl-box input[type="number"] {
+    font-size: 16px !important;
+}
+
+/* Поля хеша/ключа только для чтения — не фокусируются (нет зума, нет выделения);
+   копирование идёт по кнопке рядом */
+.fairness-input-box input {
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
