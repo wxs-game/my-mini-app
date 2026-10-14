@@ -1339,6 +1339,34 @@ function handleMinesAction() {
     }
 }
 
+// Мины считает Supabase (SQL-функции mines_*), поле с минами клиенту не отдаётся
+async function minesApi(path, body) {
+    const fn = { '/api/mines/start': 'mines_start', '/api/mines/reveal': 'mines_reveal',
+                 '/api/mines/cashout': 'mines_cashout', '/api/mines/state': 'mines_state' }[path];
+    const args = { p_init: tg?.initData || '' };
+    if (fn === 'mines_start') { args.p_bet = body.bet; args.p_mines = body.mines; }
+    if (fn === 'mines_reveal') { args.p_index = body.index; }
+    try {
+        const { data, error } = await supabase.rpc(fn, args);
+        if (error) return { ok: false, error: error.message || 'Ошибка сервера' };
+        return data;
+    } catch (e) {
+        return { ok: false, error: 'Нет соединения с сервером' };
+    }
+}
+
+function applyMinesWin(res) {
+    const winAmount = roundMoney(res.win);
+    currentTotalWin = roundMoney(currentTotalWin + winAmount);
+    currentWinsCount++;
+    if (res.mult > currentMaxWin) currentMaxWin = res.mult;
+    currentBalance = res.balance;
+    setUIBalance(currentBalance);
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${Number(res.mult).toFixed(2)}x)`);
+    resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, winAmount);
+}
+
 async function startMinesGame() {
     if (minesGame.isProcessing) return;
     if (!lockEconomy()) return;
@@ -1359,22 +1387,20 @@ async function startMinesGame() {
 
     minesGame.isProcessing = true;
     const snapshot = snapshotBalanceState();
-
-    // Списание считает и проверяет сервер (place_bet) — локально только
-    // сразу показываем уменьшенный баланс, чтобы UI не подвисал.
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    const debitResult = await placeBetServer(bet, 'Мины');
-    if (!debitResult.ok) {
+    // Ставку списывает и поле генерирует сервер — клиент поле не получает до конца игры
+    const res = await minesApi('/api/mines/start', { bet, mines: minesGame.minesCount });
+    if (!res.ok) {
         restoreBalanceState(snapshot);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        showMessage(res.error || "Не удалось начать игру.");
         minesGame.isProcessing = false;
         unlockEconomy();
         return;
     }
-    currentBalance = debitResult.balance;
+    currentBalance = res.balance;
     setUIBalance(currentBalance);
 
     minesGame.active = true;
@@ -1382,16 +1408,7 @@ async function startMinesGame() {
     minesGame.liveBetId = await broadcastLiveBet(bet, 'Мины');
     minesGame.gemsFound = 0;
     minesGame.revealed = Array(25).fill(false);
-    minesGame.field = Array(25).fill('gem');
-
-    let placedMines = 0;
-    while (placedMines < minesGame.minesCount) {
-        let randIndex = Math.floor(Math.random() * 25);
-        if (minesGame.field[randIndex] !== 'bomb') {
-            minesGame.field[randIndex] = 'bomb';
-            placedMines++;
-        }
-    }
+    minesGame.field = [];
 
     const actionBtn = document.getElementById('minesActionBtn');
     const autoBtn = document.getElementById('minesAutoBtn');
@@ -1412,37 +1429,44 @@ async function startMinesGame() {
     unlockEconomy();
 }
 
-function clickMinesTile(index) {
+async function clickMinesTile(index) {
     if (!minesGame.active || minesGame.revealed[index] || minesGame.isProcessing) return;
+    minesGame.isProcessing = true;
+
+    const res = await minesApi('/api/mines/reveal', { index });
+    if (!res.ok) {
+        showMessage(res.error || "Ошибка соединения");
+        minesGame.isProcessing = false;
+        return;
+    }
 
     minesGame.revealed[index] = true;
     const tile = document.getElementById(`tile-${index}`);
 
-    if (minesGame.field[index] === 'bomb') {
+    if (res.bomb) {
         tile.className = 'mine-tile revealed-bomb';
         tile.innerHTML = `<img src="images/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+        minesGame.field = res.field;
         endMinesGame(false);
-    } else {
-        minesGame.gemsFound++;
-        tile.className = 'mine-tile revealed-gem';
-
-        tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
-
-        if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
-
-        const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
-        const currentWin = (minesGame.bet * mult).toFixed(2);
-
-        const actionBtn = document.getElementById('minesActionBtn');
-        if (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${currentWin}$`;
-
-        renderMinesCoefBar();
-
-        if (minesGame.gemsFound === 25 - minesGame.minesCount) {
-            cashoutMines();
-        }
+        return;
     }
+
+    minesGame.gemsFound = res.gems;
+    tile.className = 'mine-tile revealed-gem';
+    tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
+
+    const actionBtn = document.getElementById('minesActionBtn');
+    if (res.finished) {
+        minesGame.field = res.field;
+        applyMinesWin(res);
+        endMinesGame(true);
+        return;
+    }
+    if (actionBtn) actionBtn.textContent = `ЗАБРАТЬ ${Number(res.potential).toFixed(2)}$`;
+    renderMinesCoefBar();
+    minesGame.isProcessing = false;
 }
 
 function autoPickMinesTile() {
@@ -1452,8 +1476,7 @@ function autoPickMinesTile() {
         if (!minesGame.revealed[i]) unrevealed.push(i);
     }
     if (unrevealed.length > 0) {
-        let rand = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-        clickMinesTile(rand);
+        clickMinesTile(unrevealed[Math.floor(Math.random() * unrevealed.length)]);
     }
 }
 
@@ -1462,39 +1485,54 @@ async function cashoutMines() {
         showMessage("Откройте хотя бы одну ячейку!");
         return;
     }
-
     if (minesGame.isProcessing) return;
     if (!lockEconomy()) return;
     minesGame.isProcessing = true;
 
-    const snapshot = snapshotBalanceState();
-
-    const mult = getMinesMultiplier(minesGame.gemsFound, minesGame.minesCount);
-    const winAmount = roundMoney(minesGame.bet * mult);
-
-    currentTotalWin = roundMoney(currentTotalWin + winAmount);
-    currentWinsCount++;
-    if (mult > currentMaxWin) currentMaxWin = mult;
-
-    setUIBalance(roundMoney(currentBalance + winAmount));
-    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
-
-    if (!creditResult.ok) {
-        restoreBalanceState(snapshot);
-        showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
+    const res = await minesApi('/api/mines/cashout');
+    if (!res.ok) {
+        showMessage(res.error || "Не удалось зачислить выигрыш. Нажмите «Забрать» ещё раз.");
         minesGame.isProcessing = false;
         unlockEconomy();
         return;
     }
-    currentBalance = creditResult.balance;
-    setUIBalance(currentBalance);
-
-    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
-    resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, winAmount);
-
+    minesGame.field = res.field;
+    applyMinesWin(res);
     endMinesGame(true);
     unlockEconomy();
+}
+
+// Если приложение закрыли посреди раунда — сервер хранит игру, возвращаем её на экран
+async function resumeMinesGame() {
+    if (!tg?.initData) return;
+    const res = await minesApi('/api/mines/state');
+    if (!res.ok || !res.active) return;
+    if (!minesGame.active) minesGame.liveBetId = null;
+    minesGame.active = true;
+    minesGame.bet = res.bet;
+    minesGame.minesCount = res.mines;
+    minesGame.gemsFound = res.gems;
+    minesGame.revealed = Array(25).fill(false);
+    minesGame.field = [];
+    for (let i = 0; i < 25; i++) {
+        const tile = document.getElementById(`tile-${i}`);
+        if (!tile) continue;
+        tile.className = 'mine-tile';
+        tile.innerHTML = '';
+    }
+    res.opened.forEach(i => {
+        minesGame.revealed[i] = true;
+        const tile = document.getElementById(`tile-${i}`);
+        if (tile) {
+            tile.className = 'mine-tile revealed-gem';
+            tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+        }
+    });
+    const actionBtn = document.getElementById('minesActionBtn');
+    const autoBtn = document.getElementById('minesAutoBtn');
+    if (actionBtn) actionBtn.textContent = res.gems > 0 ? `ЗАБРАТЬ ${Number(res.potential).toFixed(2)}$` : 'ОТКРОЙТЕ КЛЕТКУ';
+    if (autoBtn) autoBtn.disabled = false;
+    renderMinesCoefBar();
 }
 
 function endMinesGame(isWin) {
@@ -3215,6 +3253,7 @@ function openMines() {
     showPage("minesPage");
     updateNav("games");
     initMinesGrid();
+    resumeMinesGame();
 }
 
 function openBalance(mode = "deposit") {
