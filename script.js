@@ -15,7 +15,7 @@ tg.ready();
 tg.expand();
 
 // ==========================================
-ВИБРАЦИЯ (Telegram HapticFeedback)
+// 2. ВИБРАЦИЯ (Telegram HapticFeedback)
 // ==========================================
 window.tg = tg;
 
