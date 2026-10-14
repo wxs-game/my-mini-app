@@ -2337,7 +2337,11 @@ function endCrashRoundVisual(round) {
     pushCrashHistoryPoint(crashPoint);
     renderCrashHistory();
 
-    if (window.tg?.HapticFeedback) {
+    // Вибрация краха — только если игрок прямо сейчас находится в игре
+    // «Ракетка» (страница краша открыта). В других разделах — без вибрации.
+    const crashPageEl = document.getElementById('crashPage');
+    const inCrashNow = !!(crashPageEl && !crashPageEl.classList.contains('hidden'));
+    if (inCrashNow && window.tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
 
@@ -3145,16 +3149,38 @@ function upgInit() {
     upg.ctx = cv.getContext('2d');
 
     // обёртка + 3 слоя поверх базового канваса
+    // Позиционирование слоёв задаём инлайн-стилями: без них (если CSS
+    // .upg-stack/.upg-layer не подхватился) 4 канваса идут друг под другом,
+    // текст/стрелка уезжают за экран, а кнопки ставки оказываются на несколько
+    // экранов ниже — со стороны выглядит как «апгрейдер не работает».
     const stack = document.createElement('div');
     stack.className = 'upg-stack';
+    stack.style.position = 'relative';
+    stack.style.width = '100%';
+    stack.style.maxWidth = '420px';
+    stack.style.margin = '0 auto';
+    stack.style.aspectRatio = '1 / 1';
     cv.parentNode.insertBefore(stack, cv);
     stack.appendChild(cv);
+    const layerStyle = (c) => {
+        c.style.position = 'absolute';
+        c.style.left = '0';
+        c.style.top = '0';
+        c.style.width = '100%';
+        c.style.height = '100%';
+        c.style.display = 'block';
+        c.style.maxWidth = 'none';
+        c.style.margin = '0';
+    };
     cv.classList.add('upg-layer');
+    layerStyle(cv);
     const mk = (name) => {
         const c = document.createElement('canvas');
         c.width = c.height = upg.size;
         c.className = 'upg-layer upg-layer-' + name;
         c.setAttribute('aria-hidden', 'true');
+        layerStyle(c);
+        c.style.pointerEvents = 'none';
         stack.appendChild(c);
         return c;
     };

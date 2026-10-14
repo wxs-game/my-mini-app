@@ -1,5 +1,3 @@
-/* WXS Ice Arena GLOBAL LOBBY — style.css
-   Пакет: WXS_IceArena_GLOBAL
 ========================================== */
 /* ==========================================
    СБРОС И БАЗОВЫЕ НАСТРОЙКИ (RESET & BASE)
@@ -3708,3 +3706,26 @@ body.ice-history-modal-open {
     pointer-events: none;
 }
 .upg-locked #upgPlayBtn:disabled { opacity: 0.6; }
+
+/* Слои канваса апгрейдера: колесо, свечение, текст и стрелка накладываются
+   друг на друга в одном квадрате (без этого они шли друг под другом). */
+.upg-stack {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+}
+.upg-stack .upg-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    display: block;
+}
+.upg-stack .upg-layer:not(.upg-canvas) {
+    pointer-events: none;
+}
