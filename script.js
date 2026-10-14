@@ -1993,7 +1993,7 @@ function setDotCrashed(dom, on) {
     if (dom.trailDotGlow) dom.trailDotGlow.classList.toggle('crash-trail-crashed', on);
 }
 function setDotLive(dom, on) {
-    if (dom.trailDotGlow) dom.trailDotGlow.classList.toggle('crash-dot-live', on);
+    if (dom.trailDot) dom.trailDot.classList.toggle('crash-dot-live', on);
 }
 
 function isCrashPageVisible() {
@@ -3064,13 +3064,24 @@ function setCrashMaxBet() {
    ОТРИСОВКА
 ========================= */
 
+// Цвет коэффициента в истории по диапазонам
+function crashMultColor(m) {
+    if (m <= 1.25) return '#ff3b3b';   // 1.00–1.25  красный
+    if (m <= 1.85) return '#ffd21f';   // 1.26–1.85  жёлтый
+    if (m <= 3.00) return '#2ecc71';   // 1.86–3.00  зелёный
+    if (m <= 5.00) return '#3da5ff';   // 3.01–5.00  синий
+    return '#ffc400';                  // 5.01+      ярко-золотой
+}
+
 function renderCrashHistory() {
     const dom = getCrashDom();
     if (!dom.historyList) return;
 
     dom.historyList.innerHTML = crashHistory.map(point => {
-        const color = point < 1.5 ? '#e74c3c' : (point >= 2 ? '#2ecc71' : '#f1c40f');
-        return `<span style="display:inline-block; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:4px 8px; font-size:11px; font-weight:800; color:${color};">${point.toFixed(2)}x</span>`;
+        const color = crashMultColor(point);
+        const gold = point > 5.00;
+        const extra = gold ? ' text-shadow:0 0 8px rgba(255,196,0,0.85); border-color:rgba(255,196,0,0.6); background:rgba(255,196,0,0.12);' : '';
+        return `<span style="display:inline-block; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:4px 8px; font-size:11px; font-weight:800; color:${color};${extra}">${point.toFixed(2)}x</span>`;
     }).join('');
 }
 
@@ -3168,8 +3179,10 @@ function drawCrashTrail(m) {
         setTrailD(dom, `M ${r1(trailStartX)},${r1(trailStartY)} Q ${r1(ctrlX)},${r1(ctrlY)} ${r1(headX)},${r1(headY)}`);
     }
 
-    if (dom.trailHead) {
-        dom.trailHead.setAttribute('transform', `translate(${Math.round(headX * 10) / 10},${Math.round(headY * 10) / 10})`);
+    {
+        const tr = `translate(${Math.round(headX * 10) / 10},${Math.round(headY * 10) / 10})`;
+        if (dom.trailHead) dom.trailHead.setAttribute('transform', tr);
+        if (dom.trailDotGlow) dom.trailDotGlow.setAttribute('transform', tr);
     }
 }
 

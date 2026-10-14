@@ -73,19 +73,21 @@
         /* Свечение следа — полупрозрачные слои вместо filter: drop-shadow
            (drop-shadow пересчитывался на каждом кадре и фризил телефон).
            Точка двигается через transform, а не cx/cy — это бесплатно для GPU. */
-        #crashTrailGlow { stroke-opacity: 0.28; transition: opacity 0.9s ease; }
-        #crashTrailLine { transition: opacity 0.9s ease; }
-        #crashTrailDot, #crashTrailDotGlow { transition: opacity 0.9s ease; }
-        #crashTrailDotGlow { fill-opacity: 0.4; }
-        @keyframes crashDotGlowPulse {
-            0%, 100% { fill-opacity: 0.4; }
-            50%      { fill-opacity: 0.15; }
+        /* Свечение — НЕпрозрачные формы внутри группы с общей прозрачностью:
+           линия и кружок на конце сливаются в один цвет без тёмного наложения.
+           Размеры точки = размерам шлейфа: сердцевина 22px, свечение 46px. */
+        #crashTrailGlowGroup { opacity: 0.28; }
+        #crashTrailGlow, #crashTrailLine, #crashTrailDot, #crashTrailDotGlow { transition: opacity 0.9s ease; }
+        #crashTrailDot { transform-box: fill-box; transform-origin: center; }
+        @keyframes crashDotPulse {
+            0%, 100% { transform: scale(1);    fill-opacity: 1; }
+            50%      { transform: scale(0.62); fill-opacity: 0.65; }
         }
-        #crashTrailDotGlow.crash-dot-live { animation: crashDotGlowPulse 1s ease-in-out infinite; }
+        #crashTrailDot.crash-dot-live { animation: crashDotPulse 1s ease-in-out infinite; }
         #crashTrailLine.crash-trail-crashed,
         #crashTrailGlow.crash-trail-crashed { stroke: #ff3b3b; }
-        #crashTrailDot.crash-trail-crashed { fill: #ffdada; }
-        #crashTrailDotGlow.crash-trail-crashed { fill: #ff3b3b; animation: none; }
+        #crashTrailDot.crash-trail-crashed { fill: #ffdada; animation: none; }
+        #crashTrailDotGlow.crash-trail-crashed { fill: #ff3b3b; }
         #crashTrail { contain: layout paint; }
 
         .crash-mult-topleft {
@@ -452,11 +454,13 @@
 
             <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
                 <svg id="crashTrail" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
-                    <path id="crashTrailGlow" d="" fill="none" stroke="#3dff9a" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+                    <g id="crashTrailGlowGroup">
+                        <path id="crashTrailGlow" d="" fill="none" stroke="#3dff9a" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle id="crashTrailDotGlow" cx="0" cy="0" r="23" fill="#3dff9a" transform="translate(-100,-100)" style="opacity:0;"/>
+                    </g>
                     <path id="crashTrailLine" d="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
                     <g id="crashTrailHead" transform="translate(-100,-100)">
-                        <circle id="crashTrailDotGlow" cx="0" cy="0" r="28" fill="#3dff9a" style="opacity:0;"/>
-                        <circle id="crashTrailDot" cx="0" cy="0" r="13" fill="#eafff2" style="opacity:0;"/>
+                        <circle id="crashTrailDot" cx="0" cy="0" r="11" fill="#eafff2" style="opacity:0;"/>
                     </g>
                 </svg>
                 <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; will-change: transform;"></div>
