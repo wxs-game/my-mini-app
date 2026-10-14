@@ -11,13 +11,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <script>
-        // Eruda включается ТОЛЬКО с ?debug в адресе (https://.../?debug) —
-        // постоянно она перехватывает console/fetch/DOM и заметно замедляет игру.
-        if (/[?&]debug\b/.test(location.search)) {
-            document.write('<script src="https://cdn.jsdelivr.net/npm/eruda"><\/script><script>eruda.init();<\/script>');
-        }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
 

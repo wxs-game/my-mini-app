@@ -2386,6 +2386,26 @@ function applyCrashRound(round, bets) {
         return;
     }
 
+    // ЗАЩИТА ПАУЗЫ: новый раунд мог быть создан в БД раньше времени (чьи-то
+    // «убежавшие» часы, гонка клиентов). Пока у НАС идёт пауза после краша
+    // предыдущего раунда — не переключаемся, а применяем новый раунд ровно
+    // в конце паузы. Так пауза со взрывом не пропадает ни у кого.
+    if (cur && !sameRound && cur.status !== 'waiting' && crashGame.roundId === cur.id) {
+        const holdEnd = crashGame.crashAt + CRASH_RESULT_HOLD_MS;
+        const wait = holdEnd - crashNow();
+        if (wait > 0) {
+            crashLobby.deferredRound = { round, bets };
+            clearTimeout(crashLobby.deferTimer);
+            crashLobby.deferTimer = setTimeout(() => {
+                const d = crashLobby.deferredRound;
+                crashLobby.deferredRound = null;
+                if (d) applyCrashRound(d.round, d.bets);
+            }, wait + 5);
+            return;
+        }
+    }
+    crashLobby.deferredRound = null;
+
     crashLobby.round = round;
 
     if (!sameRound) {
@@ -2538,7 +2558,7 @@ async function maybeAdvanceCrash() {
                 hash: secrets.hash,
                 salt: secrets.salt,
                 crash_point: secrets.crashPoint,
-                waiting_ends_at: new Date(crashNow() + CRASH_WAIT_MS).toISOString()
+                waiting_ends_at: new Date(Math.max(crashNow(), crashGame.crashAt + CRASH_RESULT_HOLD_MS) + CRASH_WAIT_MS).toISOString()
             });
             // 23505 — гонка: кто-то другой уже успел создать новый раунд,
             // это нормально и не является ошибкой.
