@@ -15,10 +15,7 @@ tg.ready();
 tg.expand();
 
 // ==========================================
-// ВИБРАЦИЯ (Telegram HapticFeedback)
-// Весь скрипт обёрнут в функцию, поэтому tg раньше не был виден как
-// window.tg — из-за этого вызовы window.tg?.HapticFeedback в Краше и
-// Айс Арене молча не работали. Теперь tg доступен и там.
+ВИБРАЦИЯ (Telegram HapticFeedback)
 // ==========================================
 window.tg = tg;
 
@@ -2788,8 +2785,16 @@ function upgBet() {
 const upgSmooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const upgPt = (r, deg) => { const a = deg * Math.PI / 180; return [360 + r * Math.sin(a), 315 - r * Math.cos(a)]; };
 
-/* ---------- статичная сцена колеса (кэшируется по шансу) ---------- */
-function upgBuildScene(chance, hot) {
+/* ---------- статичные слои колеса (кэшируются по шансу) ----------
+   Раньше каждый кадр перерисовывал ВСЁ: 2 полноразмерные картинки с альфой,
+   ~10 текстов (с measureText в цикле) и 120 рисок. Теперь слои раздельные:
+     1. base  — колесо, плашка (рисуется только при смене шанса)
+     2. hot   — красное свечение сектора (двигаем ТОЛЬКО css-opacity, без перерисовки)
+     3. text  — тексты (перерисовываются только когда реально поменялись)
+     4. fx    — золотой хвост + стрелка (единственное, что рисуется каждый кадр) */
+// Колесо БЕЗ красного сектора — от шанса не зависит, строится один раз.
+function upgWheel() {
+    if (upg.wheel && upg.wheel.width === upg.size) return upg.wheel;
     const S = upg.size / 720;
     const c = document.createElement('canvas');
     c.width = c.height = upg.size;
@@ -2810,24 +2815,7 @@ function upgBuildScene(chance, hot) {
     }
     disc(254, '#60606c', '#1e1e24');
     disc(250.5, '#2c2c32', '#161618');
-
-    const half = chance * 1.8, k = Math.PI / 180;
-    const sector = () => {
-        x.beginPath();
-        x.arc(360, 315, 250.5, (180 - half) * k - Math.PI / 2, (180 + half) * k - Math.PI / 2);
-        x.arc(360, 315, 180, (180 + half) * k - Math.PI / 2, (180 - half) * k - Math.PI / 2, true);
-        x.closePath();
-    };
-    if (hot) {
-        x.save(); x.shadowColor = 'rgba(255,70,84,1)'; x.shadowBlur = 34 * S; x.fillStyle = '#ff4654';
-        sector(); x.fill(); x.restore();
-    }
-    sector();
-    x.fillStyle = hot ? grad(495, 569, '#ff6872', '#e22c3c') : grad(495, 569, '#f04854', '#c01c2e');
-    x.fill();
-
     disc(180, '#1f1f24', '#121216');
-    x.beginPath(); x.arc(360, 315, 180, 0, Math.PI * 2); x.strokeStyle = '#34343c'; x.lineWidth = 1.6; x.stroke();
 
     // плашка «ставка / выигрыш»
     x.fillStyle = '#161618';
@@ -2837,31 +2825,105 @@ function upgBuildScene(chance, hot) {
     x.arcTo(px0, py1, px0, py0, rr); x.arcTo(px0, py0, px1, py0, rr); x.closePath(); x.fill();
     x.strokeStyle = '#323238'; x.lineWidth = 1;
     x.beginPath(); x.moveTo(360, 633); x.lineTo(360, 681); x.stroke();
-    return c;
+    return (upg.wheel = c);
 }
 
-function upgScene(chance) {
+// Путь сектора для ЛЮБОГО (в т.ч. дробного) шанса — нужен для плавной анимации.
+function upgSectorPath(x, chance) {
+    const half = chance * 1.8, k = Math.PI / 180;
+    x.beginPath();
+    x.arc(360, 315, 250.5, (180 - half) * k - Math.PI / 2, (180 + half) * k - Math.PI / 2);
+    x.arc(360, 315, 180, (180 + half) * k - Math.PI / 2, (180 - half) * k - Math.PI / 2, true);
+    x.closePath();
+}
+
+// Красный сектор + тонкое кольцо по внутреннему краю (рисуется поверх колеса)
+function upgPaintSector(x, chance) {
+    const g = x.createLinearGradient(0, 495, 0, 569); g.addColorStop(0, '#f04854'); g.addColorStop(1, '#c01c2e');
+    upgSectorPath(x, chance);
+    x.fillStyle = g; x.fill();
+    x.beginPath(); x.arc(360, 315, 180, 0, Math.PI * 2); x.strokeStyle = '#34343c'; x.lineWidth = 1.6; x.stroke();
+}
+
+// Слой свечения. Центр (r < 180) вырезан, чтобы ореол не залезал на центральный диск.
+function upgPaintHot(x, S, chance) {
+    x.setTransform(S, 0, 0, S, 0, 0);
+    x.save();
+    x.beginPath(); x.rect(0, 0, 720, 720); x.arc(360, 315, 180, 0, Math.PI * 2, true); x.clip('evenodd');
+    x.save(); x.shadowColor = 'rgba(255,70,84,1)'; x.shadowBlur = 34 * S; x.fillStyle = '#ff4654';
+    upgSectorPath(x, chance); x.fill(); x.restore();
+    const g = x.createLinearGradient(0, 495, 0, 569); g.addColorStop(0, '#ff6872'); g.addColorStop(1, '#e22c3c');
+    upgSectorPath(x, chance); x.fillStyle = g; x.fill();
+    x.restore();
+}
+
+// Готовое свечение для «устоявшегося» шанса (кэш) — чтобы во время вращения ничего не строить.
+function upgHotSprite(chance) {
     const key = chance + ':' + upg.size;
     if (!upg.scenes[key]) {
-        if (Object.keys(upg.scenes).length >= 6) upg.scenes = {};
-        upg.scenes[key] = { base: upgBuildScene(chance, false), hot: upgBuildScene(chance, true) };
+        if (Object.keys(upg.scenes).length >= 8) upg.scenes = {};
+        const c = document.createElement('canvas');
+        c.width = c.height = upg.size;
+        upgPaintHot(c.getContext('2d'), upg.size / 720, chance);
+        upg.scenes[key] = c;
     }
     return upg.scenes[key];
 }
 
-/* ---------- текст ---------- */
+// Плавный «рост/убывание» сектора к новому шансу (по времени, не по кадрам)
+function upgChanceAnim() {
+    if (upg.chRaf) return;
+    let last = performance.now();
+    const step = (now) => {
+        upg.chRaf = 0;
+        if (upg.busy) { upg.shown = upg.chance; upgDraw(); return; }
+        const dt = Math.min(64, now - last); last = now;
+        const diff = upg.chance - upg.shown;
+        if (Math.abs(diff) < 0.04) {
+            upg.shown = upg.chance; upgDraw();
+            setTimeout(() => { if (!upg.busy && upg.ctx) upgHotSprite(upg.chance); }, 80);   // заранее готовим свечение
+            return;
+        }
+        upg.shown += diff * (1 - Math.exp(-dt / 70));
+        upgDraw();
+        upg.chRaf = requestAnimationFrame(step);
+    };
+    upg.chRaf = requestAnimationFrame(step);
+}
+
+/* ---------- текст (ширины кэшируются — measureText в кадре был очень дорогим) ---------- */
+const upgWCache = new Map();
+function upgMeasure(x, font, text) {
+    const key = font + '|' + text;
+    let w = upgWCache.get(key);
+    if (w === undefined) {
+        x.font = font; w = x.measureText(text).width;
+        if (upgWCache.size > 400) upgWCache.clear();
+        upgWCache.set(key, w);
+    }
+    return w;
+}
+
 function upgSpaced(x, text, cx, cy, size, color, sp) {
-    x.font = `700 ${size}px ${UPG_FONT}`; x.fillStyle = color; x.textBaseline = 'middle'; x.textAlign = 'left';
-    const chars = [...text], ws = chars.map(ch => x.measureText(ch).width);
+    const font = `700 ${size}px ${UPG_FONT}`;
+    x.font = font; x.fillStyle = color; x.textBaseline = 'middle'; x.textAlign = 'left';
+    const chars = [...text], ws = chars.map(ch => upgMeasure(x, font, ch));
     let cur = cx - (ws.reduce((a, b) => a + b, 0) + sp * (chars.length - 1)) / 2;
     chars.forEach((ch, i) => { x.fillText(ch, cur, cy); cur += ws[i] + sp; });
 }
 
+const upgFitCache = new Map();
 function upgFit(x, text, cx, cy, size, maxW, color) {
+    const ck = text + '|' + size + '|' + maxW;
+    let s = upgFitCache.get(ck);
+    if (s === undefined) {
+        s = size;
+        while (s > 10 && upgMeasure(x, `700 ${s}px ${UPG_FONT}`, text) > maxW) s--;
+        if (upgFitCache.size > 400) upgFitCache.clear();
+        upgFitCache.set(ck, s);
+    }
     x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
-    let s = size;
     x.font = `700 ${s}px ${UPG_FONT}`;
-    while (s > 10 && x.measureText(text).width > maxW) { s--; x.font = `700 ${s}px ${UPG_FONT}`; }
     x.fillText(text, cx, cy);
 }
 
@@ -2882,51 +2944,100 @@ function upgCenterText(x, kind, alpha, chance, payout) {
 }
 
 /* ---------- кадр ---------- */
+// Геометрия рисок считается один раз
+const UPG_TICKS = (() => {
+    const t = [];
+    for (let i = 0; i < 120; i++) {
+        const a = i * 3, big = i % 5 === 0;
+        const [x1, y1] = upgPt(262, a), [x2, y2] = upgPt(254 + (big ? 24 : 19), a);
+        t.push([x1, y1, x2, y2]);
+    }
+    return t;
+})();
+
 function upgDraw() {
-    const x = upg.ctx;
-    if (!x) return;
+    const base = upg.ctx;
+    if (!base) return;
     const S = upg.size / 720, chance = upg.chance;
-    const bet = upgBet() || MIN_BET;
-    const { payout } = upgCalc(bet, chance);
 
-    x.setTransform(1, 0, 0, 1, 0, 0);
-    x.clearRect(0, 0, upg.size, upg.size);
-    const sc = upgScene(chance);
-    x.drawImage(sc.base, 0, 0);
-    if (upg.glow > 0.01) { x.globalAlpha = Math.min(1, upg.glow); x.drawImage(sc.hot, 0, 0); x.globalAlpha = 1; }
-    x.setTransform(S, 0, 0, S, 0, 0);
+    // во время вращения ставку из DOM не читаем (она заблокирована)
+    if (!upg.busy || upg.betC == null) upg.betC = upgBet() || MIN_BET;
+    const bet = upg.betC;
 
-    if (upg.result) {
-        upgCenterText(x, null, 1 - upg.fade, chance, payout);
-        upgCenterText(x, upg.result, upg.fade, chance, payout);
-    } else {
-        upgCenterText(x, null, 1, chance, payout);
+    // 1) колесо + сектор (перерисовка только пока сектор реально меняется)
+    const shown = upg.shown;
+    const sKey = shown.toFixed(2) + ':' + upg.size;
+    if (upg.sceneKey !== sKey) {
+        base.setTransform(1, 0, 0, 1, 0, 0);
+        base.clearRect(0, 0, upg.size, upg.size);
+        base.drawImage(upgWheel(), 0, 0);
+        base.setTransform(S, 0, 0, S, 0, 0);
+        upgPaintSector(base, shown);
+        upg.sceneKey = sKey;
     }
 
-    upgSpaced(x, 'СТАВКА', 211, 639, 13, '#8c8c96', 1);
-    upgSpaced(x, 'ВЫИГРЫШ', 509, 639, 13, '#8c8c96', 1);
-    upgFit(x, `${bet.toFixed(2)} $`, 211, 667, 28, 258, '#ffffff');
-    upgFit(x, `${payout.toFixed(2)} $`, 509, 667, 28, 258, '#ffd61e');
+    // 2) свечение — прозрачность слоя (GPU); сам слой перерисовываем лишь если оно видно
+    const g = Math.max(0, Math.min(1, upg.glow));
+    const gv = g < 0.01 ? 0 : Math.round(g * 1000) / 1000;
+    if (gv > 0 && upg.hotKey !== sKey) {
+        const h = upg.hotCtx;
+        h.setTransform(1, 0, 0, 1, 0, 0);
+        h.clearRect(0, 0, upg.size, upg.size);
+        if (shown === chance) h.drawImage(upgHotSprite(chance), 0, 0);
+        else upgPaintHot(h, S, shown);
+        upg.hotKey = sKey;
+    }
+    if (upg.glowVal !== gv) { upg.hotCv.style.opacity = gv; upg.glowVal = gv; }
 
-    // золотой хвост рисок за стрелкой
+    // 3) тексты — только если что-то изменилось
+    const disp = Math.round(shown);
+    const tKey = disp + '|' + chance + '|' + bet + '|' + (upg.result || '') + '|' + (upg.result ? Math.round(upg.fade * 200) : 0) + '|' + upg.size;
+    if (upg.textKey !== tKey) {
+        upg.textKey = tKey;
+        const x = upg.txCtx;
+        const { payout } = upgCalc(bet, chance);
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        x.clearRect(0, 0, upg.size, upg.size);
+        x.setTransform(S, 0, 0, S, 0, 0);
+        if (upg.result) {
+            upgCenterText(x, null, 1 - upg.fade, disp, payout);
+            upgCenterText(x, upg.result, upg.fade, disp, payout);
+        } else {
+            upgCenterText(x, null, 1, disp, payout);
+        }
+        upgSpaced(x, 'СТАВКА', 211, 639, 13, '#8c8c96', 1);
+        upgSpaced(x, 'ВЫИГРЫШ', 509, 639, 13, '#8c8c96', 1);
+        upgFit(x, `${bet.toFixed(2)} $`, 211, 667, 28, 258, '#ffffff');
+        upgFit(x, `${payout.toFixed(2)} $`, 509, 667, 28, 258, '#ffd61e');
+    }
+
+    // 4) хвост + стрелка — каждый кадр, но это ~20 линий и один многоугольник
+    const x = upg.fxCtx;
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.clearRect(0, 0, upg.size, upg.size);
+    x.setTransform(S, 0, 0, S, 0, 0);
+
     x.strokeStyle = '#ffd61e'; x.lineWidth = 1.8;
+    const th = upg.theta;
     for (let i = 0; i < 120; i++) {
-        const behind = ((((upg.theta - i * 3 + 180) % 360) + 360) % 360) - 180;
-        const w = behind >= 0 ? Math.max(0, 1 - behind / 46) : Math.max(0, 1 + behind / 12);
-        if (w * w < 0.05) continue;
-        const a = i * 3, [x1, y1] = upgPt(262, a), [x2, y2] = upgPt(254 + (i % 5 === 0 ? 24 : 19), a);
-        x.globalAlpha = w * w;
-        x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
+        const behind = ((((th - i * 3 + 180) % 360) + 360) % 360) - 180;
+        if (behind > 46 || behind < -12) continue;
+        const w = behind >= 0 ? 1 - behind / 46 : 1 + behind / 12;
+        const a = w * w;
+        if (a < 0.05) continue;
+        const t = UPG_TICKS[i];
+        x.globalAlpha = a;
+        x.beginPath(); x.moveTo(t[0], t[1]); x.lineTo(t[2], t[3]); x.stroke();
     }
     x.globalAlpha = 1;
 
-    // стрелка
-    const t = upg.theta * Math.PI / 180, ux = Math.sin(t), uy = -Math.cos(t), vx = Math.cos(t), vy = Math.sin(t);
+    const tr = th * Math.PI / 180, ux = Math.sin(tr), uy = -Math.cos(tr), vx = Math.cos(tr), vy = Math.sin(tr);
     x.beginPath();
-    UPG_ARROW.forEach(([lx, ly], i) => {
+    for (let i = 0; i < UPG_ARROW.length; i++) {
+        const lx = UPG_ARROW[i][0], ly = UPG_ARROW[i][1];
         const r = 182 + lx, px = 360 + ux * r + vx * ly, py = 315 + uy * r + vy * ly;
         if (i) x.lineTo(px, py); else x.moveTo(px, py);
-    });
+    }
     x.closePath();
     x.lineJoin = 'round'; x.lineWidth = 4.4; x.strokeStyle = '#1e1e22'; x.stroke();
     x.fillStyle = '#ffd000'; x.fill();
@@ -2958,6 +3069,8 @@ function upgAnimate(win, chance) {
     const { pause, windup, spin, land } = UPG_T;
     const total = pause + windup + spin + land;
     const spinStart = pause + windup;
+    cancelAnimationFrame(upg.chRaf); upg.chRaf = 0; upg.shown = upg.chance;   // сектор на месте до начала вращения
+    upg.betC = null;                           // перечитаем ставку один раз и закэшируем
     const g0 = upg.glow, f0 = upg.fade;      // свечение и итог прошлого раунда — гасим плавно
 
     return new Promise(resolve => {
@@ -2987,7 +3100,7 @@ function upgAnimate(win, chance) {
                 const speed = Math.abs(theta - prev) * 30 / Math.max(8, t - prevT);   // °/кадр при 30 мс
                 calm = upgSmooth(1 - speed / 8);
                 const k = Math.floor(theta / 3);                                      // «тик» на каждой риске
-                if (lastK !== null && k !== lastK && now - lastTick > 75) { window.haptic('select'); lastTick = now; }
+                if (lastK !== null && k !== lastK && now - lastTick > 75) { setTimeout(() => window.haptic('select'), 0); lastTick = now; }
                 lastK = k;
             } else {
                 theta = final;
@@ -3030,6 +3143,26 @@ function upgInit() {
     upg.size = Math.round(600 * Math.min(window.devicePixelRatio || 1, 2));
     cv.width = cv.height = upg.size;
     upg.ctx = cv.getContext('2d');
+
+    // обёртка + 3 слоя поверх базового канваса
+    const stack = document.createElement('div');
+    stack.className = 'upg-stack';
+    cv.parentNode.insertBefore(stack, cv);
+    stack.appendChild(cv);
+    cv.classList.add('upg-layer');
+    const mk = (name) => {
+        const c = document.createElement('canvas');
+        c.width = c.height = upg.size;
+        c.className = 'upg-layer upg-layer-' + name;
+        c.setAttribute('aria-hidden', 'true');
+        stack.appendChild(c);
+        return c;
+    };
+    upg.hotCv = mk('hot'); upg.hotCv.style.opacity = '0'; upg.hotCtx = upg.hotCv.getContext('2d');
+    upg.txCv = mk('text');  upg.txCtx = upg.txCv.getContext('2d');
+    upg.fxCv = mk('fx');    upg.fxCtx = upg.fxCv.getContext('2d');
+    upg.sceneKey = null; upg.textKey = null; upg.hotKey = null; upg.glowVal = -1; upg.betC = null;
+    upg.shown = upg.chance; upg.chRaf = 0;
 }
 
 function upgRefresh(resetResult = true) {
@@ -3049,6 +3182,7 @@ function upgRefresh(resetResult = true) {
     }
     if (resetResult) upgHideResultText();
     upgDraw();
+    if (upg.shown !== upg.chance) upgChanceAnim();      // сектор плавно догоняет новый шанс
 }
 
 // Плавно гасит свечение кольца и итог прошлого раунда (без резкого сброса)
@@ -3131,6 +3265,7 @@ function upgRelease() {
     const btn = document.getElementById('upgPlayBtn');
     if (btn) { btn.disabled = false; btn.textContent = 'ИГРАТЬ'; }
     document.getElementById('upgraderPage')?.classList.remove('upg-locked');
+    document.body.classList.remove('upg-spinning');
 }
 
 async function playUpgrader() {
@@ -3147,6 +3282,7 @@ async function playUpgrader() {
     const btn = document.getElementById('upgPlayBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Вращение...'; }
     document.getElementById('upgraderPage')?.classList.add('upg-locked');
+    document.body.classList.add('upg-spinning');
 
     try {
         const snapshot = snapshotBalanceState();
