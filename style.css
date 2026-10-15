@@ -955,6 +955,7 @@ main {
 /* Индивидуальный зум под каждую картинку — меняй цифру scale() под свою картинку */
 .game-image.mines-img   { transform: scale(1.12); }
 .game-image.crash-img   { transform: scale(1.125); }
+.game-image.upg-img     { transform: scale(1.12); }
 
 /* Баннер «Telegram Emoji» — на всю ширину сетки (как 2 обычных поля) */
 .game-banner {

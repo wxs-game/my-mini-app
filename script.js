@@ -4592,7 +4592,8 @@ const PRELOAD_IMAGES = [
     'images/ui/key.png',
     'images/banners/rocket_game.png',
     'images/banners/mines_game.png',
-    'images/banners/telegram_emoji_banner.jpg'
+    'images/banners/telegram_emoji_banner.jpg',
+    'images/banners/upgrader_game.png'
 ];
 
 const PRELOAD_TASK_TIMEOUT_MS = 8000;   // один зависший файл не должен вешать загрузку
