@@ -2453,6 +2453,7 @@ function applyCrashRound(round, bets) {
     // ВАЖНО: cashedOut только поднимаем в true и никогда не сбрасываем назад —
     // иначе опрос, пришедший раньше, чем кэшаут записался в БД, на секунду
     // возвращал кнопку «Забрать» (и можно было нажать второй раз).
+    updateCrashTopbar();
     const mine = crashLobby.bets.find(b => b.isUser);
     if (mine) {
         crashGame.bet = mine.amount;
@@ -2487,6 +2488,7 @@ function advanceLocalPhase() {
     }
 
     crashGame.phase = want;
+    updateCrashTopbar();
     if (want === 'waiting') {
         enterWaitingVisual();
     } else if (want === 'flying') {
@@ -2702,9 +2704,43 @@ function enterWaitingVisual() {
     renderCrashUI();
 }
 
+// Верхняя панель краша: БАНК (все ставки раунда), ИГРА (#номер раунда
+// с сервера), СТАРТ ЧЕРЕЗ (цифры отсчёта только во время ожидания).
+let crashTopbarLastTimer = '';
+function updateCrashTopbar() {
+    const bankEl = document.getElementById('crashBankValue');
+    const numEl = document.getElementById('crashGameNumber');
+    const timerEl = document.getElementById('crashTimerValue');
+    if (bankEl) {
+        const bank = (crashLobby.bets || []).reduce((s, b) => s + (Number(b.amount) || 0), 0);
+        bankEl.textContent = bank.toFixed(2) + ' $';
+    }
+    if (numEl) {
+        const n = crashLobby.round && crashLobby.round.game_number;
+        numEl.textContent = n ? '#' + n : '—';
+    }
+    if (timerEl) {
+        let text = '—', cls = '';
+        if (crashGame.phase === 'waiting') {
+            const sec = Math.ceil((crashGame.waitEndsAt - crashNow()) / 1000);
+            if (sec >= 1) {
+                text = String(Math.min(sec, 99));
+                cls = sec >= 4 ? 'tb-green' : (sec >= 2 ? 'tb-yellow' : 'tb-red');
+            }
+        }
+        if (text !== crashTopbarLastTimer) {
+            crashTopbarLastTimer = text;
+            timerEl.textContent = text;
+            timerEl.className = cls;
+            if (cls) { void timerEl.offsetWidth; timerEl.classList.add('tb-pop'); }
+        }
+    }
+}
+
 // Обратный отсчёт: меняем DOM только когда цифра реально сменилась, а
 // следующую смену ставим на ТОЧНУЮ границу секунды.
 function renderCrashCountdown(force) {
+    updateCrashTopbar();
     if (crashGame.phase !== 'waiting') return;
     const dom = getCrashDom();
     const msLeft = crashGame.waitEndsAt - crashNow();
@@ -3159,6 +3195,7 @@ function crashEffectiveStatus(p) {
 }
 
 function renderCrashPlayersList() {
+    updateCrashTopbar();
     const dom = getCrashDom();
     if (!dom.playersList) return;
 

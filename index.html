@@ -84,6 +84,21 @@
         #crashTrailDot.crash-trail-crashed { fill: #ffdada; animation: none; }
         #crashTrailDotGlow.crash-trail-crashed { fill: #ff3b3b; }
         #crashTrail { contain: layout paint; }
+        /* ---- Верхняя панель краша: банк / номер игры / старт через ---- */
+        .crash-topbar { margin-bottom: 0; }
+        .crash-topbar .ice-arena-info-box strong {
+            display: block; font-size: 17px; line-height: 24px; min-height: 24px;
+            font-variant-numeric: tabular-nums;
+        }
+        .crash-timer-box strong { font-size: 22px; transition: color 0.2s ease; }
+        .crash-timer-box strong.tb-green  { color: #3dff9a; text-shadow: 0 0 12px rgba(61,255,154,0.75); }
+        .crash-timer-box strong.tb-yellow { color: #ffd21f; text-shadow: 0 0 12px rgba(255,210,31,0.75); }
+        .crash-timer-box strong.tb-red    { color: #ff4d4d; text-shadow: 0 0 12px rgba(255,77,77,0.8); }
+        .crash-timer-box strong.tb-pop    { animation: crashTbPop 0.35s ease-out; }
+        @keyframes crashTbPop {
+            0%   { transform: scale(1.45); }
+            100% { transform: scale(1); }
+        }
 
         .crash-mult-topleft {
             position: absolute;
@@ -446,6 +461,21 @@
         </div>
 
         <section class="wheel-card">
+
+            <div class="ice-arena-topbar crash-topbar">
+                <div class="ice-arena-info-box">
+                    <small>БАНК</small>
+                    <strong id="crashBankValue">0.00 $</strong>
+                </div>
+                <div class="ice-arena-info-box">
+                    <small>ИГРА</small>
+                    <strong id="crashGameNumber">—</strong>
+                </div>
+                <div class="ice-arena-info-box crash-timer-box" id="crashTimerBox">
+                    <small>СТАРТ ЧЕРЕЗ</small>
+                    <strong id="crashTimerValue">—</strong>
+                </div>
+            </div>
 
             <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
                 <svg id="crashTrail" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
