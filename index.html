@@ -15,6 +15,8 @@
     <script>eruda.init();</script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+    <!-- pako — запасной распаковщик .tgs для старых WebView без DecompressionStream -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
     <script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '">');</script>
 
@@ -227,7 +229,7 @@
 
         <section class="quick-actions">
             <button class="action" onclick="openBalance('deposit')">
-                <div class="action-icon">💰</div><b>Пополнить</b><small>Баланс</small>
+                <div class="action-icon" id="depositSticker">💰</div><b>Пополнить</b><small>Баланс</small>
             </button>
             <button class="action" onclick="openBalance('withdraw')">
                 <div class="action-icon">💸</div><b>Вывод</b><small>Средств</small>

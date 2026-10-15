@@ -6301,3 +6301,83 @@ window.applyBetFactor = applyBetFactor;
 window.applyBetMax = applyBetMax;
 
 })();
+
+
+/* =========================
+   СТИКЕР ВМЕСТО ЭМОДЗИ В «ПОПОЛНИТЬ»
+   Положи ОДИН файл стикера в animations/stickers/ с именем deposit.<расширение>:
+   .tgs (рекомендуется, весит ~20 КБ), .json (Lottie), .webp или .gif.
+   Если файла нет или он не загрузился — остаётся эмодзи 💰.
+========================= */
+(function () {
+    const STICKER_DIR = 'animations/stickers/';
+    const STICKER_EXTS = ['tgs', 'json', 'webp', 'gif'];   // порядок поиска
+
+    // .tgs — это gzip-архив с Lottie-JSON. Распаковываем встроенным API, а если его нет — через pako.
+    async function readLottieJson(buf) {
+        const bytes = new Uint8Array(buf);
+        const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+        if (!isGzip) return JSON.parse(new TextDecoder().decode(bytes));
+        if (typeof DecompressionStream !== 'undefined') {
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return JSON.parse(await new Response(stream).text());
+        }
+        if (window.pako) return JSON.parse(window.pako.ungzip(bytes, { to: 'string' }));
+        throw new Error('no gzip support');
+    }
+
+    function tryImage(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.draggable = false;
+            img.alt = '';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
+    async function buildStickerNode(base, ext) {
+        const url = base + '.' + ext;
+        if (ext === 'tgs' || ext === 'json') {
+            if (typeof lottie === 'undefined') throw new Error('no lottie');
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('not found');
+            const data = await readLottieJson(await res.arrayBuffer());
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            lottie.loadAnimation({
+                container: box,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                animationData: data
+            });
+            return box;
+        }
+        return tryImage(url);
+    }
+
+    async function loadStickerInto(el, base) {
+        if (!el) return;
+        for (const ext of STICKER_EXTS) {
+            try {
+                const node = await buildStickerNode(base, ext);
+                el.textContent = '';
+                el.appendChild(node);
+                el.classList.add('has-sticker');
+                return;
+            } catch (e) { /* пробуем следующий формат */ }
+        }
+        // ни один файл не подошёл — остаётся эмодзи
+    }
+
+    function initDepositSticker() {
+        loadStickerInto(document.getElementById('depositSticker'), STICKER_DIR + 'deposit');
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDepositSticker);
+    } else {
+        initDepositSticker();
+    }
+})();

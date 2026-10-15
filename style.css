@@ -882,6 +882,23 @@ main {
     background: rgba(255, 255, 255, 0.03);
 }
 
+/* Стикер вместо эмодзи в иконке быстрого действия (см. loadStickerInto в script.js) */
+.action-icon.has-sticker {
+    font-size: 0;
+    background: transparent;
+}
+.action-icon.has-sticker > img,
+.action-icon.has-sticker > .sticker-lottie {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
 .action b {
     font-size: 13px;
     font-weight: 800;
