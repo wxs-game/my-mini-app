@@ -847,11 +847,11 @@ function liveWinCardMetaHtml(bet) {
             '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
             '<span class="live-wins-arrow">→</span>' +
             '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
-            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">';
+            '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">';
     }
     return game + ' • ' +
         '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-        '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">';
+        '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">';
 }
 function renderLiveBetsTicker() {
     const pinned = document.getElementById('liveWinPinned');
@@ -885,7 +885,7 @@ function renderLiveBetsTicker() {
             '<span class="live-wins-meta">' +
                 escapeHtml(topWin.game || 'Игра') + ' • ' +
                 '<span class="live-wins-amount live-wins-win">' + Number(topWin.win_amount).toFixed(2) + ' $</span>' +
-                '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+                '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">' +
             '</span>';
 
         // Перезапускаем анимацию появления только когда реально сменился
@@ -914,7 +914,7 @@ function createLiveWinCardEl(bet, animateEnter) {
             '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
             '<span class="live-wins-arrow">→</span>' +
             '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
-            '<img class="live-wins-item-icon" src="images/tether.png" alt="USDT" draggable="false">' +
+            '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">' +
         '</span>';
     return el;
 }
@@ -1225,7 +1225,7 @@ async function requestWithdrawalServer(amount) {
 let balanceMode = "deposit";
 let selectedMethod = "CryptoBot";
 let selectedMethodSub = "Криптовалюта";
-let selectedMethodIcon = "images/cryptobot.png";
+let selectedMethodIcon = "images/crypto/cryptobot.png";
 
 const COLOR_PALETTE = [
     { id: 'slate', start: '#2c3e50', end: '#1a252f' },
@@ -1493,7 +1493,7 @@ async function clickMinesTile(index) {
 
     if (res.bomb) {
         tile.className = 'mine-tile revealed-bomb';
-        tile.innerHTML = `<img src="images/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
+        tile.innerHTML = `<img src="images/mines/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain;">`;
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
         minesGame.field = res.field;
         endMinesGame(false);
@@ -1502,7 +1502,7 @@ async function clickMinesTile(index) {
 
     minesGame.gemsFound = res.gems;
     tile.className = 'mine-tile revealed-gem';
-    tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+    tile.innerHTML = `<img src="images/mines/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
     if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 
     const actionBtn = document.getElementById('minesActionBtn');
@@ -1573,7 +1573,7 @@ async function resumeMinesGame() {
         const tile = document.getElementById(`tile-${i}`);
         if (tile) {
             tile.className = 'mine-tile revealed-gem';
-            tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
+            tile.innerHTML = `<img src="images/mines/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain;">`;
         }
     });
     const actionBtn = document.getElementById('minesActionBtn');
@@ -1602,9 +1602,9 @@ function endMinesGame(isWin) {
         if (!minesGame.revealed[i]) {
             tile.classList.add('end-show');
             if (minesGame.field[i] === 'bomb') {
-                tile.innerHTML = `<img src="images/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = `<img src="images/mines/bomb.png" alt="bomb" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             } else {
-                tile.innerHTML = `<img src="images/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
+                tile.innerHTML = `<img src="images/mines/gem.png" alt="gem" style="width: 32px; height: 32px; object-fit: contain; opacity: 0.6;">`;
             }
         }
     }
@@ -4582,16 +4582,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Все картинки, которые используются в приложении (и в HTML, и из JS).
 // Добавляете новую картинку в проект — допишите её сюда.
 const PRELOAD_IMAGES = [
-    'images/bomb.png',
-    'images/gem.png',
-    'images/tether.png',
-    'images/cryptobot.png',
-    'images/xrocket.png',
-    'images/copy.png',
-    'images/lock.png',
-    'images/key.png',
-    'images/rocket_game.png',
-    'images/mines_game.png'
+    'images/mines/bomb.png',
+    'images/mines/gem.png',
+    'images/crypto/tether.png',
+    'images/crypto/cryptobot.png',
+    'images/crypto/xrocket.png',
+    'images/ui/copy.png',
+    'images/ui/lock.png',
+    'images/ui/key.png',
+    'images/banners/rocket_game.png',
+    'images/banners/mines_game.png',
+    'images/banners/telegram_emoji_banner.jpg'
 ];
 
 const PRELOAD_TASK_TIMEOUT_MS = 8000;   // один зависший файл не должен вешать загрузку
