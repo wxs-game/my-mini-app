@@ -965,29 +965,19 @@ main {
     transform: none;
     border-color: #222222;
 }
-.game-banner-inner {
+.game-banner-img {
+    display: block;
     width: 100%;
-    aspect-ratio: 2 / 1;
+    aspect-ratio: 1536 / 858; /* Пропорции картинки баннера */
+    object-fit: cover;
+    object-position: center;
     border-radius: 24px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    background:
-        radial-gradient(circle at 25% 20%, rgba(255,255,255,0.22), transparent 55%),
-        linear-gradient(150deg, #229ed9 0%, #1b7fc4 50%, #0f4f8f 100%);
-}
-.game-banner-icon {
-    font-size: 48px;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
-}
-.game-banner-label {
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 0.2px;
-    color: #ffffff;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    background: #000000;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none;
 }
 
 /* ==========================================
