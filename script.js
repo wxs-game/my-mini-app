@@ -2390,9 +2390,13 @@ function applyCrashRound(round, bets) {
     // «убежавшие» часы, гонка клиентов). Пока у НАС идёт пауза после краша
     // предыдущего раунда — не переключаемся, а применяем новый раунд ровно
     // в конце паузы. Так пауза со взрывом не пропадает ни у кого.
-    if (cur && !sameRound && cur.status !== 'waiting' && crashGame.roundId === cur.id) {
+    // Опираемся на ЛОКАЛЬНУЮ фазу, а не на статус из БД: при медленной сети
+    // клиент может так и не получить 'flying'/'crashed', хотя по времени
+    // раунд уже взорвался (в этом случае cur.status застревает на 'waiting').
+    if (cur && !sameRound && crashGame.roundId === cur.id &&
+        (crashGame.phase === 'flying' || crashGame.phase === 'crashed')) {
         const holdEnd = crashGame.crashAt + CRASH_RESULT_HOLD_MS;
-        const wait = holdEnd - crashNow();
+        const wait = Math.min(holdEnd - crashNow(), 120000);
         if (wait > 0) {
             crashLobby.deferredRound = { round, bets };
             clearTimeout(crashLobby.deferTimer);
