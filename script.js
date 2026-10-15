@@ -2506,7 +2506,49 @@ function advanceLocalPhase() {
 // от гонки, как и в Айс Арене). Отметки времени пишем ДЕТЕРМИНИРОВАННЫЕ
 // (конец отсчёта / расчётный момент краша), а не «когда мы успели» — поэтому
 // задержка сети или медленный клиент ничего не сдвигают.
+// Серверная версия: переходы фаз делает Postgres-функция crash_tick()
+// (см. crash_server.sql) по ВРЕМЕНИ СЕРВЕРА. Клиент лишь «подталкивает» её,
+// когда по его расчётам фаза должна смениться, — результат при этом от
+// клиента не зависит. Если SQL ещё не установлен — работает прежняя логика.
+let crashTickMissing = false;
 async function maybeAdvanceCrash() {
+    if (crashTickMissing) return maybeAdvanceCrashLegacy();
+    const round = crashLobby.round;
+    if (!round || crashLobby.advancing) return;
+    if (round.id !== crashGame.roundId) return;
+
+    const now = crashNow();
+    if (now - crashLobby.lastAdvanceTry < 1000) return;
+
+    const due =
+        (now >= crashGame.waitEndsAt && (round.status === 'waiting')) ||
+        (now >= crashGame.crashAt && (round.status === 'flying' || round.status === 'waiting')) ||
+        (now >= crashGame.crashAt + CRASH_RESULT_HOLD_MS);
+    if (!due) return;
+
+    crashLobby.advancing = true;
+    crashLobby.lastAdvanceTry = now;
+    try {
+        const { error } = await supabase.rpc('crash_tick');
+        if (error) {
+            const missing = error.code === 'PGRST202' || error.code === '42883' ||
+                /could not find the function|does not exist/i.test(error.message || '');
+            if (missing) {
+                crashTickMissing = true;
+                console.warn('crash_tick не найден в БД — выполни crash_server.sql; пока работает старая логика');
+            } else {
+                console.error('crash_tick:', error);
+            }
+        }
+    } catch (e) {
+        console.error('crash_tick:', e);
+    } finally {
+        crashLobby.advancing = false;
+    }
+    scheduleCrashReload();
+}
+
+async function maybeAdvanceCrashLegacy() {
     const round = crashLobby.round;
     if (!round || crashLobby.advancing) return;
     if (round.id !== crashGame.roundId) return;
