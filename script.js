@@ -4922,7 +4922,7 @@ async function loadAdminPlayers() {
     list.innerHTML = '<p class="wheel-subtitle">Загрузка…</p>';
 
     const { data, error } = await supabase.rpc('admin_list_players', {
-        caller_telegram_id: tgUser.id
+        p_init: tg?.initData || ''
     });
 
     if (error) {
@@ -5002,7 +5002,7 @@ async function adminAdjustBalance(telegramId, sign) {
     }
 
     const { data: newBalance, error } = await supabase.rpc('admin_adjust_balance', {
-        caller_telegram_id: tgUser.id,
+        p_init: tg?.initData || '',
         target_telegram_id: telegramId,
         delta: sign * amount
     });
