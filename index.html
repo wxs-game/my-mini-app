@@ -15,7 +15,7 @@
     <script>eruda.init();</script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
-    <!-- pako — запасной распаковщик .tgs для старых WebView без DecompressionStream -->
+    <!-- pako: запасной распаковщик для .tgs (gzip), если нет DecompressionStream -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
     <script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '">');</script>
@@ -229,29 +229,35 @@
 
         <section class="quick-actions">
             <button class="action" onclick="openBalance('deposit')">
-                <div class="action-icon" id="depositSticker">💰</div><b>Пополнить</b><small>Баланс</small>
+                <div class="action-icon" data-sticker="deposit">💰</div><b>Пополнить</b><small>Баланс</small>
             </button>
             <button class="action" onclick="openBalance('withdraw')">
-                <div class="action-icon">💸</div><b>Вывод</b><small>Средств</small>
+                <div class="action-icon" data-sticker="withdraw">💸</div><b>Вывод</b><small>Средств</small>
             </button>
             <button class="action" onclick="showMessage('VIP пока в разработке')">
-                <div class="action-icon">👑</div><b>VIP</b><small>Статус</small>
+                <div class="action-icon" data-sticker="vip">👑</div><b>VIP</b><small>Статус</small>
             </button>
             <button class="action" onclick="showMessage('Задания пока в разработке')">
-                <div class="action-icon">📋</div><b>Задания</b><small>ежедневки</small>
+                <div class="action-icon" data-sticker="tasks">📋</div><b>Задания</b><small>ежедневки</small>
             </button>
         </section>
 
         <section class="games-section" id="gamesListSection">
             <div class="games">
-                <button class="game" onclick="openCrash()">
-                    <img class="game-image crash-img" src="images/banners/rocket_game.png" alt="Краш" draggable="false">
+                <button class="game" onclick="openUpgrader()">
+                    <div class="game-image ice-arena-tile upg-tile">
+                        <span class="ice-arena-tile-icon">🚀</span>
+                        <span class="ice-arena-tile-label">Апгрейдер</span>
+                    </div>
                 </button>
                 <button class="game" onclick="openMines()">
-                    <img class="game-image mines-img" src="images/banners/mines_game.png" alt="Мины" draggable="false">
+                    <img class="game-image mines-img" src="images/mines_game.png" alt="Мины" draggable="false">
                 </button>
-                <button class="game" onclick="openUpgrader()">
-                    <img class="game-image upg-img" src="images/banners/upgrader_game.png" alt="Апгрейдер" draggable="false">
+                <button class="game" onclick="openWheel()">
+                    <img class="game-image wheel-img" src="images/dream_catcher_game.png" alt="Dream Catcher" draggable="false">
+                </button>
+                <button class="game" onclick="openCrash()">
+                    <img class="game-image crash-img" src="images/rocket_game.png" alt="Краш" draggable="false">
                 </button>
                 <button class="game" onclick="openIceArena()">
                     <div class="game-image ice-arena-tile">
@@ -259,10 +265,6 @@
                         <span class="ice-arena-tile-label">Айс Арена</span>
                     </div>
                 </button>
-                <!-- Telegram Emoji — баннер на всю ширину (2 обычных поля) -->
-                <div class="game game-banner" aria-label="Telegram Emoji">
-                    <img class="game-banner-img" src="images/banners/telegram_emoji_banner.jpg" alt="Telegram Emoji" draggable="false">
-                </div>
             </div>
         </section>
     </main>
@@ -378,6 +380,80 @@
         </section>
     </main>
 
+    <!-- ==================== КОЛЕСО ==================== -->
+    <main id="wheelPage" class="wheel-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Dream Catcher</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card">
+
+            <div class="wheel-stage">
+                <div class="wheel-pointer">
+                    <div class="pointer-tip"></div>
+                </div>
+
+                <div class="wheel-gold-frame">
+                    <div class="gold-bezel-glow"></div>
+                    <div class="wheel-outer">
+                        <svg class="wheel-svg" id="wheelSvg" viewBox="0 0 300 300"></svg>
+                        <div class="wheel-center">
+                            <span>WXS</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wheel-result" id="wheelResult">
+                <span class="result-small">РЕЗУЛЬТАТ</span>
+                <strong id="resultValue">?</strong>
+            </div>
+
+            <div class="wheel-bet-panels">
+                <div class="bet-panel-header">
+                    <span id="betBalanceText">Баланс: Загрузка...</span>
+                </div>
+
+                <div class="color-tabs-row" id="colorTabsRow"></div>
+
+                <div class="active-bet-box" id="activeBetBox">
+                    <div class="card-top">
+                        <div class="card-title" id="activeColorTitle"></div>
+                        <div class="card-input-wrap">
+                            <input type="number" 
+                                   id="activeBetInput" 
+                                   placeholder="0.00" 
+                                   min="0" 
+                                   step="any" 
+                                   oninput="onActiveColorInput(this.value)">
+                            <span style="color:#666; font-size:14px; margin-left:4px;">$</span>
+                        </div>
+                    </div>
+
+                    <div class="card-percent-btns" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px;">
+                        <button class="pct-btn" onclick="applyMinToActive()">MIN</button>
+                        <button class="pct-btn" onclick="applyPercentToActive(0.10)">10%</button>
+                        <button class="pct-btn" onclick="applyPercentToActive(0.25)">25%</button>
+                        <button class="pct-btn" onclick="applyPercentToActive(0.50)">50%</button>
+                        <button class="pct-btn" onclick="applyPercentToActive(1.00)">MAX</button>
+                    </div>
+
+                    <button class="reset-bet-btn" onclick="resetActiveBet()" style="width: 100%; margin-top: 8px; padding: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #888; font-size: 11px; font-weight: 700; cursor: pointer;">
+                        ✕ Сбросить ставку
+                    </button>
+                </div>
+
+                <div class="total-bet-info" id="totalBetInfo" style="margin-top: 10px;">Общая ставка: 0.00 $</div>
+            </div>
+
+            <button class="spin-button-gold" id="spinButton" onclick="spinWheel()">
+                <span>↻ Сделать ставку</span>
+            </button>
+        </section>
+    </main>
+
     <!-- ==================== КРАШ ==================== -->
     <main id="crashPage" class="crash-page hidden">
         <div class="page-header" style="margin-top: 10px;">
@@ -474,18 +550,18 @@
 
         <div class="crash-fairness-body">
             <div class="fairness-field-group">
-                <label><img src="images/ui/lock.png" class="fairness-label-icon" alt="" draggable="false"> Хеш раунда</label>
+                <label><img src="images/lock.png" class="fairness-label-icon" alt="" draggable="false"> Хеш раунда</label>
                 <div class="fairness-input-box">
                     <input type="text" id="crashRoundHashInput" readonly placeholder="Генерация..." />
-                    <button id="copyCrashHashBtn" class="copy-btn" onclick="copyCrashHash()"><img src="images/ui/copy.png" class="copy-btn-icon" alt="Копировать" draggable="false"></button>
+                    <button id="copyCrashHashBtn" class="copy-btn" onclick="copyCrashHash()"><img src="images/copy.png" class="copy-btn-icon" alt="Копировать" draggable="false"></button>
                 </div>
             </div>
 
             <div class="fairness-field-group">
-                <label><img src="images/ui/key.png" class="fairness-label-icon" alt="" draggable="false"> SHA-256 Ключ</label>
+                <label><img src="images/key.png" class="fairness-label-icon" alt="" draggable="false"> SHA-256 Ключ</label>
                 <div class="fairness-input-box">
                     <input type="text" id="crashRoundKeyInput" readonly placeholder="Раскроется сервером после раунда" />
-                    <button id="copyCrashKeyBtn" class="copy-btn" onclick="copyCrashKey()"><img src="images/ui/copy.png" class="copy-btn-icon" alt="Копировать" draggable="false"></button>
+                    <button id="copyCrashKeyBtn" class="copy-btn" onclick="copyCrashKey()"><img src="images/copy.png" class="copy-btn-icon" alt="Копировать" draggable="false"></button>
                 </div>
             </div>
 
@@ -558,7 +634,7 @@
                 <label>МЕТОД</label>
                 <div class="custom-select" onclick="toggleMethods()">
                     <div class="select-selected">
-                        <img class="m-icon" id="selectedMethodIcon" src="images/crypto/cryptobot.png" alt="CryptoBot" style="width: 26px; height: 26px; object-fit: contain;">
+                        <img class="m-icon" id="selectedMethodIcon" src="images/cryptobot.png" alt="CryptoBot" style="width: 26px; height: 26px; object-fit: contain;">
                         <div class="m-text">
                             <strong id="selectedMethod">CryptoBot</strong>
                             <small id="selectedMethodSub">Криптовалюта</small>
@@ -566,12 +642,12 @@
                         <span class="arrow" id="methodArrow">▼</span>
                     </div>
                     <div class="select-items" id="methodsDropdown">
-                        <div onclick="event.stopPropagation(); selectMethod('CryptoBot', 'images/crypto/cryptobot.png', 'Криптовалюта')">
-                            <img src="images/crypto/cryptobot.png" alt="CryptoBot" style="width: 24px; height: 24px; object-fit: contain;"> 
+                        <div onclick="event.stopPropagation(); selectMethod('CryptoBot', 'images/cryptobot.png', 'Криптовалюта')">
+                            <img src="images/cryptobot.png" alt="CryptoBot" style="width: 24px; height: 24px; object-fit: contain;"> 
                             <div><strong>CryptoBot</strong><small>Криптовалюта</small></div>
                         </div>
-                        <div onclick="event.stopPropagation(); selectMethod('xRocket', 'images/crypto/xrocket.png', 'Криптовалюта')">
-                            <img src="images/crypto/xrocket.png" alt="xRocket" style="width: 24px; height: 24px; object-fit: contain;"> 
+                        <div onclick="event.stopPropagation(); selectMethod('xRocket', 'images/xrocket.png', 'Криптовалюта')">
+                            <img src="images/xrocket.png" alt="xRocket" style="width: 24px; height: 24px; object-fit: contain;"> 
                             <div><strong>xRocket</strong><small>Криптовалюта</small></div>
                         </div>
                     </div>
@@ -793,6 +869,37 @@
             </button>
     </main>
 
+    <!-- ================================================================
+         СЛУЖЕБНАЯ АДМИН-ПАНЕЛЬ
+    ================================================================== -->
+    <main id="adminPage" class="admin-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Админ-панель</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <div class="balance-mode-toggle">
+            <button class="mode-btn active" id="adminTabPlayersBtn" onclick="setAdminTab('players')">Игроки</button>
+            <button class="mode-btn" id="adminTabActionsBtn" onclick="setAdminTab('actions')">Действия</button>
+        </div>
+
+        <section class="wheel-card admin-tab-view" id="adminPlayersView" style="text-align: left;">
+            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadAdminPlayers()">Обновить список</button>
+            <div id="adminPlayersList" class="admin-players-list">
+                <p class="wheel-subtitle">Загрузка…</p>
+            </div>
+        </section>
+
+        <!-- Действия: ставка → результат, с началом и концом по времени,
+             по всем играм (Мины/Краш/Колесо/Айс Арена). Клик по
+             раунду Айс Арены сразу открывает его реплей. -->
+        <section class="wheel-card admin-tab-view hidden" id="adminActionsView" style="text-align: left;">
+            <button class="promo-apply-btn" style="width:100%; margin-bottom: 14px;" onclick="loadActionsFeed().then(renderActionsFeed)">Обновить список</button>
+            <div id="actionsList" class="ice-history-list"></div>
+        </section>
+    </main>
+
     <!-- НИЖНЕЕ МЕНЮ -->
     <nav class="bottom-nav">
         <button class="nav-item active" id="homeNav" onclick="goHome()">
@@ -814,22 +921,22 @@
 </div>
 
 <!-- Скрипты анимации ракеты -->
-<script src="animations/crash/rocket-data-part1.js"></script>
-<script src="animations/crash/rocket-data-part2.js"></script>
-<script src="animations/crash/rocket-data-part3.js"></script>
-<script src="animations/crash/rocket-data-part4.js"></script>
-<script src="animations/crash/rocket-data-part5.js"></script>
-<script src="animations/crash/rocket-data-part6.js"></script>
-<script src="animations/crash/rocket-data-part7.js"></script>
-<script src="animations/crash/rocket-data-part8.js"></script>
-<script src="animations/crash/explosion-data-part1.js"></script>
-<script src="animations/crash/explosion-data-part2.js"></script>
-<script src="animations/crash/explosion-data-part3.js"></script>
-<script src="animations/crash/explosion-data-part4.js"></script>
-<script src="animations/crash/explosion-data-part5.js"></script>
-<script src="animations/crash/explosion-data-part6.js"></script>
-<script src="animations/crash/explosion-data-part7.js"></script>
-<script src="animations/crash/explosion-data-part8.js"></script>
+<script src="animations/rocket-data-part1.js"></script>
+<script src="animations/rocket-data-part2.js"></script>
+<script src="animations/rocket-data-part3.js"></script>
+<script src="animations/rocket-data-part4.js"></script>
+<script src="animations/rocket-data-part5.js"></script>
+<script src="animations/rocket-data-part6.js"></script>
+<script src="animations/rocket-data-part7.js"></script>
+<script src="animations/rocket-data-part8.js"></script>
+<script src="animations/explosion-data-part1.js"></script>
+<script src="animations/explosion-data-part2.js"></script>
+<script src="animations/explosion-data-part3.js"></script>
+<script src="animations/explosion-data-part4.js"></script>
+<script src="animations/explosion-data-part5.js"></script>
+<script src="animations/explosion-data-part6.js"></script>
+<script src="animations/explosion-data-part7.js"></script>
+<script src="animations/explosion-data-part8.js"></script>
 <!-- Исполняемый скрипт логики приложения -->
 <script>document.write('<script src="script.js?v=' + Date.now() + '"><\/script>');</script>
 </body>
