@@ -3429,12 +3429,7 @@ function upgMinBet(chance) {
     return MIN_BET;
 }
 
-// Исход — честный: победа с вероятностью ровно «шанс»%, криптостойкий генератор.
-function upgRoll(chance) {
-    const a = new Uint32Array(1);
-    crypto.getRandomValues(a);
-    return (a[0] % 100) < chance;
-}
+// Исход броска считает сервер (SQL-функция upgrader_play) — в браузере его нет.
 
 function upgBet() {
     const v = parseFloat(document.getElementById('upgBetInput')?.value);
@@ -3949,6 +3944,19 @@ function upgRelease() {
     document.body.classList.remove('upg-spinning');
 }
 
+// Ставку, бросок и выплату делает Supabase (upgrader_play), клиент только показывает итог
+async function upgApi(bet, chance) {
+    try {
+        const { data, error } = await supabase.rpc('upgrader_play', {
+            p_init: tg?.initData || '', p_bet: bet, p_chance: chance
+        });
+        if (error) return { ok: false, error: error.message || 'Ошибка сервера' };
+        return data;
+    } catch (e) {
+        return { ok: false, error: 'Нет соединения с сервером' };
+    }
+}
+
 async function playUpgrader() {
     if (upg.busy || isBetProcessing) return;
     const bet = upgBet(), chance = upg.chance;
@@ -3971,47 +3979,38 @@ async function playUpgrader() {
         currentBetsCount++;
         setUIBalance(roundMoney(currentBalance - bet));
 
-        const debit = await placeBetServer(bet, 'Апгрейдер');
-        if (!debit.ok) {
+        const srv = await upgApi(bet, chance);
+        if (!srv || !srv.ok) {
             restoreBalanceState(snapshot);
-            showMessage('Не удалось списать ставку. Проверьте соединение и попробуйте снова.');
+            showMessage((srv && srv.error) || 'Не удалось сыграть. Проверьте соединение и попробуйте снова.');
             return;
         }
-        currentBalance = debit.balance;
-        setUIBalance(currentBalance);
+        const win = !!srv.win;
+        const credited = win ? roundMoney(srv.payout) : 0;
+        const srvCoef = Number(srv.coef);
+        // на экране сначала показываем баланс после списания ставки,
+        // а выигрыш раскрываем, когда колесо остановилось
+        setUIBalance(roundMoney(Number(srv.balance) - credited));
 
         const liveBetId = await broadcastLiveBet(bet, 'Апгрейдер');
-        const win = upgRoll(chance);
 
-        // Деньги проводим сразу (как в боте), а на экране баланс и итог
-        // раскрываются только когда колесо остановилось.
-        let credited = 0;
         if (win) {
-            const winSnap = snapshotBalanceState();
-            currentTotalWin = roundMoney(currentTotalWin + payout);
+            currentTotalWin = roundMoney(currentTotalWin + credited);
             currentWinsCount++;
-            if (coef > currentMaxWin) currentMaxWin = coef;
-            const cr = await resolveWinServerWithRetry(payout, coef);
-            if (!cr.ok) {
-                restoreBalanceState(winSnap);
-                showMessage('Ошибка сети: выигрыш не был зачислен. Обратитесь в поддержку и укажите время игры.');
-            } else {
-                credited = payout;
-                currentBalance = cr.balance;
-            }
+            if (srvCoef > currentMaxWin) currentMaxWin = srvCoef;
         }
 
         const res = document.getElementById('upgResult');
         upgHideResultText();      // старый итог плавно гаснет, кольцо и стрелка — внутри upgAnimate
         await upgAnimate(win, chance);
 
-        setUIBalance(currentBalance);
+        setUIBalance(Number(srv.balance));
         resolveLiveBetWin(liveBetId, bet, credited);
         window.haptic(credited > 0 ? 'success' : 'error');
         if (res) {
             clearTimeout(upgResTimer);
             res.style.opacity = '1';
-            res.textContent = credited > 0 ? `Победа! +${credited.toFixed(2)} $ (x${coef.toFixed(2)})` : 'Не повезло. Попробуйте ещё раз';
+            res.textContent = credited > 0 ? `Победа! +${credited.toFixed(2)} $ (x${srvCoef.toFixed(2)})` : 'Не повезло. Попробуйте ещё раз';
             res.className = 'upg-result ' + (credited > 0 ? 'win' : 'lose');
         }
     } finally {
