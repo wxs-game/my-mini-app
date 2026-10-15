@@ -145,7 +145,7 @@ window.tg = tg;
         } catch (e) {}
     };
 
-    // Вибрация на КАЖДЫЙ тап по кнопкам, плиткам игр, мин, цветам колеса,
+    // Вибрация на КАЖДЫЙ тап по кнопкам, плиткам игр, мин, 
     // нижнему меню и любым элементам с onclick. Слушатель один, на уровне
     // документа, поэтому работает и для элементов, которые создаются позже.
     const CLICKABLE = 'button, a, [onclick], .game, .nav-item, .mines-tile, .mine-tile, .pct-btn, .action, label, select, input[type="checkbox"], input[type="radio"]';
@@ -1244,56 +1244,8 @@ let profileDesign = JSON.parse(localStorage.getItem('wxs_profile')) || {
     end: '#1a252f'
 };
 
-let colorBets = { green: 0, red: 0, blue: 0, yellow: 0, gold: 0 };
-let activeColor = 'green';
-
 let transactions = [];
 
-const COLOR_CONFIG = {
-    green:  { label: '1x',  mult: 1,  color: '#2ecc71', name: 'Зеленый' },
-    red:    { label: '2x',  mult: 2,  color: '#e74c3c', name: 'Красный' },
-    blue:   { label: '3x',  mult: 3,  color: '#3498db', name: 'Синий' },
-    yellow: { label: '5x',  mult: 5,  color: '#f1c40f', name: 'Желтый' },
-    gold:   { label: '20x', mult: 20, color: '#ffd700', name: 'Золото' }
-};
-
-const sectors = [
-    { type: 'gold',   ...COLOR_CONFIG.gold },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'blue',   ...COLOR_CONFIG.blue },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'yellow', ...COLOR_CONFIG.yellow },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'blue',   ...COLOR_CONFIG.blue },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'yellow', ...COLOR_CONFIG.yellow },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'blue',   ...COLOR_CONFIG.blue },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'yellow', ...COLOR_CONFIG.yellow },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'blue',   ...COLOR_CONFIG.blue },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red },
-    { type: 'green',  ...COLOR_CONFIG.green },
-    { type: 'red',    ...COLOR_CONFIG.red }
-];
-
-let wheelRotation = 0;
-let wheelSpinning = false;
 let isBetProcessing = false;
 
 /* =========================
@@ -4037,8 +3989,7 @@ function setUIBalance(newBalance) {
         "statTurnover": turnoverValue,
         "statMaxMult": maxMultValue,
         "statTotalWin": totalWinValue,
-        "statBetsCount": betsCountValue,
-        "betBalanceText": `Баланс: ${formatted}`
+        "statBetsCount": betsCountValue
     };
 
     Object.keys(elementsMap).forEach(id => {
@@ -4051,7 +4002,6 @@ function setUIBalance(newBalance) {
     });
 
     updateLevelUI();
-    updateTotalBet();
 }
 
 /* =========================
@@ -4059,7 +4009,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "wheelPage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "adminPage", "iceArenaPage"];
+    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4102,14 +4052,6 @@ function openGamesMenu() {
     }
 }
 
-function openWheel() {
-    showPage("wheelPage");
-    updateNav("games");
-    drawWheel();
-    renderColorTabs();
-    selectColorTab(activeColor);
-}
-
 function openMines() {
     showPage("minesPage");
     updateNav("games");
@@ -4144,364 +4086,6 @@ function updateNav(active) {
     const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
     const activeElement = document.getElementById(map[active]);
     if (activeElement) activeElement.classList.add("active");
-}
-
-/* =========================
-   ОТРИСОВКА SVG КОЛЕСА
-========================= */
-
-function drawWheel() {
-    const wheelSvg = document.getElementById('wheelSvg');
-    const rewardList = document.getElementById('rewardList');
-    if (!wheelSvg) return;
-
-    const total = sectors.length;
-    const sliceAngle = 360 / total;
-    const radius = 150;
-    const center = 150;
-
-    let svgContent = '';
-
-    sectors.forEach((sector, i) => {
-        const startAngle = i * sliceAngle - 90;
-        const endAngle = startAngle + sliceAngle;
-
-        const x1 = center + radius * Math.cos((Math.PI * startAngle) / 180);
-        const y1 = center + radius * Math.sin((Math.PI * startAngle) / 180);
-        const x2 = center + radius * Math.cos((Math.PI * endAngle) / 180);
-        const y2 = center + radius * Math.sin((Math.PI * endAngle) / 180);
-
-        const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} Z`;
-
-        const textAngle = startAngle + sliceAngle / 2;
-        const textRadius = radius * 0.75;
-        const textX = center + textRadius * Math.cos((Math.PI * textAngle) / 180);
-        const textY = center + textRadius * Math.sin((Math.PI * textAngle) / 180);
-
-        svgContent += `
-            <path d="${pathData}" fill="${sector.color}" class="wheel-sector" />
-            <text x="${textX}" y="${textY}" class="wheel-sector-text" style="font-size: 8px;" transform="rotate(${textAngle + 90}, ${textX}, ${textY})">
-                ${sector.label}
-            </text>
-        `;
-    });
-
-    wheelSvg.innerHTML = svgContent;
-
-    if (rewardList) {
-        rewardList.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
-            const cfg = COLOR_CONFIG[key];
-            return `
-                <div style="background:#161616; border:1px solid #222; padding:10px; border-radius:12px; display:flex; align-items:center; gap:8px;">
-                    <span style="background:${cfg.color}; width:16px; height:16px; border-radius:50%; display:inline-block;"></span>
-                    <b style="font-size:12px;">${cfg.name} (${cfg.label})</b>
-                </div>
-            `;
-        }).join('');
-    }
-}
-
-/* =========================
-   ТАБЫ ЦВЕТОВ И СТАВКИ КОЛЕСА
-========================= */
-
-function renderColorTabs() {
-    const row = document.getElementById('colorTabsRow');
-    if (!row) return;
-
-    row.innerHTML = Object.keys(COLOR_CONFIG).map(key => {
-        const cfg = COLOR_CONFIG[key];
-        const hasBet = colorBets[key] > 0;
-
-        return `
-            <div class="color-tab-btn ${key === activeColor ? 'active' : ''}" 
-                 id="tab-${key}" 
-                 onclick="selectColorTab('${key}')">
-                <span class="tab-indicator" style="background: ${cfg.color};"></span>
-                <span class="tab-name">${cfg.name}</span>
-                <span class="tab-mult" id="tab-val-${key}">
-                    ${hasBet ? colorBets[key] + ' $' : cfg.label}
-                </span>
-            </div>
-        `;
-    }).join('');
-}
-
-function selectColorTab(color) {
-    if (wheelSpinning) return;
-
-    const currentInput = document.getElementById('activeBetInput');
-    if (currentInput) {
-        onActiveColorInput(currentInput.value);
-    }
-
-    activeColor = color;
-
-    document.querySelectorAll('.color-tab-btn').forEach(btn => btn.classList.remove('active'));
-    const currentTab = document.getElementById(`tab-${color}`);
-    if (currentTab) currentTab.classList.add('active');
-
-    const cfg = COLOR_CONFIG[color];
-    const titleBox = document.getElementById('activeColorTitle');
-    if (titleBox) {
-        titleBox.innerHTML = `
-            <span class="color-indicator" style="background: ${cfg.color};"></span>
-            <div>
-                <span>Ставка на ${cfg.name}</span><br>
-                <span style="color: #888888; font-size: 11px; font-weight: 700;">(${cfg.label})</span>
-            </div>
-        `;
-    }
-
-    if (currentInput) {
-        const savedVal = colorBets[color];
-        currentInput.value = savedVal > 0 ? savedVal : '';
-    }
-
-    updateTotalBet();
-}
-
-function onActiveColorInput(val) {
-    let parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0.10) {
-        colorBets[activeColor] = 0;
-    } else {
-        colorBets[activeColor] = parsed;
-    }
-
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        const cfg = COLOR_CONFIG[activeColor];
-        tabVal.textContent = colorBets[activeColor] > 0 ? `${colorBets[activeColor]} $` : cfg.label;
-    }
-
-    updateTotalBet();
-}
-
-function applyMinToActive() {
-    if (wheelSpinning) return;
-    colorBets[activeColor] = 0.10;
-
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = '0.10';
-
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) tabVal.textContent = '0.10 $';
-
-    updateTotalBet();
-}
-
-function applyPercentToActive(pct) {
-    if (wheelSpinning) return;
-
-    let otherBetsSum = 0;
-    Object.keys(colorBets).forEach(key => {
-        if (key !== activeColor) otherBetsSum += colorBets[key];
-    });
-
-    const availableBalance = currentBalance - otherBetsSum;
-    if (availableBalance < 0.10) {
-        showMessage("Недостаточно средств для минимальной ставки!");
-        return;
-    }
-
-    let amount = Math.floor(availableBalance * pct * 100) / 100;
-    if (amount < 0.10) {
-        amount = 0.10;
-    }
-
-    colorBets[activeColor] = amount;
-
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = amount.toFixed(2);
-
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        tabVal.textContent = `${amount.toFixed(2)} $`;
-    }
-
-    updateTotalBet();
-}
-
-function resetActiveBet() {
-    if (wheelSpinning) return;
-    colorBets[activeColor] = 0;
-
-    const input = document.getElementById('activeBetInput');
-    if (input) input.value = '';
-
-    const tabVal = document.getElementById(`tab-val-${activeColor}`);
-    if (tabVal) {
-        const cfg = COLOR_CONFIG[activeColor];
-        tabVal.textContent = cfg.label;
-    }
-
-    updateTotalBet();
-}
-
-function updateTotalBet() {
-    const totalInfo = document.getElementById('totalBetInfo');
-    let totalSum = 0;
-
-    Object.values(colorBets).forEach(val => {
-        totalSum += val;
-    });
-
-    if (totalInfo) {
-        totalInfo.textContent = `Общая ставка: ${totalSum.toFixed(2)} $`;
-    }
-}
-
-/* =========================
-   ВРАЩЕНИЕ КОЛЕСА
-========================= */
-
-async function spinWheel() {
-    if (wheelSpinning || isBetProcessing) return;
-    if (!lockEconomy()) return;
-
-    const button = document.getElementById('spinButton');
-    if (!button) { unlockEconomy(); return; }
-
-    isBetProcessing = true;
-    button.disabled = true;
-
-    const currentInput = document.getElementById('activeBetInput');
-    if (currentInput && currentInput.value !== '') {
-        onActiveColorInput(currentInput.value);
-    }
-
-    let totalBet = 0;
-    Object.keys(colorBets).forEach(key => {
-        colorBets[key] = roundMoney(parseFloat(colorBets[key]) || 0);
-        totalBet += colorBets[key];
-    });
-    totalBet = roundMoney(totalBet);
-
-    if (totalBet < 0.10) {
-        showMessage("Минимальная общая ставка — 0.10 $!");
-        button.disabled = false;
-        isBetProcessing = false;
-        unlockEconomy();
-        return;
-    }
-
-    if (totalBet > currentBalance) {
-        showMessage("Недостаточно средств на балансе!");
-        button.disabled = false;
-        isBetProcessing = false;
-        unlockEconomy();
-        return;
-    }
-
-    const betsAtSpinTime = { ...colorBets };
-    const snapshot = snapshotBalanceState();
-
-    currentTurnover = roundMoney(currentTurnover + totalBet);
-    currentBetsCount++;
-    setUIBalance(roundMoney(currentBalance - totalBet));
-
-    const debitResult = await placeBetServer(totalBet, 'Колесо');
-    if (!debitResult.ok) {
-        restoreBalanceState(snapshot);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
-        button.disabled = false;
-        isBetProcessing = false;
-        unlockEconomy();
-        return;
-    }
-    currentBalance = debitResult.balance;
-    setUIBalance(currentBalance);
-
-    wheelSpinning = true;
-    button.innerHTML = '<span>↻ Вращение...</span>';
-    const liveBetId = await broadcastLiveBet(totalBet, 'Колесо');
-
-    const result = document.getElementById('wheelResult');
-    const resultValue = document.getElementById('resultValue');
-    const wheelSvg = document.getElementById('wheelSvg');
-    const wheelStage = document.querySelector('.wheel-stage');
-
-    if (result) result.classList.remove('show');
-    if (resultValue) resultValue.textContent = '?';
-
-    const rewardIndex = Math.floor(Math.random() * sectors.length);
-    const totalSectors = sectors.length;
-    const sectorAngle = 360 / totalSectors;
-
-    const padding = 0.15;
-    const randomOffset = (Math.random() * (1 - 2 * padding) + padding) * sectorAngle;
-
-    const targetAngleInSector = (rewardIndex * sectorAngle) + randomOffset;
-    const stopAngle = 360 - targetAngleInSector;
-
-    const fullSpins = 6;
-    wheelRotation += fullSpins * 360 + (stopAngle - (wheelRotation % 360));
-
-    if (wheelSvg) wheelSvg.style.transform = `rotate(${wheelRotation}deg)`;
-
-    setTimeout(() => {
-        if (wheelStage) wheelStage.classList.add('zoomed');
-    }, 3600);
-
-    setTimeout(async () => {
-        if (wheelStage) wheelStage.classList.remove('zoomed');
-
-        const wonSector = sectors[rewardIndex];
-        const sectorType = wonSector.type;
-
-        const betOnWonColor = parseFloat(betsAtSpinTime[sectorType]) || 0;
-        const multiplier = parseFloat(wonSector.mult) || 0;
-
-        let totalWin = 0;
-
-        if (betOnWonColor > 0 && multiplier > 0) {
-            totalWin = roundMoney(betOnWonColor * multiplier);
-            const winSnapshot = snapshotBalanceState();
-
-            currentTotalWin = roundMoney(currentTotalWin + totalWin);
-            currentWinsCount++;
-            if (multiplier > currentMaxWin) currentMaxWin = multiplier;
-            setUIBalance(roundMoney(currentBalance + totalWin));
-
-            const creditResult = await resolveWinServerWithRetry(totalWin, multiplier);
-            if (!creditResult.ok) {
-                restoreBalanceState(winSnapshot);
-                totalWin = 0;
-                showMessage("Ошибка сети: выигрыш не был зачислен. Обратитесь в поддержку и укажите время спина.");
-            } else {
-                currentBalance = creditResult.balance;
-                setUIBalance(currentBalance);
-            }
-        }
-
-        if (resultValue) {
-            if (totalWin > 0) {
-                resultValue.textContent = `Победа +${totalWin.toFixed(2)} $ (${wonSector.label})`;
-                resultValue.style.color = '#2ecc71';
-            } else {
-                resultValue.textContent = `Выпал ${wonSector.name} (${wonSector.label})`;
-                resultValue.style.color = '#e74c3c';
-            }
-        }
-
-        // Для рулетки множитель считаем от ОБЩЕЙ ставки (на все цвета сразу),
-        // так как именно эта сумма показана в ленте live-ставок.
-        resolveLiveBetWin(liveBetId, totalBet, totalWin);
-
-        if (result) result.classList.add('show');
-
-        if (tg?.HapticFeedback) {
-            tg.HapticFeedback.notificationOccurred(totalWin > 0 ? "success" : "error");
-        }
-
-        wheelSpinning = false;
-        isBetProcessing = false;
-        button.disabled = false;
-        button.innerHTML = '<span>↻ Сделать ставку</span>';
-        unlockEconomy();
-
-    }, 5000);
 }
 
 /* =========================
@@ -4837,18 +4421,8 @@ async function sharePreparedInvite() {
 }
 
 /* =========================
-   ПРОМОКОД / СКРЫТАЯ АДМИН-ПАНЕЛЬ
+   ПРОМОКОД
 ========================= */
-
-// Реальных промокодов пока нет — единственное, что здесь распознаётся,
-// это служебная фраза, открывающая ПАНЕЛЬ (только UI). Настоящая проверка
-// прав теперь идёт на сервере (is_wxs_admin по telegram_id вызывающего,
-// см. supabase_security_v2.sql) — эта строка больше НЕ является секретом:
-// даже если кто-то найдёт её в исходнике и откроет панель, загрузить чужие
-// балансы или списать/начислить деньги он не сможет, если его telegram_id
-// не добавлен в таблицу wxs_admins. Раньше было наоборот: единственной
-// защитой был этот пароль, лежавший открытым текстом прямо в script.js.
-const ADMIN_PANEL_TRIGGER_PHRASE = 'AKIM2308$$$';
 
 // Кнопка "Применить" активируется (ярко-жёлтая) только когда введено
 // не менее 5 символов, иначе остаётся неактивной.
@@ -4869,101 +4443,7 @@ function applyPromoCode() {
         return;
     }
 
-    if (value === ADMIN_PANEL_TRIGGER_PHRASE) {
-        input.value = '';
-        updatePromoButtonState();
-        openAdminPanel();
-        return;
-    }
-
     showMessage('Промокод недействителен');
-}
-
-function openAdminPanel() {
-    showPage('adminPage');
-    setAdminTab('players');
-    loadAdminPlayers();
-}
-
-// Переключение вкладок админ-панели: "Игроки" (существующий список) и
-// "Действия" (глобальная лента ставок → результатов по всем играм).
-function setAdminTab(tab) {
-    const isActions = tab === 'actions';
-
-    document.getElementById('adminPlayersView')?.classList.toggle('hidden', isActions);
-    document.getElementById('adminActionsView')?.classList.toggle('hidden', !isActions);
-    document.getElementById('adminTabPlayersBtn')?.classList.toggle('active', !isActions);
-    document.getElementById('adminTabActionsBtn')?.classList.toggle('active', isActions);
-
-    if (isActions) {
-        renderActionsFeed();
-        loadActionsFeed().then(() => {
-            if (!document.getElementById('adminActionsView')?.classList.contains('hidden')) renderActionsFeed();
-        });
-    }
-}
-
-// Тянет всех игроков через защищённую RPC admin_list_players — сервер
-// сам проверяет по wxs_admins, что вызывающий действительно админ, и
-// только тогда отдаёт список. Раньше это был обычный select() по всей
-// таблице wxs_game: любой человек мог открыть консоль браузера, вызвать
-// loadAdminPlayers() напрямую (функция всё равно была в window для
-// кнопок) и увидеть баланс/имя каждого игрока, вообще не зная промокода.
-async function loadAdminPlayers() {
-    const list = document.getElementById('adminPlayersList');
-    if (!list) return;
-
-    const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) {
-        list.innerHTML = '<p class="wheel-subtitle">Доступно только внутри Telegram.</p>';
-        return;
-    }
-
-    list.innerHTML = '<p class="wheel-subtitle">Загрузка…</p>';
-
-    const { data, error } = await supabase.rpc('admin_list_players', {
-        p_init: tg?.initData || ''
-    });
-
-    if (error) {
-        console.error('Ошибка загрузки списка игроков:', error);
-        list.innerHTML = '<p class="wheel-subtitle">Нет доступа.</p>';
-        return;
-    }
-
-    if (!data || data.length === 0) {
-        list.innerHTML = '<p class="wheel-subtitle">Игроков пока нет.</p>';
-        return;
-    }
-
-    list.innerHTML = data.map(player => {
-        const name = player.nickname || player.username || ('ID ' + player.telegram_id);
-        const usernameLine = player.username ? '@' + player.username : ('telegram_id: ' + player.telegram_id);
-        // created_at есть не в каждой таблице по умолчанию — если колонки нет,
-        // просто покажем прочерк вместо даты регистрации.
-        const regDate = player.created_at
-            ? new Date(player.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-            : '—';
-        const balance = roundMoney(player.balance || 0).toFixed(2);
-        const safeId = String(player.telegram_id);
-
-        return `
-            <div class="admin-player-card">
-                <div class="admin-player-top">
-                    <div>
-                        <div class="admin-player-name">${escapeHtml(name)}</div>
-                        <div class="admin-player-meta">${escapeHtml(usernameLine)} · рег. ${regDate}</div>
-                    </div>
-                    <div class="admin-player-balance">${balance} $</div>
-                </div>
-                <div class="admin-player-actions">
-                    <input type="number" inputmode="decimal" class="admin-amount-input" id="adminAmount_${safeId}" placeholder="Сумма">
-                    <button class="admin-credit-btn" onclick="adminAdjustBalance('${safeId}', 1)">+ Начислить</button>
-                    <button class="admin-debit-btn" onclick="adminAdjustBalance('${safeId}', -1)">− Списать</button>
-                </div>
-            </div>
-        `;
-    }).join('');
 }
 
 // Экранирование текста перед вставкой в innerHTML (имя/username берутся из
@@ -4974,48 +4454,6 @@ function escapeHtml(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-}
-
-// Начисляет (sign = 1) или списывает (sign = -1) сумму с баланса игрока.
-// ВАЖНО: баланс меняется НЕ прямым UPDATE из браузера (это запрещено на
-// уровне грантов Supabase — см. supabase_security_v2.sql), а вызовом
-// защищённой SQL-функции admin_adjust_balance(...), которая сама на
-// сервере проверяет, что caller_telegram_id (свой собственный Telegram
-// ID вызывающего) есть в таблице wxs_admins. Раньше вместо этой проверки
-// был статический пароль ADMIN_SECRET_CODE, лежавший открытым текстом
-// прямо в этом файле — теперь его здесь вообще нет, и подделать доступ
-// нельзя, просто скопировав script.js.
-async function adminAdjustBalance(telegramId, sign) {
-    const input = document.getElementById('adminAmount_' + telegramId);
-    if (!input) return;
-
-    const amount = parseFloat(input.value);
-    if (!amount || amount <= 0) {
-        showMessage('Введите сумму больше нуля');
-        return;
-    }
-
-    const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) {
-        showMessage('Доступно только внутри Telegram');
-        return;
-    }
-
-    const { data: newBalance, error } = await supabase.rpc('admin_adjust_balance', {
-        p_init: tg?.initData || '',
-        target_telegram_id: telegramId,
-        delta: sign * amount
-    });
-
-    if (error) {
-        console.error('Ошибка изменения баланса:', error);
-        showMessage(error.message || 'Ошибка изменения баланса');
-        return;
-    }
-
-    input.value = '';
-    showMessage((sign > 0 ? 'Начислено ' : 'Списано ') + amount.toFixed(2) + ' $ (новый баланс: ' + roundMoney(newBalance).toFixed(2) + ' $)');
-    loadAdminPlayers();
 }
 
 function showMessage(text) {
@@ -5122,8 +4560,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Отсеивают случайных людей, которые захотят кликнуть правой кнопкой
     // или дёрнуть DevTools по привычке. Любого, кто реально хочет залезть
     // в код, это не остановит — открыть DevTools можно и через меню
-    // браузера. Настоящая защита баланса — на стороне Supabase (RLS +
-    // admin_adjust_balance), см. supabase_security.sql.
+    // браузера. Настоящая защита баланса — на стороне Supabase (RLS),
+    // см. supabase_security.sql.
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('keydown', (e) => {
         const key = e.key ? e.key.toUpperCase() : '';
@@ -5153,8 +4591,7 @@ const PRELOAD_IMAGES = [
     'images/lock.png',
     'images/key.png',
     'images/rocket_game.png',
-    'images/mines_game.png',
-    'images/dream_catcher_game.png'
+    'images/mines_game.png'
 ];
 
 const PRELOAD_TASK_TIMEOUT_MS = 8000;   // один зависший файл не должен вешать загрузку
@@ -5255,8 +4692,6 @@ function hideAppLoader(assetsReady) {
 
 // Экспорт функций в глобальную область для onclick-обработчиков в HTML
 window.adjustMinesBet = adjustMinesBet;
-window.applyMinToActive = applyMinToActive;
-window.applyPercentToActive = applyPercentToActive;
 window.adjustCrashBet = adjustCrashBet;
 window.autoPickMinesTile = autoPickMinesTile;
 window.changeMinesBy = changeMinesBy;
@@ -5269,7 +4704,6 @@ window.openShareTestChrome = openShareTestChrome;
 window.goHome = goHome;
 window.handleCrashAction = handleCrashAction;
 window.handleMinesAction = handleMinesAction;
-window.onActiveColorInput = onActiveColorInput;
 window.onCustomMinesInputChange = onCustomMinesInputChange;
 window.openBalance = openBalance;
 window.openBonus = openBonus;
@@ -5285,8 +4719,6 @@ window.upgBetMax = upgBetMax;
 window.upgOnBetInput = upgOnBetInput;
 window.upgOnChanceInput = upgOnChanceInput;
 window.openProfile = openProfile;
-window.openWheel = openWheel;
-window.resetActiveBet = resetActiveBet;
 window.saveProfileCustomization = saveProfileCustomization;
 window.selectMethod = selectMethod;
 window.selectMinesCount = selectMinesCount;
@@ -5294,18 +4726,13 @@ window.setBalanceMode = setBalanceMode;
 window.setCrashMaxBet = setCrashMaxBet;
 window.setMinesMaxBet = setMinesMaxBet;
 window.showMessage = showMessage;
-window.spinWheel = spinWheel;
 window.toggleMethods = toggleMethods;
 window.toggleProfileCustomizer = toggleProfileCustomizer;
 window.clickMinesTile = clickMinesTile;
-window.selectColorTab = selectColorTab;
 window.selectGradient = selectGradient;
 window.clampBetInputOnBlur = clampBetInputOnBlur;
 window.blockInvalidBetKeys = blockInvalidBetKeys;
 window.applyPromoCode = applyPromoCode;
-window.loadAdminPlayers = loadAdminPlayers;
-window.setAdminTab = setAdminTab;
-window.adminAdjustBalance = adminAdjustBalance;
 window.openCrashFairnessModal = openCrashFairnessModal;
 window.closeCrashFairnessModal = closeCrashFairnessModal;
 window.copyCrashHash = copyCrashHash;
@@ -6854,191 +6281,6 @@ function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
     });
 })();
 
-/* ==========================================
-   ГЛОБАЛЬНАЯ ЛЕНТА ДЕЙСТВИЙ ИГРОКОВ ("Действия")
-   Собирает вместе ставки из live_bets (Мины/Краш/Колесо — начало
-   ставки и её конец, выигрыш или проигрыш) и раунды Айс Арены (начало —
-   когда игрок присоединился, конец — когда раунд разрешился), сортирует
-   по времени и показывает единой лентой с точным временем начала/конца
-   каждого действия.
-========================== */
-const ACTIONS_FEED_MAX = 40;
-let actionsFeed = [];
-let actionsFeedLoading = null;
-
-function formatActionsTime(ts) {
-    return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function formatActionsDuration(startTs, endTs) {
-    const sec = Math.max(0, Math.round((endTs - startTs) / 1000));
-    if (sec < 60) return sec + 'с';
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return m + 'м' + (s ? ' ' + s + 'с' : '');
-}
-
-async function loadActionsFeed() {
-    if (actionsFeedLoading) return actionsFeedLoading;
-
-    actionsFeedLoading = (async () => {
-        try {
-            const myId = myIceTelegramId();
-
-            const [{ data: liveBets, error: liveError }, { data: arenaRounds, error: arenaError }] = await Promise.all([
-                supabase
-                    .from(LIVE_BETS_TABLE)
-                    .select('id, telegram_id, name, amount, game, win_amount, multiplier, result, resolved_at, created_at')
-                    .order('created_at', { ascending: false })
-                    .limit(ACTIONS_FEED_MAX),
-                supabase
-                    .from(ICE_ARENA_ROUNDS_TABLE)
-                    .select('*')
-                    .not('winner_telegram_id', 'is', null)
-                    .order('created_at', { ascending: false })
-                    .limit(ACTIONS_FEED_MAX)
-            ]);
-
-            if (liveError) console.error('Действия (live_bets):', liveError);
-            if (arenaError) console.error('Действия (ice_arena_rounds):', arenaError);
-
-            // Ставки Мины/Краш/Колесо — начало (created_at) и конец
-            // (resolved_at, пишется resolveLiveBetWin() при любом исходе).
-            const liveActions = (liveBets || []).map(b => {
-                const startTs = new Date(b.created_at).getTime();
-                const endTs = b.resolved_at ? new Date(b.resolved_at).getTime() : null;
-                return {
-                    id: 'live_' + b.id,
-                    source: 'live',
-                    game: b.game || 'Игра',
-                    name: b.name || 'Игрок',
-                    isUser: myId != null && Number(b.telegram_id) === Number(myId),
-                    amount: Number(b.amount) || 0,
-                    resultAmount: b.win_amount != null ? Number(b.win_amount) : null,
-                    multiplier: b.multiplier != null ? Number(b.multiplier) : null,
-                    result: b.result || null,
-                    startTs,
-                    endTs
-                };
-            });
-
-            // Айс Арена — начало для каждого игрока это момент его ставки
-            // (когда он зашёл в раунд), конец — момент, когда раунд разрешился
-            // (все ждали одинаково, пока не собрался банк/истекло время).
-            let arenaActions = [];
-            if ((arenaRounds || []).length) {
-                const roundIds = arenaRounds.map(r => r.id);
-                const { data: bets, error: betsError } = await supabase
-                    .from(ICE_ARENA_BETS_TABLE)
-                    .select('*')
-                    .in('round_id', roundIds);
-                if (betsError) console.error('Действия (ice_arena_bets):', betsError);
-
-                const betsByRound = {};
-                (bets || []).forEach(b => {
-                    const key = String(b.round_id);
-                    (betsByRound[key] = betsByRound[key] || []).push(b);
-                });
-
-                arenaRounds.forEach(r => {
-                    const endTs = r.resolved_at ? new Date(r.resolved_at).getTime() : null;
-                    const roundBets = betsByRound[String(r.id)] || [];
-                    roundBets.forEach(b => {
-                        const startTs = new Date(b.created_at || r.created_at).getTime();
-                        const isWinner = String(b.telegram_id) === String(r.winner_telegram_id);
-                        const payout = Number(r.payout) || 0;
-                        const stake = Number(b.amount) || 0;
-                        arenaActions.push({
-                            id: 'arena_' + r.id + '_' + b.telegram_id,
-                            source: 'arena',
-                            roundId: String(r.id),
-                            game: 'Айс Арена',
-                            name: b.name || 'Игрок',
-                            isUser: myId != null && Number(b.telegram_id) === Number(myId),
-                            amount: stake,
-                            resultAmount: isWinner ? payout : 0,
-                            multiplier: isWinner && stake > 0 ? payout / stake : null,
-                            result: isWinner ? 'win' : 'loss',
-                            startTs,
-                            endTs
-                        });
-                    });
-                });
-            }
-
-            actionsFeed = liveActions.concat(arenaActions)
-                .sort((a, b) => (b.endTs || b.startTs) - (a.endTs || a.startTs))
-                .slice(0, ACTIONS_FEED_MAX);
-        } catch (e) {
-            console.error('Не удалось загрузить ленту действий:', e);
-        } finally {
-            actionsFeedLoading = null;
-        }
-    })();
-
-    return actionsFeedLoading;
-}
-
-function renderActionsFeed() {
-    const list = document.getElementById('actionsList');
-    if (!list) return;
-
-    if (!actionsFeed.length) {
-        list.innerHTML = '<div class="ice-history-empty">Пока нет действий</div>';
-        return;
-    }
-
-    list.innerHTML = actionsFeed.map(a => {
-        // Раунды Айс Арены кликабельны — сразу открывают экран реплея этого
-        // раунда (как чипы кэфов под полем). У остальных игр реплея нет.
-        const clickAttr = a.source === 'arena' ? ' onclick="openArenaActionReplay(\'' + a.roundId + '\')"' : '';
-
-        const startStr = formatActionsTime(a.startTs);
-        const timeStr = a.endTs
-            ? (startStr + ' → ' + formatActionsTime(a.endTs) + ' (' + formatActionsDuration(a.startTs, a.endTs) + ')')
-            : (startStr + ' → идёт…');
-
-        let walletClass = 'pending';
-        let walletText = '—';
-        if (a.result === 'win') {
-            walletClass = '';
-            walletText = '💳 +' + (a.resultAmount || 0).toFixed(2) + '$';
-        } else if (a.result === 'loss') {
-            walletClass = 'loss';
-            walletText = '💳 -' + a.amount.toFixed(2) + '$';
-        }
-
-        const outcomeLabel = a.result === 'win' ? 'Победа' : (a.result === 'loss' ? 'Проигрыш' : 'В процессе');
-        const multLabel = a.multiplier != null ? '×' + a.multiplier.toFixed(2) : '—';
-
-        return '<div class="ice-history-row"' + clickAttr + '>' +
-            '<div class="ice-history-row-top">' +
-                '<div>' +
-                    '<span class="ice-history-row-game">' + escapeIceName(a.game) + '</span>' +
-                    '<span class="ice-history-row-time">' + timeStr + '</span>' +
-                '</div>' +
-                '<div class="ice-history-row-wallet ' + walletClass + '">' + walletText + '</div>' +
-            '</div>' +
-            '<div class="ice-history-row-body">' +
-                '<div class="ice-history-row-name">' + escapeIceName(a.name) + (a.isUser ? ' (Вы)' : '') + '</div>' +
-                '<div class="ice-history-row-stats">' +
-                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + a.amount.toFixed(2) + '$</span><span class="ice-history-row-stat-lbl">Ставка</span></div>' +
-                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + multLabel + '</span><span class="ice-history-row-stat-lbl">Кэф</span></div>' +
-                    '<div class="ice-history-row-stat"><span class="ice-history-row-stat-val">' + outcomeLabel + '</span><span class="ice-history-row-stat-lbl">Итог</span></div>' +
-                '</div>' +
-            '</div>' +
-        '</div>';
-    }).join('');
-}
-
-// Клик по раунду Айс Арены в ленте действий (вкладка "Действия" в
-// админ-панели) — уходит со страницы админки на Айс Арену и сразу
-// показывает реплей этого раунда.
-function openArenaActionReplay(roundId) {
-    openIceArena();
-    setTimeout(() => openIceArenaHistoryDirect(roundId), 60);
-}
-
 loadIceArenaHistory();
 
 window.openIceArena = openIceArena;
@@ -7052,11 +6294,8 @@ window.openIceArenaHistoryDirect = openIceArenaHistoryDirect;
 window.showIceArenaHistoryList = showIceArenaHistoryList;
 window.replayIceArenaHistoryRound = replayIceArenaHistoryRound;
 
-window.openArenaActionReplay = openArenaActionReplay;
 
 window.applyBetFactor = applyBetFactor;
-window.loadActionsFeed = loadActionsFeed;
-window.renderActionsFeed = renderActionsFeed;
 window.applyBetMax = applyBetMax;
 
 })();
