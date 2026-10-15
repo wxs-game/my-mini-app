@@ -286,13 +286,21 @@ const CRASH_RTP = 0.95;
 // получается из этой же формулы сам по себе (когда X настолько мало, что
 // crash < 1.00 и округляется вверх до 1.00) — его частота автоматически
 // равна ровно (1 - CRASH_RTP), без отдельной "магической" ветки.
+// ВАЖНО: тот же расчёт делает сервер в crash_tick() (crash_server.sql) —
+// если меняешь формулу тут, меняй и там.
+//
+// Новое распределение: P(crash >= m) = m^(-CRASH_TAIL_ALPHA).
+// При alpha = 1.5 крах на 4.00x и выше выпадает примерно раз в 8 игр
+// (12.5%), на 3.00x и выше — ~19%, на 2.00x и выше — ~35%.
+const CRASH_TAIL_ALPHA = 1.5;
 function calculateCrashPoint(seed, salt) {
     let hash = seed + salt;
     let hex = hash.substring(0, 8);
     let intVal = parseInt(hex, 16);
     const maxVal = 4294967296; // 2^32 — диапазон intVal (8 hex-символов)
 
-    const raw = (CRASH_RTP * maxVal) / (maxVal - intVal);
+    const u = (intVal + 1) / maxVal;                 // (0, 1]
+    const raw = Math.pow(u, -1 / CRASH_TAIL_ALPHA);  // >= 1
     let crash = Math.floor(raw * 100) / 100;
 
     crash = Math.max(1.00, crash);
@@ -1733,11 +1741,18 @@ const CRASH_BETS_TABLE = 'crash_bets';
 const CRASH_HISTORY_MAX = 25;       // сколько прошедших раундов видно в ленте
 const CRASH_RESULT_HOLD_MS = 3000;  // пауза с картинкой взрыва перед новым раундом
 
-// Скорость роста коэффициента: x2 за 10 секунд полёта (исходный рост)
-const CRASH_GROWTH_PER_MS = Math.log(2) / 10000;
-// Время «раскачки» — исходные 6000 мс (6 сек)
-const CRASH_SLOW_START_MS = 6000;
-const CRASH_SLOW_START_TARGET = 1.5;
+// КРИВАЯ РОСТА (одна и та же у коэффициента, следа и цифр; сервер считает так же):
+//  1) до 1.45x — очень медленно, скорость плавно нарастает (степень POW);
+//  2) с 1.45x рост продолжается с ТОЙ ЖЕ скоростью, на которой закончился
+//     этап 1 (без скачка), и дальше непрерывно ускоряется до самого краша.
+const CRASH_SLOW_START_TARGET = 1.45;
+const CRASH_SLOW_START_MS = 7000;          // за сколько мс дорастаем до 1.45x
+const CRASH_SLOW_POW = 2.5;                // «мягкость» разгона на этапе 1
+// скорость роста (в долях/мс) в точке 1.45x — продолжение скорости этапа 1
+const CRASH_GROWTH_PER_MS =
+    ((CRASH_SLOW_START_TARGET - 1) * CRASH_SLOW_POW) / (CRASH_SLOW_START_MS * CRASH_SLOW_START_TARGET);
+// дальнейшее ускорение: скорость роста удваивается примерно каждые 30 сек
+const CRASH_GROWTH_ACCEL = CRASH_GROWTH_PER_MS / 30000;
 
 /* ================================================================
    СИНХРОНИЗАЦИЯ ВРЕМЕНИ (почему раньше «скипались» пауза и взрыв)
@@ -1824,9 +1839,13 @@ function computeCrashDurationMs(crashPoint) {
     if (cp <= 1) return 0;
     if (cp <= CRASH_SLOW_START_TARGET) {
         const x = (cp - 1) / (CRASH_SLOW_START_TARGET - 1);
-        return CRASH_SLOW_START_MS * Math.cbrt(x);
+        return CRASH_SLOW_START_MS * Math.pow(x, 1 / CRASH_SLOW_POW);
     }
-    return CRASH_SLOW_START_MS + Math.log(cp / CRASH_SLOW_START_TARGET) / CRASH_GROWTH_PER_MS;
+    // ln(m/1.45) = k*s + a*s^2/2  →  s = (-k + sqrt(k^2 + 2*a*L)) / a
+    const L = Math.log(cp / CRASH_SLOW_START_TARGET);
+    const k = CRASH_GROWTH_PER_MS, a = CRASH_GROWTH_ACCEL;
+    const s = (-k + Math.sqrt(k * k + 2 * a * L)) / a;
+    return CRASH_SLOW_START_MS + s;
 }
 
 function crashParseTime(iso) {
@@ -2129,11 +2148,12 @@ function computeCrashMultAt(elapsedMs, crashPointCap) {
     let rawMult;
     if (elapsed < CRASH_SLOW_START_MS) {
         const p = elapsed / CRASH_SLOW_START_MS;
-        const eased = Math.pow(p, 3);
+        const eased = Math.pow(p, CRASH_SLOW_POW);
         rawMult = 1 + (CRASH_SLOW_START_TARGET - 1) * eased;
     } else {
-        const elapsedAfter = elapsed - CRASH_SLOW_START_MS;
-        rawMult = CRASH_SLOW_START_TARGET * Math.exp(CRASH_GROWTH_PER_MS * elapsedAfter);
+        const s = elapsed - CRASH_SLOW_START_MS;
+        rawMult = CRASH_SLOW_START_TARGET *
+            Math.exp(CRASH_GROWTH_PER_MS * s + 0.5 * CRASH_GROWTH_ACCEL * s * s);
     }
     const floored = Math.floor(rawMult * 100) / 100;
     return crashPointCap != null ? Math.min(crashPointCap, floored) : floored;
@@ -3255,31 +3275,46 @@ function renderCrashPlayersList() {
 }
 
 // Путь следа + точка на его конце для коэффициента m (без смены классов/прозрачности)
+// Прогресс следа 0..1. Раньше пик достигался на 3.00x; теперь след идёт
+// на 10% медленнее — пик на ~3.22x.
+const CRASH_TRAIL_SPEED = 0.9;
+function crashTrailProgress(m) {
+    return Math.min(1, Math.max(0, CRASH_TRAIL_SPEED * (m - 1) / 2));
+}
+
 function drawCrashTrail(m) {
     const dom = getCrashDom();
     const stageW = crashStageW;
     const stageH = crashStageH;
 
-    // Скорость полета ракеты: достигает верхнего угла (пика) ровно при 3.00x
-    const trailProgress = Math.min(1, Math.max(0, (m - 1) / 2));
+    const trailProgress = crashTrailProgress(m);
 
     const trailStartX = stageW * 0.05;
     const trailStartY = stageH * 0.95;
     const trailEndX = stageW * 0.95;
     const trailEndY = stageH * 0.05;
 
-    const headX = trailStartX + (trailEndX - trailStartX) * trailProgress;
-    const headY = trailStartY + (trailEndY - trailStartY) * trailProgress;
+    // След — это начало ФИКСИРОВАННОЙ кривой (квадратичная Безье от старта
+    // к верхнему углу с изгибом). Голова ползёт по этой кривой, а сам след —
+    // её кусочек от старта до головы (алгоритм де Кастельжо). Форма не
+    // «плывёт», а именно вытягивается — как график, который дорисовывают.
+    const fullDx = trailEndX - trailStartX;
+    const fullDy = trailEndY - trailStartY;
+    const fullLen = Math.hypot(fullDx, fullDy) || 1;
+    const bow = 0.22 * fullLen;
+    const ctrlX = (trailStartX + trailEndX) / 2 + (-fullDy / fullLen) * bow;
+    const ctrlY = (trailStartY + trailEndY) / 2 + (fullDx / fullLen) * bow;
+
+    const t = trailProgress;
+    const u1 = 1 - t;
+    const headX = u1 * u1 * trailStartX + 2 * u1 * t * ctrlX + t * t * trailEndX;
+    const headY = u1 * u1 * trailStartY + 2 * u1 * t * ctrlY + t * t * trailEndY;
 
     if (dom.trailLine) {
-        const segDx = headX - trailStartX;
-        const segDy = headY - trailStartY;
-        const segLen = Math.hypot(segDx, segDy) || 1;
-        const bow = 0.25 * segLen;
-        const ctrlX = (trailStartX + headX) / 2 + (-segDy / segLen) * bow;
-        const ctrlY = (trailStartY + headY) / 2 + (segDx / segLen) * bow;
+        const subCx = trailStartX + t * (ctrlX - trailStartX);
+        const subCy = trailStartY + t * (ctrlY - trailStartY);
         const r1 = v => Math.round(v * 10) / 10;
-        setTrailD(dom, `M ${r1(trailStartX)},${r1(trailStartY)} Q ${r1(ctrlX)},${r1(ctrlY)} ${r1(headX)},${r1(headY)}`);
+        setTrailD(dom, `M ${r1(trailStartX)},${r1(trailStartY)} Q ${r1(subCx)},${r1(subCy)} ${r1(headX)},${r1(headY)}`);
     }
 
     {
@@ -3318,8 +3353,7 @@ function renderCrashUI(heavy = true) {
     // каждый кадр, чтобы ракета двигалась идеально плавно.
     const currentM = crashGame.currentMult;
 
-    // Скорость полета ракеты: достигает верхнего угла (пика) ровно при 3.00x
-    const trailProgress = Math.min(1, Math.max(0, (currentM - 1) / 2));
+    const trailProgress = crashTrailProgress(currentM);
 
     // Поворот ракеты адаптирован под траекторию до 3.00x
     const angle = 45 - (90 * trailProgress);
