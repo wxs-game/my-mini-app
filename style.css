@@ -977,11 +977,7 @@ main {
 /* Баннер «Telegram Emoji» — на всю ширину сетки (как 2 обычных поля) */
 .game-banner {
     grid-column: 1 / -1;
-    cursor: default;
-}
-.game-banner:active {
-    transform: none;
-    border-color: #222222;
+    cursor: pointer;
 }
 .game-banner-img {
     display: block;
@@ -3565,3 +3561,90 @@ input, textarea {
     -webkit-user-select: none;
     user-select: none;
 }
+
+
+/* ==========================================================
+   TELEGRAM EMOJI — выбор режима (Кубик, Футбол, Баскетбол…)
+   Плитки в стиле главного меню: скругление 24px, янтарная
+   обводка, тёмная заливка. Баннер — светлая подложка под .tgs.
+========================================================== */
+.tge-page {
+    --tge-amber: #ff9d00;
+    --tge-title-font: 'Russo One', 'Arial Black', Impact, sans-serif; /* поменяй здесь, если найдёшь точнее шрифт */
+}
+
+.tge-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+    padding-bottom: 110px; /* чтобы нижнее меню не перекрывало последний ряд */
+}
+
+.tge-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 10px 12px;
+    border-radius: 24px;
+    border: 3px solid var(--tge-amber);
+    background:
+        radial-gradient(120% 80% at 50% 0%, rgba(255, 157, 0, 0.10), transparent 60%),
+        #0a0a0a;
+    box-shadow: 0 0 18px rgba(255, 157, 0, 0.14), inset 0 0 14px rgba(255, 157, 0, 0.06);
+    color: #ffffff;
+    text-align: center;
+}
+
+.tge-tile:active {
+    transform: scale(0.96);
+    border-color: #ffc800;
+    box-shadow: 0 0 22px rgba(255, 200, 0, 0.35), inset 0 0 14px rgba(255, 200, 0, 0.1);
+}
+
+.tge-title {
+    display: block;
+    font-family: var(--tge-title-font);
+    font-weight: 400;
+    font-size: clamp(15px, 4.7vw, 21px);
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    white-space: nowrap;
+    padding-top: 4px;
+    -webkit-text-stroke: 0.9px #ffffff;       /* утолщаем штрих до «маркерного» */
+    filter: url(#tgeMarker);                   /* лёгкая рукописная неровность */
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.tge-banner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 16px;
+    overflow: hidden;
+    font-size: 54px;                           /* размер эмодзи-заглушки */
+    /* лёгкий светлый фон под анимацию */
+    background:
+        radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 60%),
+        linear-gradient(160deg, #e8eef4 0%, #c6d2de 100%);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 -10px 18px rgba(80, 100, 125, 0.18);
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: none;
+}
+
+.tge-banner > img,
+.tge-banner > .sticker-lottie {
+    display: block;
+    width: 82%;
+    height: 82%;
+    object-fit: contain;
+    -webkit-user-drag: none;
+    pointer-events: none;
+}
+.tge-banner.has-anim { font-size: 0; }

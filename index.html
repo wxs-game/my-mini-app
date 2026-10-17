@@ -23,6 +23,8 @@
     <!-- Шрифт для большого таймера обратного отсчёта в Краше -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <!-- Шрифт заголовков режимов Telegram Emoji (кириллица) -->
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
 
     <style>
         .crash-countdown {
@@ -260,9 +262,9 @@
                     </div>
                 </button>
                 <!-- Telegram Emoji — баннер на всю ширину (2 обычных поля) -->
-                <div class="game game-banner" aria-label="Telegram Emoji">
+                <button class="game game-banner" aria-label="Telegram Emoji" onclick="openTgEmoji()">
                     <img class="game-banner-img" src="images/banners/telegram_emoji_banner.jpg" alt="Telegram Emoji" draggable="false">
-                </div>
+                </button>
             </div>
         </section>
     </main>
@@ -671,6 +673,50 @@
 
             <button class="mines-main-btn ice-arena-bet-btn" id="iceArenaBetBtn" onclick="placeIceArenaBet()" style="width: 100%; margin-top: 12px;">
                 СДЕЛАТЬ СТАВКУ
+        </section>
+    </main>
+
+    <!-- ==================== TELEGRAM EMOJI (ВЫБОР РЕЖИМА) ==================== -->
+    <main id="tgEmojiPage" class="tge-page hidden">
+        <!-- SVG-фильтр: лёгкая «маркерная» неровность букв в заголовках -->
+        <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+            <filter id="tgeMarker" x="-5%" y="-10%" width="110%" height="120%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7" result="n"/>
+                <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+        </svg>
+
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Telegram Emoji</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="tge-grid">
+            <button class="game tge-tile" data-mode="dice" onclick="openTgEmojiMode('dice')">
+                <span class="tge-title">КУБИК</span>
+                <span class="tge-banner" data-banner="dice" data-emoji="🎲">🎲</span>
+            </button>
+            <button class="game tge-tile" data-mode="football" onclick="openTgEmojiMode('football')">
+                <span class="tge-title">ФУТБОЛ</span>
+                <span class="tge-banner" data-banner="football" data-emoji="⚽">⚽</span>
+            </button>
+            <button class="game tge-tile" data-mode="basketball" onclick="openTgEmojiMode('basketball')">
+                <span class="tge-title">БАСКЕТБОЛ</span>
+                <span class="tge-banner" data-banner="basketball" data-emoji="🏀">🏀</span>
+            </button>
+            <button class="game tge-tile" data-mode="darts" onclick="openTgEmojiMode('darts')">
+                <span class="tge-title">ДАРТС</span>
+                <span class="tge-banner" data-banner="darts" data-emoji="🎯">🎯</span>
+            </button>
+            <button class="game tge-tile" data-mode="bowling" onclick="openTgEmojiMode('bowling')">
+                <span class="tge-title">БОУЛИНГ</span>
+                <span class="tge-banner" data-banner="bowling" data-emoji="🎳">🎳</span>
+            </button>
+            <button class="game tge-tile" data-mode="slots" onclick="openTgEmojiMode('slots')">
+                <span class="tge-title">СЛОТЫ</span>
+                <span class="tge-banner" data-banner="slots" data-emoji="🎰">🎰</span>
+            </button>
         </section>
     </main>
 
