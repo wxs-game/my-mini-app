@@ -4009,7 +4009,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage"];
+    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4050,6 +4050,17 @@ function openGamesMenu() {
     if (gamesSection) {
         gamesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+}
+
+function openTgEmoji() {
+    showPage("tgEmojiPage");
+    updateNav("games");
+    if (typeof window.initTgEmojiBanners === "function") window.initTgEmojiBanners();
+}
+
+function openTgEmojiMode(mode) {
+    // Функции внутри режимов пока не реализованы
+    showMessage("Режим скоро появится");
 }
 
 function openMines() {
@@ -4712,6 +4723,8 @@ window.openBonus = openBonus;
 window.openCrash = openCrash;
 window.openGamesMenu = openGamesMenu;
 window.openMines = openMines;
+window.openTgEmoji = openTgEmoji;
+window.openTgEmojiMode = openTgEmojiMode;
 window.openUpgrader = openUpgrader;
 window.playUpgrader = playUpgrader;
 window.upgSetChance = upgSetChance;
@@ -6389,4 +6402,74 @@ window.applyBetMax = applyBetMax;
     } else {
         initQuickActionStickers();
     }
+})();
+
+
+/* =========================
+   TELEGRAM EMOJI — анимации на баннерах режимов
+   Положи по одному файлу в animations/dice/banner/ :
+   dice, football, basketball, darts, bowling, slots + расширение
+   (.tgs рекомендуется, также .json / .webp / .gif / .png).
+   Пока файла нет — в баннере показывается эмодзи.
+========================= */
+(function () {
+    const DIR = 'animations/dice/banner/';
+    const EXTS = ['tgs', 'json', 'webp', 'gif', 'png'];
+    let started = false;
+
+    async function readLottieJson(buf) {
+        const bytes = new Uint8Array(buf);
+        const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+        if (!isGzip) return JSON.parse(new TextDecoder().decode(bytes));
+        if (typeof DecompressionStream !== 'undefined') {
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return JSON.parse(await new Response(stream).text());
+        }
+        if (window.pako) return JSON.parse(window.pako.ungzip(bytes, { to: 'string' }));
+        throw new Error('no gzip support');
+    }
+
+    function tryImage(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.draggable = false;
+            img.alt = '';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
+    async function buildNode(base, ext) {
+        const url = base + '.' + ext;
+        if (ext === 'tgs' || ext === 'json') {
+            if (typeof lottie === 'undefined') throw new Error('no lottie');
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('not found');
+            const data = await readLottieJson(await res.arrayBuffer());
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            lottie.loadAnimation({ container: box, renderer: 'svg', loop: true, autoplay: true, animationData: data });
+            return box;
+        }
+        return tryImage(url);
+    }
+
+    async function loadInto(el, name) {
+        for (const ext of EXTS) {
+            try {
+                const node = await buildNode(DIR + name, ext);
+                el.textContent = '';
+                el.appendChild(node);
+                el.classList.add('has-anim');
+                return;
+            } catch (e) { /* пробуем следующий формат */ }
+        }
+    }
+
+    window.initTgEmojiBanners = function () {
+        if (started) return;          // грузим один раз
+        started = true;
+        document.querySelectorAll('.tge-banner[data-banner]').forEach(el => loadInto(el, el.dataset.banner));
+    };
 })();
