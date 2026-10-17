@@ -6413,7 +6413,7 @@ window.applyBetMax = applyBetMax;
    Пока файла нет — в баннере показывается эмодзи.
 ========================= */
 (function () {
-    const DIR = 'animations/dice/banner/';
+    const DIR = 'animations/dice/banners/';
     const EXTS = ['tgs', 'json', 'webp', 'gif', 'png'];
     let started = false;
 
