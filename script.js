@@ -6407,15 +6407,23 @@ window.applyBetMax = applyBetMax;
 
 /* =========================
    TELEGRAM EMOJI — анимации на баннерах режимов
-   Положи по одному файлу в animations/dice/banner/ :
+   Файлы лежат в animations/dice/banner/ :
    dice, football, basketball, darts, bowling, slots + расширение
    (.tgs рекомендуется, также .json / .webp / .gif / .png).
    Пока файла нет — в баннере показывается эмодзи.
+
+   Анимации идут с частотой экрана (60 / 90 / 120 Гц) без ограничения FPS.
+   Облегчение: canvas вместо SVG, и играют ТОЛЬКО анимации, которые сейчас
+   видны на экране (скрытые под нижним меню или за краем стоят на паузе).
 ========================= */
 (function () {
-    const DIR = 'animations/dice/banners/';
+    const DIR = 'animations/dice/banner/';
     const EXTS = ['tgs', 'json', 'webp', 'gif', 'png'];
+    const DPR = 1.5;         // разрешение canvas; 1 — легче, 2 — чётче
     let started = false;
+    const players = new Map();   // элемент баннера -> { anim, frame, playing }
+    let rafId = 0;
+    let lastTick = 0;
 
     async function readLottieJson(buf) {
         const bytes = new Uint8Array(buf);
@@ -6440,7 +6448,44 @@ window.applyBetMax = applyBetMax;
         });
     }
 
-    async function buildNode(base, ext) {
+    // Один общий цикл на все анимации: кадр считается по реальному времени
+    // и обновляется на каждом кадре экрана (60/90/120 Гц), без лимита FPS.
+    function tick(now) {
+        rafId = 0;
+        let anyPlaying = false;
+        players.forEach(p => { if (p.playing) anyPlaying = true; });
+        if (!anyPlaying) return;
+        rafId = requestAnimationFrame(tick);
+
+        // после паузы/возврата в приложение не прыгаем вперёд
+        const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0;
+        lastTick = now;
+
+        players.forEach(p => {
+            if (!p.playing) return;
+            p.frame += dt * p.fr;
+            if (p.frame >= p.total) p.frame %= p.total;
+            p.anim.goToAndStop(p.frame, true);   // дробный кадр = плавно даже на 120 Гц
+        });
+    }
+
+    function ensureLoop() {
+        if (!rafId) { lastTick = 0; rafId = requestAnimationFrame(tick); }
+    }
+
+    // Следим, какие баннеры реально видны (нижнее меню перекрывает ~110px снизу)
+    const observer = ('IntersectionObserver' in window)
+        ? new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                const p = players.get(e.target);
+                if (!p) return;
+                p.playing = e.isIntersecting;
+            });
+            ensureLoop();
+        }, { rootMargin: '0px 0px -110px 0px', threshold: 0.5 })
+        : null;
+
+    async function buildNode(el, base, ext) {
         const url = base + '.' + ext;
         if (ext === 'tgs' || ext === 'json') {
             if (typeof lottie === 'undefined') throw new Error('no lottie');
@@ -6449,27 +6494,52 @@ window.applyBetMax = applyBetMax;
             const data = await readLottieJson(await res.arrayBuffer());
             const box = document.createElement('div');
             box.className = 'sticker-lottie';
-            lottie.loadAnimation({ container: box, renderer: 'svg', loop: true, autoplay: true, animationData: data });
+            el.textContent = '';
+            el.appendChild(box);
+            const anim = lottie.loadAnimation({
+                container: box,
+                renderer: 'canvas',
+                loop: false,
+                autoplay: false,
+                animationData: data,
+                rendererSettings: { clearCanvas: true, dpr: DPR, preserveAspectRatio: 'xMidYMid meet' }
+            });
+            anim.goToAndStop(0, true);
+            players.set(el, {
+                anim,
+                frame: 0,
+                total: anim.totalFrames || 1,
+                fr: anim.frameRate || 60,
+                playing: !observer     // без IntersectionObserver играет всегда
+            });
+            if (observer) observer.observe(el);
+            ensureLoop();
             return box;
         }
-        return tryImage(url);
+        const img = await tryImage(url);
+        el.textContent = '';
+        el.appendChild(img);
+        return img;
     }
 
     async function loadInto(el, name) {
         for (const ext of EXTS) {
             try {
-                const node = await buildNode(DIR + name, ext);
-                el.textContent = '';
-                el.appendChild(node);
+                await buildNode(el, DIR + name, ext);
                 el.classList.add('has-anim');
                 return;
             } catch (e) { /* пробуем следующий формат */ }
         }
     }
 
-    window.initTgEmojiBanners = function () {
+    window.initTgEmojiBanners = async function () {
         if (started) return;          // грузим один раз
         started = true;
-        document.querySelectorAll('.tge-banner[data-banner]').forEach(el => loadInto(el, el.dataset.banner));
+        // по очереди, чтобы не фризить телефон одновременной распаковкой шести файлов
+        const els = document.querySelectorAll('.tge-banner[data-banner]');
+        for (const el of els) {
+            await loadInto(el, el.dataset.banner);
+            await new Promise(r => setTimeout(r, 60));
+        }
     };
 })();

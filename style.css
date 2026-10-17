@@ -3565,8 +3565,8 @@ input, textarea {
 
 /* ==========================================================
    TELEGRAM EMOJI — выбор режима (Кубик, Футбол, Баскетбол…)
-   Плитки в стиле главного меню: скругление 24px, янтарная
-   обводка, тёмная заливка. Баннер — светлая подложка под .tgs.
+   Лёгкая версия: плоская тёмная плитка + янтарная обводка,
+   без теней, градиентов и фильтров (меньше перерисовок = нет лагов).
 ========================================================== */
 .tge-page {
     --tge-amber: #ff9d00;
@@ -3578,7 +3578,7 @@ input, textarea {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     margin-top: 14px;
-    padding-bottom: 110px; /* чтобы нижнее меню не перекрывало последний ряд */
+    /* нижний отступ под меню уже есть у .app — второй не нужен */
 }
 
 .tge-tile {
@@ -3589,18 +3589,16 @@ input, textarea {
     padding: 10px 10px 12px;
     border-radius: 24px;
     border: 3px solid var(--tge-amber);
-    background:
-        radial-gradient(120% 80% at 50% 0%, rgba(255, 157, 0, 0.10), transparent 60%),
-        #0a0a0a;
-    box-shadow: 0 0 18px rgba(255, 157, 0, 0.14), inset 0 0 14px rgba(255, 157, 0, 0.06);
+    background: transparent;      /* фон плитки убран */
+    box-shadow: none;
     color: #ffffff;
     text-align: center;
+    contain: layout paint;        /* перерисовка анимации не трогает остальную страницу */
 }
 
 .tge-tile:active {
-    transform: scale(0.96);
+    transform: scale(0.97);
     border-color: #ffc800;
-    box-shadow: 0 0 22px rgba(255, 200, 0, 0.35), inset 0 0 14px rgba(255, 200, 0, 0.1);
 }
 
 .tge-title {
@@ -3613,9 +3611,7 @@ input, textarea {
     color: #ffffff;
     white-space: nowrap;
     padding-top: 4px;
-    -webkit-text-stroke: 0.9px #ffffff;       /* утолщаем штрих до «маркерного» */
-    filter: url(#tgeMarker);                   /* лёгкая рукописная неровность */
-    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+    -webkit-text-stroke: 0.9px #ffffff;   /* утолщаем штрих до «маркерного» */
 }
 
 .tge-banner {
@@ -3627,12 +3623,8 @@ input, textarea {
     aspect-ratio: 1 / 1;
     border-radius: 16px;
     overflow: hidden;
-    font-size: 54px;                           /* размер эмодзи-заглушки */
-    /* лёгкий светлый фон под анимацию */
-    background:
-        radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 60%),
-        linear-gradient(160deg, #e8eef4 0%, #c6d2de 100%);
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 -10px 18px rgba(80, 100, 125, 0.18);
+    font-size: 54px;                      /* размер эмодзи-заглушки */
+    background: transparent;              /* фон баннера убран */
     -webkit-user-select: none;
     user-select: none;
     pointer-events: none;
@@ -3641,10 +3633,21 @@ input, textarea {
 .tge-banner > img,
 .tge-banner > .sticker-lottie {
     display: block;
-    width: 82%;
-    height: 82%;
-    object-fit: contain;
+    width: 90%;
+    height: 90%;
     -webkit-user-drag: none;
     pointer-events: none;
 }
+.tge-banner > .sticker-lottie canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
 .tge-banner.has-anim { font-size: 0; }
+
+/* Каждый баннер — отдельный слой GPU: кадр анимации не перерисовывает
+   страницу (градиенты фона, плитки, меню) */
+.tge-banner {
+    transform: translateZ(0);
+    will-change: transform;
+}
