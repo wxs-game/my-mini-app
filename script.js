@@ -4096,7 +4096,6 @@ function openDiceGame() {
     showPage("diceGamePage");
     updateNav("games");
     if (typeof window.initDicePreview === "function") window.initDicePreview();
-    if (!diceGame.busy && window.DiceStage) window.DiceStage.reset();
 }
 
 function updateDicePlayLabel() {
@@ -4111,7 +4110,7 @@ function selectDiceMode(mode, btn) {
     document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
     if (btn) btn.classList.add("selected");
     updateDicePlayLabel();
-    if (!diceGame.busy && window.DiceStage) window.DiceStage.reset();   // вернуть крутящийся кубик
+    // результат (галочка/крестик) остаётся на экране до начала новой игры
 }
 
 function selectDiceCubes(n, btn) {
