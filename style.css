@@ -3638,7 +3638,8 @@ input, textarea {
     -webkit-user-drag: none;
     pointer-events: none;
 }
-.tge-banner > .sticker-lottie canvas {
+.tge-banner > .sticker-lottie canvas,
+.tge-banner > .sticker-lottie svg {
     display: block;
     width: 100% !important;
     height: 100% !important;
@@ -3714,13 +3715,13 @@ input, textarea {
 .dice-tile.selected .dice-mode-coef { opacity: 1; }
 
 /* Сцена: превью → выпавший кубик → результат */
-.dice-page { --dice-size: min(60vw, 240px); }
+.dice-page { --dice-size: min(62vw, 250px); }
 
 .dice-stage {
     position: relative;
     width: 100%;
-    height: min(68vw, 280px);
-    margin: 14px 0 12px;
+    height: min(84vw, 340px);
+    margin: 10px 0 10px;
     overflow: hidden;                 /* слои уезжают за края, не создавая прокрутку */
     -webkit-user-select: none;
     user-select: none;
@@ -3732,36 +3733,40 @@ input, textarea {
     display: flex;
     align-items: center;
     justify-content: center;
-    transform: translateZ(0);
+    backface-visibility: hidden;
     will-change: transform, opacity;
 }
 
-/* Превью */
+/* Превью: плавно уплывает вверх */
 .dice-preview {
-    font-size: 110px;                 /* размер эмодзи-заглушки */
-    transition: transform 0.55s cubic-bezier(.4, 0, .2, 1), opacity 0.45s ease;
+    transition: transform 0.8s cubic-bezier(.32, .72, 0, 1), opacity 0.55s ease;
 }
-.dice-preview.has-anim { font-size: 0; }
-.dice-preview.out { transform: translateY(-120%); opacity: 0; }
+.dice-preview.is-fallback { font-size: 110px; }
+.dice-preview.out { transform: translateY(-62%) scale(0.94); opacity: 0; }
 
-/* Выпавший кубик */
+/* Выпавший кубик: плавно заезжает сбоку */
 .dice-roll {
     opacity: 0;
     pointer-events: none;
-    transition: transform 0.55s cubic-bezier(.22, .9, .3, 1), opacity 0.4s ease;
+    transition: transform 0.85s cubic-bezier(.22, 1, .36, 1), opacity 0.55s ease;
 }
-.dice-roll.from-left  { transform: translateX(-120%); }
-.dice-roll.from-right { transform: translateX(120%); }
-.dice-roll.in   { transform: translateX(0); opacity: 1; }
-.dice-roll.away { transform: translateY(-14%) scale(0.88); opacity: 0; transition-duration: 0.4s; }
+.dice-roll.from-left  { transform: translateX(-105%) scale(0.94); }
+.dice-roll.from-right { transform: translateX(105%) scale(0.94); }
+.dice-roll.in   { transform: translateX(0) scale(1); opacity: 1; }
+.dice-roll.away { transform: translateY(-8%) scale(0.92); opacity: 0; transition-duration: 0.45s; }
 
 .dice-preview > .sticker-lottie,
-.dice-roll > .sticker-lottie,
+.dice-roll > .sticker-lottie {
+    width: var(--dice-size);
+    height: var(--dice-size);
+}
+.dice-preview > .sticker-lottie svg,
+.dice-roll > .sticker-lottie svg,
 .dice-preview > .sticker-lottie canvas,
 .dice-roll > .sticker-lottie canvas {
     display: block;
-    width: var(--dice-size) !important;
-    height: var(--dice-size) !important;
+    width: 100% !important;
+    height: 100% !important;
 }
 .dice-fallback {
     font-size: 120px;
@@ -3779,18 +3784,18 @@ input, textarea {
 .dice-result {
     --rc: #2ecc71;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
     opacity: 0;
-    transform: translateY(18px);
-    transition: transform 0.5s cubic-bezier(.22, .9, .3, 1), opacity 0.4s ease;
+    transform: translateY(14px) scale(0.97);
+    transition: transform 0.45s cubic-bezier(.22, 1, .36, 1), opacity 0.35s ease;
 }
 .dice-result.lose { --rc: #e74c3c; }
-.dice-result.show { opacity: 1; transform: translateY(0); }
-.dice-result.hide-up { opacity: 0; transform: translateY(-60%); }
+.dice-result.show { opacity: 1; transform: translateY(0) scale(1); }
+.dice-result.hide-up { opacity: 0; transform: translateY(-50%) scale(0.95); }
 
 .dr-icon {
-    width: calc(var(--dice-size) * 0.62);
-    height: calc(var(--dice-size) * 0.62);
+    width: calc(var(--dice-size) * 0.84);
+    height: calc(var(--dice-size) * 0.84);
     overflow: visible;
 }
 .dice-result.win  { --ring: #33291a; --disc: #f2bd42; --mark: #1d140a; --sp: #f7c948; }
@@ -3814,15 +3819,15 @@ input, textarea {
     stroke-dashoffset: 1;
 }
 
-/* Появление по частям (запускается, когда карточка получает .show) */
-.dice-result.show .dr-ring  { animation: drPop 0.45s cubic-bezier(.2, 1.2, .4, 1) both; }
-.dice-result.show .dr-disc  { animation: drPop 0.45s 0.12s cubic-bezier(.2, 1.2, .4, 1) both; }
-.dice-result.show .dr-mark  { animation: drDraw 0.4s 0.5s ease-out forwards; }
-.dice-result.show .dr-second { animation-delay: 0.85s; }
+/* Появление по частям: быстро, но мягко (без «пружинистых» рывков) */
+.dice-result.show .dr-ring  { animation: drPop 0.32s cubic-bezier(.22, 1, .36, 1) both; }
+.dice-result.show .dr-disc  { animation: drPop 0.34s 0.06s cubic-bezier(.3, 1.25, .5, 1) both; }
+.dice-result.show .dr-mark  { animation: drDraw 0.3s 0.24s cubic-bezier(.4, 0, .2, 1) forwards; }
+.dice-result.show .dr-second { animation-delay: 0.38s; }
 .dice-result.show .dr-spark,
 .dice-result.show .dr-dot {
     opacity: 0;
-    animation: drSpark 0.5s var(--d, 1s) cubic-bezier(.2, 1.3, .4, 1) forwards;
+    animation: drSpark 0.36s var(--d, 0.4s) cubic-bezier(.22, 1.1, .4, 1) forwards;
 }
 
 .dice-result-title,
@@ -3832,15 +3837,15 @@ input, textarea {
     text-align: center;
     opacity: 0;
 }
-.dice-result-title  { font-size: 16px; margin-top: 4px; }
-.dice-result-amount { font-size: 20px; }
-.dice-result.show .dice-result-title  { animation: drText 0.4s 1.0s ease-out forwards; }
-.dice-result.show .dice-result-amount { animation: drText 0.4s 1.2s ease-out forwards; }
+.dice-result-title  { font-size: 17px; margin-top: 2px; }
+.dice-result-amount { font-size: 22px; }
+.dice-result.show .dice-result-title  { animation: drText 0.35s 0.42s cubic-bezier(.22, 1, .36, 1) forwards; }
+.dice-result.show .dice-result-amount { animation: drText 0.35s 0.52s cubic-bezier(.22, 1, .36, 1) forwards; }
 
-@keyframes drPop   { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes drPop   { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes drDraw  { to { stroke-dashoffset: 0; } }
-@keyframes drSpark { 0% { transform: scale(0) rotate(-40deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
-@keyframes drText  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes drSpark { 0% { transform: scale(0.2) rotate(-30deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes drText  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Пока идёт бросок — управление заблокировано */
 .dice-page.is-busy .dice-count-row,
@@ -3867,3 +3872,21 @@ input, textarea {
 .dice-bet-box {
     margin-top: 14px;
 }
+
+
+/* ==========================================================
+   Спиннер загрузки анимаций (жёлтый)
+========================================================== */
+.tge-spinner {
+    display: block;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(255, 200, 0, 0) 0%, #ffd23f 100%);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+    animation: tgeSpin 0.85s linear infinite;
+    filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.45));
+}
+.tge-spinner.big { width: 52px; height: 52px; }
+@keyframes tgeSpin { to { transform: rotate(360deg); } }
