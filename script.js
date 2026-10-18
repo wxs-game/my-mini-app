@@ -6902,31 +6902,46 @@ window.applyBetMax = applyBetMax;
     }
 
     /* ---------- выпавший кубик ----------
-       Играет в РОДНОМ темпе файла (кадр в кадр, без растяжения по времени —
-       растяжение 3 с → 4 с давало неравномерные повторы кадров = микро-фризы),
+       Играет в РОДНОМ темпе файла (кадр в кадр, без растяжения по времени),
        затем замирает на последнем кадре, пока не пройдёт totalMs.
-       Если устройство не успевает рисовать SVG (>9 мс на кадр), автоматически
-       переходим на ровные 30 кадров/с — это выглядит плавнее, чем нерегулярные 20-60. */
+       Всегда стараемся держать полные 60 кадров/с. Ровные 30 включаются только
+       если реальная частота кадров экрана упала ниже ~40 (rAF > 24 мс подряд),
+       то есть телефон физически не справляется. В консоль пишется итог замера. */
     function playRoll(anim, totalMs) {
         return new Promise(resolve => {
             const fr = anim.frameRate || 60;
             const last = Math.max((anim.totalFrames || 2) - 1, 1);
             const nativeMs = last / fr * 1000;
-            let prevTarget = -1, costEma = 0, stride = 1;
+            let prevTarget = -1, stride = 1;
+            let lastNow = 0, dtEma = 16.7, ticks = 0;
+            let renders = 0, renderMs = 0, switchedAt = -1;
             const t0 = performance.now();
             (function step(now) {
+                if (lastNow) {
+                    const dt = now - lastNow;
+                    if (++ticks > 6) dtEma = dtEma * 0.9 + dt * 0.1;
+                    if (stride === 1 && ticks > 40 && dtEma > 24) { stride = 2; switchedAt = ticks; }
+                }
+                lastNow = now;
+
                 const f = Math.min(Math.floor((now - t0) / 1000 * fr), last);
                 const target = f >= last ? last : Math.floor(f / stride) * stride;
                 if (target !== prevTarget) {
                     const c0 = performance.now();
                     anim.goToAndStop(target, true);
-                    const cost = performance.now() - c0;
-                    costEma = costEma ? costEma * 0.8 + cost * 0.2 : cost;
-                    if (stride === 1 && costEma > 9) stride = 2;
+                    renderMs += performance.now() - c0;
+                    renders++;
                     prevTarget = target;
                 }
-                if (f < last) requestAnimationFrame(step);
-                else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
+                if (f < last) {
+                    requestAnimationFrame(step);
+                } else {
+                    console.log('[Куб] бросок: ' + renders + ' отрисовок, в среднем ' +
+                        (renders ? (renderMs / renders).toFixed(1) : 0) + ' мс на кадр (JS), ' +
+                        'средний интервал экрана ' + dtEma.toFixed(1) + ' мс' +
+                        (switchedAt > 0 ? ', включён режим 30 к/с' : ', режим 60 к/с'));
+                    setTimeout(resolve, Math.max(0, totalMs - nativeMs));
+                }
             })(t0);
         });
     }
