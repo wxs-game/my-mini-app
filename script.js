@@ -4065,7 +4065,7 @@ function openTgEmojiMode(mode) {
 }
 
 /* ---------- КУБ ---------- */
-const diceGame = { cubes: 1, mode: null };
+const diceGame = { cubes: 1, mode: null, busy: false };
 const DICE_MODE_COEFS = {
     high: 1.95, low: 1.95,      // 4-6 / 1-3
     even: 1.95, odd: 1.95,      // чёт / нечёт
@@ -4095,6 +4095,7 @@ function openDiceGame() {
     showPage("diceGamePage");
     updateNav("games");
     if (typeof window.initDicePreview === "function") window.initDicePreview();
+    if (!diceGame.busy && window.DiceStage) window.DiceStage.reset();
 }
 
 function updateDicePlayLabel() {
@@ -4109,6 +4110,7 @@ function selectDiceMode(mode, btn) {
     document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
     if (btn) btn.classList.add("selected");
     updateDicePlayLabel();
+    if (!diceGame.busy && window.DiceStage) window.DiceStage.reset();   // вернуть крутящийся кубик
 }
 
 function selectDiceCubes(n, btn) {
@@ -4126,8 +4128,110 @@ function setDiceMaxBet() {
     applyBetMax(document.getElementById("diceBetInput"));
 }
 
-function handleDicePlay() {
-    // Пока без логики — продолжим позже
+function setDiceBusy(on) {
+    diceGame.busy = on;
+    const page = document.getElementById("diceGamePage");
+    if (page) page.classList.toggle("is-busy", on);
+}
+
+// Честный бросок 1..6 без смещения (crypto вместо Math.random)
+function rollDie() {
+    const a = new Uint32Array(1);
+    do { crypto.getRandomValues(a); } while (a[0] >= 4294967292); // 6 * 715827882
+    return (a[0] % 6) + 1;
+}
+
+function isDiceWin(mode, r) {
+    switch (mode) {
+        case "high":   return r >= 4;
+        case "low":    return r <= 3;
+        case "even":   return r % 2 === 0;
+        case "odd":    return r % 2 === 1;
+        case "edges":  return r === 1 || r === 6;
+        case "center": return r === 3 || r === 4;
+    }
+    return false;
+}
+
+async function handleDicePlay() {
+    if (diceGame.busy) return;
+    if (!diceGame.mode) { showMessage("Выберите режим ставки!"); return; }
+    if (!lockEconomy()) return;
+
+    const input = document.getElementById("diceBetInput");
+    const bet = roundMoney(parseFloat(input.value));
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    setDiceBusy(true);
+    const mode = diceGame.mode;
+    const coef = DICE_MODE_COEFS[mode];
+
+    // --- 1. списываем ставку ---
+    const snapshot = snapshotBalanceState();
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debit = await placeBetServer(bet, "Куб");
+    if (!debit.ok) {
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        setDiceBusy(false);
+        unlockEconomy();
+        return;
+    }
+    currentBalance = debit.balance;
+    setUIBalance(currentBalance);
+    const liveBetId = await broadcastLiveBet(bet, "Куб");
+
+    // --- 2. бросок и расчёт ---
+    const roll = rollDie();
+    const win = isDiceWin(mode, roll);
+    const winAmount = win ? roundMoney(bet * coef) : 0;
+    let finalBalance = currentBalance;
+
+    if (win) {
+        const afterBet = snapshotBalanceState();
+        currentTotalWin = roundMoney(currentTotalWin + winAmount);
+        currentWinsCount++;
+        if (coef > currentMaxWin) currentMaxWin = coef;
+
+        // Выигрыш зачисляем на сервер сразу, а на экране баланс покажем после анимации
+        const credit = await resolveWinServerWithRetry(winAmount, coef, 3);
+        if (!credit.ok) {
+            restoreBalanceState(afterBet);
+            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку.");
+            setDiceBusy(false);
+            unlockEconomy();
+            if (window.DiceStage) window.DiceStage.reset();
+            return;
+        }
+        finalBalance = credit.balance;
+    }
+    unlockEconomy();
+
+    // --- 3. анимация ---
+    const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
+    try {
+        if (window.DiceStage) await window.DiceStage.play({ roll, win, amountText });
+    } catch (e) {
+        console.error("Dice animation error:", e);
+    }
+
+    // --- 4. итог: баланс на экране, вибрация, лента ставок ---
+    setUIBalance(finalBalance);
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
+    resolveLiveBetWin(liveBetId, bet, winAmount);
+    setDiceBusy(false);
 }
 
 function openMines() {
@@ -6623,17 +6727,19 @@ window.applyBetMax = applyBetMax;
 
 
 /* =========================
-   КУБ — крутящийся кубик над кнопкой «Играть»
-   Файл: animations/dice/preview/cube.tgs  (или cube.json)
-   Крутится постоянно, с частотой экрана; на паузе, когда не виден.
+   КУБ — сцена: превью → выпавший кубик → результат
+   Файлы:
+     animations/dice/preview/cube.tgs   — крутится, пока не нажали «Играть»
+     animations/dice/cube1.tgs … cube6.tgs — анимация выпавшей грани
+   Если файла нет — вместо него показывается запасная анимация-эмодзи.
 ========================= */
 (function () {
-    const SRC = 'animations/dice/preview/cube';
+    const PREVIEW_SRC = 'animations/dice/preview/cube';
+    const ROLL_DIR = 'animations/dice/';   // cube1 … cube6
+    const ROLL_MS = 4000;                  // сколько секунд играет выпавший кубик
     const DPR = 1.5;
-    let started = false;
-    let player = null;
-    let rafId = 0;
-    let lastTick = 0;
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const cache = new Map();               // base -> Promise<json|null>
 
     async function readLottieJson(buf) {
         const bytes = new Uint8Array(buf);
@@ -6647,61 +6753,206 @@ window.applyBetMax = applyBetMax;
         throw new Error('no gzip support');
     }
 
+    function loadData(base) {
+        if (cache.has(base)) return cache.get(base);
+        const p = (async () => {
+            for (const ext of ['tgs', 'json']) {
+                try {
+                    const res = await fetch(base + '.' + ext);
+                    if (!res.ok) continue;
+                    return await readLottieJson(await res.arrayBuffer());
+                } catch (e) { /* следующий формат */ }
+            }
+            console.warn('[Куб] анимация не найдена:', base);
+            return null;
+        })();
+        cache.set(base, p);
+        return p;
+    }
+
+    const $ = id => document.getElementById(id);
+    const reflow = el => void el.offsetWidth;
+
+    /* ---------- превью (крутится постоянно) ---------- */
+    let preview = null;      // { anim, frame, total, fr, visible, paused }
+    let rafId = 0, lastTick = 0, previewStarted = false;
+
     function tick(now) {
         rafId = 0;
-        if (!player || !player.playing) return;
+        if (!preview || !preview.visible || preview.paused) return;
         rafId = requestAnimationFrame(tick);
         const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0;
         lastTick = now;
-        player.frame += dt * player.fr;
-        if (player.frame >= player.total) player.frame %= player.total;
-        player.anim.goToAndStop(player.frame, true);
+        preview.frame += dt * preview.fr;
+        if (preview.frame >= preview.total) preview.frame %= preview.total;
+        preview.anim.goToAndStop(preview.frame, true);
     }
-
     function ensureLoop() {
-        if (!rafId) { lastTick = 0; rafId = requestAnimationFrame(tick); }
+        if (!rafId && preview && preview.visible && !preview.paused) { lastTick = 0; rafId = requestAnimationFrame(tick); }
+    }
+    function setPreviewPaused(v) { if (preview) { preview.paused = v; ensureLoop(); } }
+
+    async function preloadRolls() {
+        for (let n = 1; n <= 6; n++) { await loadData(ROLL_DIR + 'cube' + n); await wait(80); }
     }
 
     window.initDicePreview = async function () {
-        if (started) return;
-        started = true;
-        const el = document.getElementById('dicePreview');
+        if (previewStarted) return;
+        previewStarted = true;
+        const el = $('dicePreview');
         if (!el || typeof lottie === 'undefined') return;
 
-        let data = null;
-        for (const ext of ['tgs', 'json']) {
-            try {
-                const res = await fetch(SRC + '.' + ext);
-                if (!res.ok) continue;
-                data = await readLottieJson(await res.arrayBuffer());
-                break;
-            } catch (e) { /* пробуем следующий формат */ }
+        const data = await loadData(PREVIEW_SRC);
+        if (data) {
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            el.textContent = '';
+            el.appendChild(box);
+            el.classList.add('has-anim');
+            const anim = lottie.loadAnimation({
+                container: box, renderer: 'canvas', loop: false, autoplay: false, animationData: data,
+                rendererSettings: { clearCanvas: true, dpr: DPR, preserveAspectRatio: 'xMidYMid meet' }
+            });
+            anim.goToAndStop(0, true);
+            preview = { anim, frame: 0, total: anim.totalFrames || 1, fr: anim.frameRate || 60, visible: true, paused: false };
+            if ('IntersectionObserver' in window) {
+                new IntersectionObserver(entries => {
+                    preview.visible = entries[0].isIntersecting;
+                    ensureLoop();
+                }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
+            }
+            ensureLoop();
         }
-        if (!data) return;   // файла нет — остаётся эмодзи 🎲
+        preloadRolls();   // фоном подгружаем 6 граней
+    };
 
+    /* ---------- выпавший кубик: играет ROLL_MS и замирает на последнем кадре ---------- */
+    function playRoll(box, data, ms) {
+        return new Promise(resolve => {
+            const anim = lottie.loadAnimation({
+                container: box, renderer: 'canvas', loop: false, autoplay: false, animationData: data,
+                rendererSettings: { clearCanvas: true, dpr: DPR, preserveAspectRatio: 'xMidYMid meet' }
+            });
+            const last = Math.max((anim.totalFrames || 2) - 1, 1);
+            anim.goToAndStop(0, true);
+            const t0 = performance.now();
+            (function step(now) {
+                const p = Math.min((now - t0) / ms, 1);
+                anim.goToAndStop(p * last, true);
+                if (p < 1) requestAnimationFrame(step); else resolve(anim);
+            })(t0);
+        });
+    }
+
+    // Запасной вариант, если cubeN.tgs ещё не загружен
+    async function fallbackRoll(box, roll, ms) {
+        box.className = 'dice-fallback shaking';
+        box.textContent = '🎲';
+        await wait(ms * 0.75);
+        box.classList.remove('shaking');
+        box.textContent = '⚀⚁⚂⚃⚄⚅'[roll - 1];
+        await wait(ms * 0.25);
+    }
+
+    /* ---------- результат: галочка / крестик ---------- */
+    function sparkles() {
+        const stars = [[30, 62, 0.95], [172, 124, 1.1], [72, 164, 1.2]];
+        const dots = [[60, 38, 1.0], [160, 74, 1.15], [38, 128, 1.25], [128, 170, 1.05]];
+        const star = 'M0-10 L2.6-2.6 L10 0 L2.6 2.6 L0 10 L-2.6 2.6 L-10 0 L-2.6-2.6Z';
+        return stars.map(([x, y, d]) =>
+                '<g transform="translate(' + x + ' ' + y + ')"><path class="dr-spark" style="--d:' + d + 's" d="' + star + '"/></g>').join('') +
+            dots.map(([x, y, d]) =>
+                '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
+    }
+
+    function resultHtml(win, amountText) {
+        const mark = win
+            ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
+            : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
+              '<path class="dr-mark dr-second" pathLength="1" d="M119 81 L81 119"/>';
+        return '' +
+            '<svg class="dr-icon" viewBox="0 0 200 200" aria-hidden="true">' +
+                '<circle class="dr-ring" cx="100" cy="100" r="54"/>' +
+                '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
+                mark + sparkles() +
+            '</svg>' +
+            '<div class="dice-result-title">' + (win ? 'Ставка сыграла' : 'Ставка не сыграла') + '</div>' +
+            '<div class="dice-result-amount">' + amountText + '</div>';
+    }
+
+    /* ---------- управление сценой ---------- */
+    function hideResult(slideUp) {
+        const res = $('diceResult');
+        if (!res || !res.classList.contains('show')) return;
+        res.classList.remove('show');
+        if (slideUp) res.classList.add('hide-up');
+        setTimeout(() => { if (!res.classList.contains('show')) res.innerHTML = ''; }, 500);
+    }
+
+    function showPreview() {
+        const prev = $('dicePreview');
+        if (!prev || !prev.classList.contains('out')) return;
+        prev.style.transition = 'none';
+        prev.classList.remove('out');
+        prev.style.opacity = '0';
+        prev.style.transform = 'translateY(30px)';
+        reflow(prev);
+        prev.style.transition = '';
+        prev.style.opacity = '';
+        prev.style.transform = '';
+        setPreviewPaused(false);
+    }
+
+    // Вернуть сцену к крутящемуся превью (вызывается при выборе режима и т.п.)
+    function reset() {
+        hideResult(false);
+        showPreview();
+    }
+
+    async function play({ roll, win, amountText }) {
+        const prev = $('dicePreview'), rollEl = $('diceRoll'), res = $('diceResult');
+        if (!prev || !rollEl || !res) return;
+
+        const data = (typeof lottie !== 'undefined') ? await loadData(ROLL_DIR + 'cube' + roll) : null;
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+
+        // подготовка выпавшего кубика (за кадром сбоку)
+        rollEl.className = 'dice-layer dice-roll from-' + side;
+        rollEl.innerHTML = '';
         const box = document.createElement('div');
         box.className = 'sticker-lottie';
-        el.textContent = '';
-        el.appendChild(box);
-        el.classList.add('has-anim');
+        rollEl.appendChild(box);
+        reflow(rollEl);
 
-        const anim = lottie.loadAnimation({
-            container: box,
-            renderer: 'canvas',
-            loop: false,
-            autoplay: false,
-            animationData: data,
-            rendererSettings: { clearCanvas: true, dpr: DPR, preserveAspectRatio: 'xMidYMid meet' }
-        });
-        anim.goToAndStop(0, true);
-        player = { anim, frame: 0, total: anim.totalFrames || 1, fr: anim.frameRate || 60, playing: true };
+        // 1) превью (или прошлый результат) уплывает вверх, новый кубик заезжает сбоку
+        hideResult(true);
+        prev.classList.add('out');
+        rollEl.classList.add('in');
+        setTimeout(() => setPreviewPaused(true), 600);
 
-        if ('IntersectionObserver' in window) {
-            new IntersectionObserver(entries => {
-                player.playing = entries[0].isIntersecting;
-                ensureLoop();
-            }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
-        }
-        ensureLoop();
-    };
+        // 2) играет 4 секунды и замирает на последнем кадре
+        let anim = null;
+        if (data) anim = await playRoll(box, data, ROLL_MS);
+        else await fallbackRoll(box, roll, ROLL_MS);
+        await wait(450);
+
+        // 3) кубик плавно уходит, появляется галочка / крестик
+        rollEl.classList.add('away');
+        res.style.transition = 'none';
+        res.classList.remove('show', 'hide-up');
+        res.innerHTML = resultHtml(win, amountText);
+        res.classList.toggle('win', win);
+        res.classList.toggle('lose', !win);
+        reflow(res);
+        res.style.transition = '';
+        res.classList.add('show');
+
+        await wait(450);
+        if (anim) anim.destroy();
+        rollEl.innerHTML = '';
+        rollEl.className = 'dice-layer dice-roll';
+        await wait(1300);   // дать результату доиграть, прежде чем разрешить новую ставку
+    }
+
+    window.DiceStage = { play, reset };
 })();

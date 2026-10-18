@@ -3713,29 +3713,143 @@ input, textarea {
 }
 .dice-tile.selected .dice-mode-coef { opacity: 1; }
 
-/* Кубик */
-.dice-preview {
+/* Сцена: превью → выпавший кубик → результат */
+.dice-page { --dice-size: min(60vw, 240px); }
+
+.dice-stage {
     position: relative;
+    width: 100%;
+    height: min(68vw, 280px);
+    margin: 14px 0 12px;
+    overflow: hidden;                 /* слои уезжают за края, не создавая прокрутку */
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: none;
+}
+.dice-layer {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: min(62vw, 250px);
-    aspect-ratio: 1 / 1;
-    margin: 18px auto 12px;
+    transform: translateZ(0);
+    will-change: transform, opacity;
+}
+
+/* Превью */
+.dice-preview {
     font-size: 110px;                 /* размер эмодзи-заглушки */
-    transform: translateZ(0);         /* свой слой GPU: кадры не перерисовывают страницу */
-    will-change: transform;
-    pointer-events: none;
-    -webkit-user-select: none;
-    user-select: none;
+    transition: transform 0.55s cubic-bezier(.4, 0, .2, 1), opacity 0.45s ease;
 }
 .dice-preview.has-anim { font-size: 0; }
-.dice-preview > .sticker-lottie,
-.dice-preview > .sticker-lottie canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
+.dice-preview.out { transform: translateY(-120%); opacity: 0; }
+
+/* Выпавший кубик */
+.dice-roll {
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.55s cubic-bezier(.22, .9, .3, 1), opacity 0.4s ease;
 }
+.dice-roll.from-left  { transform: translateX(-120%); }
+.dice-roll.from-right { transform: translateX(120%); }
+.dice-roll.in   { transform: translateX(0); opacity: 1; }
+.dice-roll.away { transform: translateY(-14%) scale(0.88); opacity: 0; transition-duration: 0.4s; }
+
+.dice-preview > .sticker-lottie,
+.dice-roll > .sticker-lottie,
+.dice-preview > .sticker-lottie canvas,
+.dice-roll > .sticker-lottie canvas {
+    display: block;
+    width: var(--dice-size) !important;
+    height: var(--dice-size) !important;
+}
+.dice-fallback {
+    font-size: 120px;
+    line-height: 1;
+}
+.dice-fallback.shaking { animation: diceShake 0.45s ease-in-out infinite; }
+@keyframes diceShake {
+    0%, 100% { transform: rotate(0) translateY(0); }
+    25% { transform: rotate(-18deg) translateY(-8px); }
+    50% { transform: rotate(14deg) translateY(2px); }
+    75% { transform: rotate(-9deg) translateY(-6px); }
+}
+
+/* Результат */
+.dice-result {
+    --rc: #2ecc71;
+    flex-direction: column;
+    gap: 2px;
+    opacity: 0;
+    transform: translateY(18px);
+    transition: transform 0.5s cubic-bezier(.22, .9, .3, 1), opacity 0.4s ease;
+}
+.dice-result.lose { --rc: #e74c3c; }
+.dice-result.show { opacity: 1; transform: translateY(0); }
+.dice-result.hide-up { opacity: 0; transform: translateY(-60%); }
+
+.dr-icon {
+    width: calc(var(--dice-size) * 0.62);
+    height: calc(var(--dice-size) * 0.62);
+    overflow: visible;
+}
+.dice-result.win  { --ring: #33291a; --disc: #f2bd42; --mark: #1d140a; --sp: #f7c948; }
+.dice-result.lose { --ring: #331a1a; --disc: #e5484d; --mark: #2a0d0e; --sp: #ff6b6b; }
+
+.dr-ring  { fill: var(--ring); }
+.dr-disc  { fill: var(--disc); }
+.dr-spark { fill: var(--sp); }
+.dr-dot   { fill: var(--sp); }
+.dr-ring, .dr-disc, .dr-spark, .dr-dot {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+.dr-mark {
+    fill: none;
+    stroke: var(--mark);
+    stroke-width: 11;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 1;
+}
+
+/* Появление по частям (запускается, когда карточка получает .show) */
+.dice-result.show .dr-ring  { animation: drPop 0.45s cubic-bezier(.2, 1.2, .4, 1) both; }
+.dice-result.show .dr-disc  { animation: drPop 0.45s 0.12s cubic-bezier(.2, 1.2, .4, 1) both; }
+.dice-result.show .dr-mark  { animation: drDraw 0.4s 0.5s ease-out forwards; }
+.dice-result.show .dr-second { animation-delay: 0.85s; }
+.dice-result.show .dr-spark,
+.dice-result.show .dr-dot {
+    opacity: 0;
+    animation: drSpark 0.5s var(--d, 1s) cubic-bezier(.2, 1.3, .4, 1) forwards;
+}
+
+.dice-result-title,
+.dice-result-amount {
+    color: var(--rc);
+    font-weight: 900;
+    text-align: center;
+    opacity: 0;
+}
+.dice-result-title  { font-size: 16px; margin-top: 4px; }
+.dice-result-amount { font-size: 20px; }
+.dice-result.show .dice-result-title  { animation: drText 0.4s 1.0s ease-out forwards; }
+.dice-result.show .dice-result-amount { animation: drText 0.4s 1.2s ease-out forwards; }
+
+@keyframes drPop   { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes drDraw  { to { stroke-dashoffset: 0; } }
+@keyframes drSpark { 0% { transform: scale(0) rotate(-40deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes drText  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Пока идёт бросок — управление заблокировано */
+.dice-page.is-busy .dice-count-row,
+.dice-page.is-busy .dice-modes,
+.dice-page.is-busy .dice-bet-box,
+.dice-page.is-busy .dice-play-btn {
+    pointer-events: none;
+}
+.dice-page.is-busy .dice-play-btn { opacity: 0.6; }
 
 /* Кнопка «Играть» — как «Начать игру» в Минах */
 .dice-play-btn {

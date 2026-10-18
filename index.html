@@ -418,7 +418,11 @@
         </section>
 
         <!-- Крутящийся кубик (animations/dice/preview/cube.tgs) -->
-        <div class="dice-preview" id="dicePreview" aria-hidden="true">🎲</div>
+        <div class="dice-stage" id="diceStage">
+            <div class="dice-layer dice-preview" id="dicePreview" aria-hidden="true">🎲</div>
+            <div class="dice-layer dice-roll" id="diceRoll" aria-hidden="true"></div>
+            <div class="dice-layer dice-result" id="diceResult" aria-live="polite"></div>
+        </div>
 
         <button class="dice-tile dice-play-btn" id="dicePlayBtn" onclick="handleDicePlay()">Играть</button>
 
