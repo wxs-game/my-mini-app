@@ -3651,3 +3651,107 @@ input, textarea {
     transform: translateZ(0);
     will-change: transform;
 }
+
+
+/* ==========================================================
+   КУБ (Telegram Emoji) — страница режима
+========================================================== */
+.dice-page {
+    --dice-orange: #ff8c00;
+    --dice-yellow: #ffd400;
+    --dice-hand: 'Caveat', 'Marck Script', 'Comic Sans MS', cursive;
+}
+
+/* Общий вид рукописных плиток */
+.dice-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    column-gap: 6px;
+    row-gap: 0;
+    background: var(--dice-orange);
+    color: #000000;
+    border: none;
+    border-radius: 14px;
+    padding: 8px 10px;
+    font-family: var(--dice-hand);
+    font-weight: 700;
+    font-size: 26px;
+    line-height: 1.05;
+    text-align: center;
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.dice-tile:active { transform: scale(0.96); }
+
+/* 1 куб / 2 куба / 3 куба */
+.dice-count-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+}
+.dice-count-btn {
+    min-height: 54px;
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.dice-count-btn.is-soon { opacity: 0.55; }
+.dice-count-btn.active {
+    background: var(--dice-yellow);
+    box-shadow: 0 0 18px rgba(255, 212, 0, 0.55);
+}
+
+/* Режимы */
+.dice-modes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 14px;
+}
+.dice-mode {
+    min-height: 66px;
+}
+.dice-mode.selected {
+    background: var(--dice-yellow);
+    box-shadow: 0 0 22px rgba(255, 212, 0, 0.7), 0 0 4px rgba(255, 212, 0, 0.9);
+}
+
+/* Кубик */
+.dice-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(62vw, 250px);
+    aspect-ratio: 1 / 1;
+    margin: 18px auto 12px;
+    font-size: 110px;                 /* размер эмодзи-заглушки */
+    transform: translateZ(0);         /* свой слой GPU: кадры не перерисовывают страницу */
+    will-change: transform;
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.dice-preview.has-anim { font-size: 0; }
+.dice-preview > .sticker-lottie,
+.dice-preview > .sticker-lottie canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Кнопка «Играть» */
+.dice-play-btn {
+    width: 100%;
+    min-height: 62px;
+    font-size: 34px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+}
+
+/* Блок ставки (как в Минах) */
+.dice-bet-box {
+    margin-top: 14px;
+}

@@ -4009,7 +4009,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage"];
+    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4059,8 +4059,56 @@ function openTgEmoji() {
 }
 
 function openTgEmojiMode(mode) {
-    // Функции внутри режимов пока не реализованы
+    if (mode === "dice") { openDiceGame(); return; }
+    // Остальные режимы пока не реализованы
     showMessage("Режим скоро появится");
+}
+
+/* ---------- КУБ ---------- */
+const diceGame = { cubes: 1, mode: null };
+const DICE_MODE_COEFS = {
+    high: 1.95, low: 1.95,      // 4-6 / 1-3
+    even: 1.95, odd: 1.95,      // чёт / нечёт
+    edges: 2.92, center: 2.92   // 1 или 6 / 3 или 4  (шанс 1/3, RTP 97.5%)
+};
+
+function openDiceGame() {
+    showPage("diceGamePage");
+    updateNav("games");
+    if (typeof window.initDicePreview === "function") window.initDicePreview();
+}
+
+function updateDicePlayLabel() {
+    const btn = document.getElementById("dicePlayBtn");
+    if (!btn) return;
+    const c = diceGame.mode ? DICE_MODE_COEFS[diceGame.mode] : null;
+    btn.textContent = c ? "Играть (" + c.toFixed(2) + "x)" : "Играть";
+}
+
+function selectDiceMode(mode, btn) {
+    diceGame.mode = mode;
+    document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
+    if (btn) btn.classList.add("selected");
+    updateDicePlayLabel();
+}
+
+function selectDiceCubes(n, btn) {
+    if (n !== 1) { showMessage("Скоро появится"); return; }
+    diceGame.cubes = n;
+    document.querySelectorAll(".dice-count-btn").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+}
+
+function adjustDiceBet(factor) {
+    applyBetFactor(document.getElementById("diceBetInput"), factor);
+}
+
+function setDiceMaxBet() {
+    applyBetMax(document.getElementById("diceBetInput"));
+}
+
+function handleDicePlay() {
+    // Пока без логики — продолжим позже
 }
 
 function openMines() {
@@ -4725,6 +4773,12 @@ window.openGamesMenu = openGamesMenu;
 window.openMines = openMines;
 window.openTgEmoji = openTgEmoji;
 window.openTgEmojiMode = openTgEmojiMode;
+window.openDiceGame = openDiceGame;
+window.selectDiceMode = selectDiceMode;
+window.selectDiceCubes = selectDiceCubes;
+window.adjustDiceBet = adjustDiceBet;
+window.setDiceMaxBet = setDiceMaxBet;
+window.handleDicePlay = handleDicePlay;
 window.openUpgrader = openUpgrader;
 window.playUpgrader = playUpgrader;
 window.upgSetChance = upgSetChance;
@@ -6541,5 +6595,90 @@ window.applyBetMax = applyBetMax;
             await loadInto(el, el.dataset.banner);
             await new Promise(r => setTimeout(r, 60));
         }
+    };
+})();
+
+
+/* =========================
+   КУБ — крутящийся кубик над кнопкой «Играть»
+   Файл: animations/dice/preview/cube.tgs  (или cube.json)
+   Крутится постоянно, с частотой экрана; на паузе, когда не виден.
+========================= */
+(function () {
+    const SRC = 'animations/dice/preview/cube';
+    const DPR = 1.5;
+    let started = false;
+    let player = null;
+    let rafId = 0;
+    let lastTick = 0;
+
+    async function readLottieJson(buf) {
+        const bytes = new Uint8Array(buf);
+        const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+        if (!isGzip) return JSON.parse(new TextDecoder().decode(bytes));
+        if (typeof DecompressionStream !== 'undefined') {
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return JSON.parse(await new Response(stream).text());
+        }
+        if (window.pako) return JSON.parse(window.pako.ungzip(bytes, { to: 'string' }));
+        throw new Error('no gzip support');
+    }
+
+    function tick(now) {
+        rafId = 0;
+        if (!player || !player.playing) return;
+        rafId = requestAnimationFrame(tick);
+        const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0;
+        lastTick = now;
+        player.frame += dt * player.fr;
+        if (player.frame >= player.total) player.frame %= player.total;
+        player.anim.goToAndStop(player.frame, true);
+    }
+
+    function ensureLoop() {
+        if (!rafId) { lastTick = 0; rafId = requestAnimationFrame(tick); }
+    }
+
+    window.initDicePreview = async function () {
+        if (started) return;
+        started = true;
+        const el = document.getElementById('dicePreview');
+        if (!el || typeof lottie === 'undefined') return;
+
+        let data = null;
+        for (const ext of ['tgs', 'json']) {
+            try {
+                const res = await fetch(SRC + '.' + ext);
+                if (!res.ok) continue;
+                data = await readLottieJson(await res.arrayBuffer());
+                break;
+            } catch (e) { /* пробуем следующий формат */ }
+        }
+        if (!data) return;   // файла нет — остаётся эмодзи 🎲
+
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        el.textContent = '';
+        el.appendChild(box);
+        el.classList.add('has-anim');
+
+        const anim = lottie.loadAnimation({
+            container: box,
+            renderer: 'canvas',
+            loop: false,
+            autoplay: false,
+            animationData: data,
+            rendererSettings: { clearCanvas: true, dpr: DPR, preserveAspectRatio: 'xMidYMid meet' }
+        });
+        anim.goToAndStop(0, true);
+        player = { anim, frame: 0, total: anim.totalFrames || 1, fr: anim.frameRate || 60, playing: true };
+
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(entries => {
+                player.playing = entries[0].isIntersecting;
+                ensureLoop();
+            }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
+        }
+        ensureLoop();
     };
 })();
