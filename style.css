@@ -3893,3 +3893,27 @@ input, textarea {
 }
 .tge-spinner.big { width: 52px; height: 52px; }
 @keyframes tgeSpin { to { transform: rotate(360deg); } }
+
+
+/* =========================================================
+   РЕЖИМ «БРОСОК КУБИКА»: пока крутится кубик, всё лишнее
+   на странице замирает, чтобы браузер рисовал только кубик
+========================================================= */
+body.dice-playing *,
+body.dice-playing *::before,
+body.dice-playing *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+body.dice-playing *:not(.dice-stage):not(.dice-stage *) {
+    animation-play-state: paused !important;
+}
+/* стекло без blur — заменяем плотным фоном, чтобы вид не «проваливался» */
+body.dice-playing .top > *,
+body.dice-playing .bottom-nav {
+    background: rgba(18, 18, 20, 0.88) !important;
+}
+/* сцена кубика — отдельный слой, изолированный от остальной страницы */
+.dice-stage { contain: layout paint; transform: translateZ(0); }
+.dice-roll > .sticker-lottie svg { shape-rendering: auto; text-rendering: optimizeSpeed; }
+.dice-page.is-busy * { transition-duration: 0s !important; }

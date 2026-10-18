@@ -854,6 +854,7 @@ function liveWinCardMetaHtml(bet) {
         '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">';
 }
 function renderLiveBetsTicker() {
+    if (window.__diceRolling) return;
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
     if (!pinned || !scroll) return;
@@ -2680,6 +2681,7 @@ function enterWaitingVisual() {
 // с сервера), СТАРТ ЧЕРЕЗ (цифры отсчёта только во время ожидания).
 let crashTopbarLastTimer = '';
 function updateCrashTopbar() {
+    if (window.__diceRolling) return;
     const bankEl = document.getElementById('crashBankValue');
     const numEl = document.getElementById('crashGameNumber');
     const timerEl = document.getElementById('crashTimerValue');
@@ -2712,6 +2714,7 @@ function updateCrashTopbar() {
 // Обратный отсчёт: меняем DOM только когда цифра реально сменилась, а
 // следующую смену ставим на ТОЧНУЮ границу секунды.
 function renderCrashCountdown(force) {
+    if (window.__diceRolling) return;
     updateCrashTopbar();
     if (crashGame.phase !== 'waiting') return;
     const dom = getCrashDom();
@@ -3148,6 +3151,7 @@ function crashMultColor(m) {
 }
 
 function renderCrashHistory() {
+    if (window.__diceRolling) return;
     const dom = getCrashDom();
     if (!dom.historyList) return;
 
@@ -3167,6 +3171,7 @@ function crashEffectiveStatus(p) {
 }
 
 function renderCrashPlayersList() {
+    if (window.__diceRolling) return;
     updateCrashTopbar();
     const dom = getCrashDom();
     if (!dom.playersList) return;
@@ -3277,6 +3282,7 @@ function drawCrashTrail(m) {
 }
 
 function renderCrashUI(heavy = true) {
+    if (window.__diceRolling) return;
     const dom = getCrashDom();
     if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
 
@@ -5290,6 +5296,7 @@ function startIceArenaClock() {
 }
 
 function updateIceArenaClock() {
+    if (window.__diceRolling) return;
     const timerBox = document.getElementById('iceTimerBox');
     const countdownEl = document.getElementById('iceCountdownValue');
     const round = iceArena.round;
@@ -5602,6 +5609,7 @@ async function placeIceArenaBet() {
 }
 
 function renderIceArenaField() {
+    if (window.__diceRolling) return;
     const field = document.getElementById('iceField');
     const empty = document.getElementById('iceEmptyState');
     const puck = document.getElementById('icePuck');
@@ -5654,6 +5662,7 @@ function renderIceArenaField() {
 }
 
 function renderIceArenaPlayersList() {
+    if (window.__diceRolling) return;
     const list = document.getElementById('iceArenaPlayersList');
     if (!list) return;
     list.innerHTML = '';
@@ -6771,6 +6780,27 @@ window.applyBetMax = applyBetMax;
 })();
 
 
+/* Режим «бросок»: на время анимации кубика откладываем фоновую перерисовку
+   краша / айс-арены / ленты выигрышей (сетевая логика раундов не трогается),
+   а после броска один раз всё догоняем. */
+window.__diceRolling = false;
+function setDiceRolling(on) {
+    window.__diceRolling = on;
+    document.body.classList.toggle('dice-playing', on);
+    if (on) return;
+    const safe = fn => { try { fn(); } catch (e) { /* ок */ } };
+    setTimeout(() => {
+        safe(() => typeof renderCrashUI === 'function' && renderCrashUI(true));
+        safe(() => typeof renderCrashCountdown === 'function' && renderCrashCountdown(true));
+        safe(() => typeof renderCrashPlayersList === 'function' && renderCrashPlayersList());
+        safe(() => typeof renderCrashHistory === 'function' && renderCrashHistory());
+        safe(() => typeof renderIceArenaField === 'function' && renderIceArenaField());
+        safe(() => typeof renderIceArenaPlayersList === 'function' && renderIceArenaPlayersList());
+        safe(() => typeof updateIceArenaClock === 'function' && updateIceArenaClock());
+        safe(() => typeof renderLiveBetsTicker === 'function' && renderLiveBetsTicker());
+    }, 60);
+}
+
 /* =========================
    КУБ — сцена: превью → выпавший кубик → результат
    Файлы:
@@ -7024,12 +7054,16 @@ window.applyBetMax = applyBetMax;
         setPreviewPaused(true);                // освобождаем процессор на время переезда
         prev.classList.add('out');
         await wait(160);
+        setDiceRolling(true);
         rollEl.classList.add('in');
 
         // 2) играет 4 секунды и замирает на последнем кадре
-        if (anim) await playRoll(anim, ROLL_MS);
-        else await fallbackRoll(box, roll, ROLL_MS);
+        try {
+            if (anim) await playRoll(anim, ROLL_MS);
+            else await fallbackRoll(box, roll, ROLL_MS);
+        } catch (e) { setDiceRolling(false); throw e; }
         await wait(400);
+        setDiceRolling(false);
 
         // 3) кубик плавно уходит, появляется галочка / крестик
         rollEl.classList.add('away');
