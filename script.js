@@ -4195,7 +4195,6 @@ function isDiceWin(mode, r) {
 
 async function handleDicePlay() {
     if (diceGame.busy) return;
-    if (diceGame.cubes !== 1) { showMessage("Режим двух кубов скоро появится"); return; }
     if (!diceGame.mode) { showMessage("Выберите режим ставки!"); return; }
     if (!lockEconomy()) return;
 
@@ -4234,10 +4233,21 @@ async function handleDicePlay() {
     setUIBalance(currentBalance);
     const liveBetId = await broadcastLiveBet(bet, "Куб");
 
-    // --- 2. бросок и расчёт ---
-    const roll = rollDie();
-    const win = isDiceWin(mode, roll);
-    if (window.DiceStage) window.DiceStage.prepare(roll);   // заранее собираем анимацию выпавшей грани
+    // --- 2. броски и расчёт ---
+    // 1 куб: один бросок должен подойти под режим.
+    // 2 куба: первый бросок должен подойти — тогда кидается второй, и он тоже должен подойти.
+    // Если первый не подошёл — второй не кидается. Выигрыш только при (2/2).
+    const twoCubes = diceGame.cubes === 2;
+    const baseMode = mode.replace(/2$/, "");       // "even2" → "even"
+    const roll1 = rollDie();
+    const pass1 = isDiceWin(baseMode, roll1);
+    let roll2 = null, pass2 = false;
+    if (twoCubes && pass1) {
+        roll2 = rollDie();
+        pass2 = isDiceWin(baseMode, roll2);
+    }
+    const win = twoCubes ? (pass1 && pass2) : pass1;
+    if (window.DiceStage) window.DiceStage.prepare(roll1);   // заранее собираем анимацию выпавшей грани
     const winAmount = win ? calcDiceWin(bet, coef) : 0;
     let finalBalance = currentBalance;
 
@@ -4264,7 +4274,29 @@ async function handleDicePlay() {
     // --- 3. анимация ---
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
-        if (window.DiceStage) await window.DiceStage.play({ roll, win, amountText });
+        if (window.DiceStage) {
+            if (!twoCubes) {
+                await window.DiceStage.play({ roll: roll1, win, amountText });
+            } else {
+                // бросок 1/2
+                await window.DiceStage.play({
+                    roll: roll1,
+                    win: pass1,
+                    title: pass1 ? "Ставка зашла (1/2)" : "Ставка не зашла (1/2)",
+                    amountText: pass1 ? "" : amountText,       // сумма — только в финале
+                    nextRoll: pass1 ? roll2 : null
+                });
+                // бросок 2/2 (только если первый подошёл)
+                if (pass1) {
+                    await window.DiceStage.play({
+                        roll: roll2,
+                        win: pass2,
+                        title: pass2 ? "Ставка зашла (2/2)" : "Ставка не зашла (2/2)",
+                        amountText
+                    });
+                }
+            }
+        }
     } catch (e) {
         console.error("Dice animation error:", e);
     }
@@ -7046,7 +7078,7 @@ window.applyBetMax = applyBetMax;
                 '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
     }
 
-    function resultHtml(win, amountText) {
+    function resultHtml(win, amountText, title) {
         const mark = win
             ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
             : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
@@ -7057,8 +7089,9 @@ window.applyBetMax = applyBetMax;
                 '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
                 mark + sparkles() +
             '</svg>' +
-            '<div class="dice-result-title">' + (win ? 'Ставка сыграла' : 'Ставка не сыграла') + '</div>' +
-            '<div class="dice-result-amount">' + amountText + '</div>';
+            '<div class="dice-result-title">' + (title || (win ? 'Ставка сыграла' : 'Ставка не сыграла')) + '</div>' +
+            // пустая сумма (промежуточный результат 1/2) занимает место, чтобы блок не «прыгал»
+            '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
     /* ---------- управление сценой ---------- */
@@ -7090,7 +7123,9 @@ window.applyBetMax = applyBetMax;
         showPreview();
     }
 
-    async function play({ roll, win, amountText }) {
+    // title — свой текст под галочкой (для 2 кубов: «Ставка зашла (1/2)»)
+    // nextRoll — если после этого броска будет ещё один, его анимацию готовим заранее
+    async function play({ roll, win, amountText, title, nextRoll }) {
         const prev = $('dicePreview'), rollEl = $('diceRoll'), res = $('diceResult');
         if (!prev || !rollEl || !res) return;
 
@@ -7114,7 +7149,7 @@ window.applyBetMax = applyBetMax;
         rollEl.classList.add('away');
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
-        res.innerHTML = resultHtml(win, amountText);
+        res.innerHTML = resultHtml(win, amountText, title);
         res.classList.toggle('win', win);
         res.classList.toggle('lose', !win);
         reflow(res);
@@ -7127,6 +7162,7 @@ window.applyBetMax = applyBetMax;
         rollEl.innerHTML = '';
         rollEl.className = 'dice-layer dice-roll';
         prepared = null;
+        if (nextRoll) { await prepare(nextRoll); return; }   // следующий бросок собираем, пока виден результат
         await wait(300);
     }
 

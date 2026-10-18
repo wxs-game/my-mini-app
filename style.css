@@ -3928,3 +3928,7 @@ input, textarea {
     from { opacity: 0; transform: translateY(10px) scale(0.96); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+
+/* пустая строка суммы (промежуточный результат 1/2) — держит высоту блока */
+.dice-result-amount.is-empty { visibility: hidden; }
