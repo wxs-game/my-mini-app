@@ -4141,6 +4141,15 @@ function rollDie() {
     return (a[0] % 6) + 1;
 }
 
+// Выигрыш = ставка × коэффициент, округлённый ВНИЗ до цента (не в пользу игрока).
+// Считаем в целых центах, чтобы не ловить ошибки дробных чисел
+// (например 1.2 × 1.95 в обычной арифметике даёт 2.3399999… и терял бы цент).
+function calcDiceWin(bet, coef) {
+    const cents = Math.round(bet * 100);
+    const coefHundredths = Math.round(coef * 100);
+    return Math.floor((cents * coefHundredths) / 100) / 100;
+}
+
 function isDiceWin(mode, r) {
     switch (mode) {
         case "high":   return r >= 4;
@@ -4197,7 +4206,7 @@ async function handleDicePlay() {
     const roll = rollDie();
     const win = isDiceWin(mode, roll);
     if (window.DiceStage) window.DiceStage.prepare(roll);   // заранее собираем анимацию выпавшей грани
-    const winAmount = win ? roundMoney(bet * coef) : 0;
+    const winAmount = win ? calcDiceWin(bet, coef) : 0;
     let finalBalance = currentBalance;
 
     if (win) {
