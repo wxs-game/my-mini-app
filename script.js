@@ -854,7 +854,6 @@ function liveWinCardMetaHtml(bet) {
         '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">';
 }
 function renderLiveBetsTicker() {
-    if (window.__diceRolling) return;
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
     if (!pinned || !scroll) return;
@@ -2681,7 +2680,6 @@ function enterWaitingVisual() {
 // с сервера), СТАРТ ЧЕРЕЗ (цифры отсчёта только во время ожидания).
 let crashTopbarLastTimer = '';
 function updateCrashTopbar() {
-    if (window.__diceRolling) return;
     const bankEl = document.getElementById('crashBankValue');
     const numEl = document.getElementById('crashGameNumber');
     const timerEl = document.getElementById('crashTimerValue');
@@ -2714,7 +2712,6 @@ function updateCrashTopbar() {
 // Обратный отсчёт: меняем DOM только когда цифра реально сменилась, а
 // следующую смену ставим на ТОЧНУЮ границу секунды.
 function renderCrashCountdown(force) {
-    if (window.__diceRolling) return;
     updateCrashTopbar();
     if (crashGame.phase !== 'waiting') return;
     const dom = getCrashDom();
@@ -3151,7 +3148,6 @@ function crashMultColor(m) {
 }
 
 function renderCrashHistory() {
-    if (window.__diceRolling) return;
     const dom = getCrashDom();
     if (!dom.historyList) return;
 
@@ -3171,7 +3167,6 @@ function crashEffectiveStatus(p) {
 }
 
 function renderCrashPlayersList() {
-    if (window.__diceRolling) return;
     updateCrashTopbar();
     const dom = getCrashDom();
     if (!dom.playersList) return;
@@ -3282,7 +3277,6 @@ function drawCrashTrail(m) {
 }
 
 function renderCrashUI(heavy = true) {
-    if (window.__diceRolling) return;
     const dom = getCrashDom();
     if (!dom.statusEl || !dom.multEl || !dom.actionBtn) return;
 
@@ -4076,29 +4070,55 @@ const diceGame = { cubes: 1, mode: null, busy: false };
 const DICE_MODE_COEFS = {
     high: 1.95, low: 1.95,      // 4-6 / 1-3
     even: 1.95, odd: 1.95,      // чёт / нечёт
-    edges: 2.93, center: 2.93   // края (1 или 6) / центр (3 или 4)
+    edges: 2.93, center: 2.93,  // края (1 или 6) / центр (3 или 4)
+    // два куба (логика пока не реализована, только оформление)
+    high2: 3.89, low2: 3.89, even2: 3.89, odd2: 3.89
+};
+
+// Какие плитки показываем при 1 и при 2 кубах
+const DICE_MODE_SETS = {
+    1: ["high", "low", "even", "odd", "edges", "center"],
+    2: ["high2", "low2", "even2", "odd2"]
 };
 
 const DICE_MODE_NAMES = {
     high: "Больше", low: "Меньше",
     even: "Чёт", odd: "Нечёт",
-    edges: "Края", center: "Центр"
+    edges: "Края", center: "Центр",
+    high2: "2 Больше", low2: "2 Меньше",
+    even2: "2 Чёт", odd2: "2 Нечёт"
 };
 
-// Подписи плиток берутся из одной таблицы коэффициентов (DICE_MODE_COEFS),
+// Плитки режимов строятся из таблиц DICE_MODE_SETS / DICE_MODE_NAMES / DICE_MODE_COEFS,
 // поэтому плитка и кнопка «Играть» всегда показывают одно и то же число.
-function renderDiceModeLabels() {
-    document.querySelectorAll("#diceModes .dice-mode").forEach(btn => {
-        const m = btn.dataset.mode;
-        if (!DICE_MODE_NAMES[m]) return;
-        btn.innerHTML =
-            '<span class="dice-mode-name">' + DICE_MODE_NAMES[m] + '</span> ' +
-            '<span class="dice-mode-coef">(' + DICE_MODE_COEFS[m].toFixed(2) + '×)</span>';
-    });
+// animate=true — плавная смена набора плиток (при переключении 1 куб ↔ 2 куба).
+function renderDiceModes(animate) {
+    const box = document.getElementById("diceModes");
+    if (!box) return;
+    const keys = DICE_MODE_SETS[diceGame.cubes] || DICE_MODE_SETS[1];
+    const oldH = box.offsetHeight;
+
+    box.innerHTML = keys.map((k, i) =>
+        '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + k +
+        '" onclick="selectDiceMode(\'' + k + '\', this)">' +
+        '<span class="dice-mode-name">' + DICE_MODE_NAMES[k] + '</span> ' +
+        '<span class="dice-mode-coef">(' + DICE_MODE_COEFS[k].toFixed(2) + '×)</span></button>'
+    ).join("");
+
+    // плавное изменение высоты блока (6 плиток → 4 и обратно), чтобы нижняя часть не прыгала
+    if (animate && oldH) {
+        box.style.height = "auto";
+        const newH = box.offsetHeight;
+        box.style.height = oldH + "px";
+        box.classList.add("resizing");
+        void box.offsetHeight;
+        box.style.height = newH + "px";
+        setTimeout(() => { box.style.height = ""; box.classList.remove("resizing"); }, 520);
+    }
 }
 
 function openDiceGame() {
-    renderDiceModeLabels();
+    renderDiceModes(false);
     showPage("diceGamePage");
     updateNav("games");
     if (typeof window.initDicePreview === "function") window.initDicePreview();
@@ -4120,10 +4140,15 @@ function selectDiceMode(mode, btn) {
 }
 
 function selectDiceCubes(n, btn) {
-    if (n !== 1) { showMessage("Скоро появится"); return; }
+    if (n !== 1 && n !== 2) { showMessage("Скоро появится"); return; }
+    if (diceGame.busy || n === diceGame.cubes) return;
     diceGame.cubes = n;
+    diceGame.mode = null;                       // набор режимов другой — выбор сбрасываем
     document.querySelectorAll(".dice-count-btn").forEach(b => b.classList.remove("active"));
     if (btn) btn.classList.add("active");
+    renderDiceModes(true);
+    updateDicePlayLabel();
+    if (window.DiceStage) window.DiceStage.setCubes(n);   // раздвоение / склейка кубиков
 }
 
 function adjustDiceBet(factor) {
@@ -4170,6 +4195,7 @@ function isDiceWin(mode, r) {
 
 async function handleDicePlay() {
     if (diceGame.busy) return;
+    if (diceGame.cubes !== 1) { showMessage("Режим двух кубов скоро появится"); return; }
     if (!diceGame.mode) { showMessage("Выберите режим ставки!"); return; }
     if (!lockEconomy()) return;
 
@@ -5296,7 +5322,6 @@ function startIceArenaClock() {
 }
 
 function updateIceArenaClock() {
-    if (window.__diceRolling) return;
     const timerBox = document.getElementById('iceTimerBox');
     const countdownEl = document.getElementById('iceCountdownValue');
     const round = iceArena.round;
@@ -5609,7 +5634,6 @@ async function placeIceArenaBet() {
 }
 
 function renderIceArenaField() {
-    if (window.__diceRolling) return;
     const field = document.getElementById('iceField');
     const empty = document.getElementById('iceEmptyState');
     const puck = document.getElementById('icePuck');
@@ -5662,7 +5686,6 @@ function renderIceArenaField() {
 }
 
 function renderIceArenaPlayersList() {
-    if (window.__diceRolling) return;
     const list = document.getElementById('iceArenaPlayersList');
     if (!list) return;
     list.innerHTML = '';
@@ -6780,27 +6803,6 @@ window.applyBetMax = applyBetMax;
 })();
 
 
-/* Режим «бросок»: на время анимации кубика откладываем фоновую перерисовку
-   краша / айс-арены / ленты выигрышей (сетевая логика раундов не трогается),
-   а после броска один раз всё догоняем. */
-window.__diceRolling = false;
-function setDiceRolling(on) {
-    window.__diceRolling = on;
-    document.body.classList.toggle('dice-playing', on);
-    if (on) return;
-    const safe = fn => { try { fn(); } catch (e) { /* ок */ } };
-    setTimeout(() => {
-        safe(() => typeof renderCrashUI === 'function' && renderCrashUI(true));
-        safe(() => typeof renderCrashCountdown === 'function' && renderCrashCountdown(true));
-        safe(() => typeof renderCrashPlayersList === 'function' && renderCrashPlayersList());
-        safe(() => typeof renderCrashHistory === 'function' && renderCrashHistory());
-        safe(() => typeof renderIceArenaField === 'function' && renderIceArenaField());
-        safe(() => typeof renderIceArenaPlayersList === 'function' && renderIceArenaPlayersList());
-        safe(() => typeof updateIceArenaClock === 'function' && updateIceArenaClock());
-        safe(() => typeof renderLiveBetsTicker === 'function' && renderLiveBetsTicker());
-    }, 60);
-}
-
 /* =========================
    КУБ — сцена: превью → выпавший кубик → результат
    Файлы:
@@ -6853,12 +6855,60 @@ function setDiceRolling(on) {
         preview.frame += dt * preview.fr;
         if (preview.frame >= preview.total) preview.frame %= preview.total;
         const fi = Math.floor(preview.frame);
-        if (fi !== preview.last) { preview.last = fi; preview.anim.goToAndStop(fi, true); }
+        if (fi !== preview.last) {
+            preview.last = fi;
+            preview.anim.goToAndStop(fi, true);
+            if (pairActive && previewB) previewB.goToAndStop(fi, true);   // второй кубик в такт первому
+        }
     }
     function ensureLoop() {
         if (!rafId && preview && preview.visible && !preview.paused) { lastTick = 0; rafId = requestAnimationFrame(tick); }
     }
     function setPreviewPaused(v) { if (preview) { preview.paused = v; ensureLoop(); } }
+
+    /* ---------- два куба: раздвоение превью ---------- */
+    let cells = null;          // { a, b } — ячейки внутри превью
+    let previewData = null;
+    let previewB = null;       // второй экземпляр анимации
+    let pairActive = false;    // обновлять ли второй кубик
+    let mergeTimer = 0;
+
+    function buildPair(el, emoji) {
+        el.textContent = '';
+        const pair = document.createElement('div');
+        pair.className = 'dice-pair' + (emoji ? ' is-fallback' : '');
+        const a = document.createElement('div'); a.className = 'dice-cell a';
+        const b = document.createElement('div'); b.className = 'dice-cell b';
+        if (emoji) { a.textContent = '🎲'; b.textContent = '🎲'; }
+        pair.appendChild(a); pair.appendChild(b);
+        el.appendChild(pair);
+        return { a, b };
+    }
+
+    function ensurePreviewB() {
+        if (previewB || !previewData || !cells) return;
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        cells.b.appendChild(box);
+        previewB = createAnim(box, previewData);
+        previewB.goToAndStop(preview ? Math.max(preview.last, 0) : 0, true);
+    }
+
+    // 1 куб ↔ 2 куба: превью раздваивается / склеивается
+    function setCubes(n) {
+        const el = $('dicePreview');
+        if (!el) return;
+        clearTimeout(mergeTimer);
+        if (n === 2) {
+            pairActive = true;
+            ensurePreviewB();
+            if (previewB && preview) previewB.goToAndStop(Math.max(preview.last, 0), true);  // тот же кадр, что у первого
+            el.classList.add('pair');
+        } else {
+            el.classList.remove('pair');
+            mergeTimer = setTimeout(() => { pairActive = false; }, 900);   // пока склеиваются — обновляем оба
+        }
+    }
 
     window.initDicePreview = async function () {
         if (previewStarted) return;
@@ -6866,15 +6916,13 @@ function setDiceRolling(on) {
         const el = $('dicePreview');
         if (!el) return;
         const data = await load(PREVIEW_SRC);       // пока грузится — виден спиннер
-        if (!data) {                                 // файла нет — эмодзи вместо спиннера
-            el.textContent = '🎲';
-            el.classList.add('is-fallback');
-            return;
-        }
+        cells = buildPair(el, !data);               // нет файла — эмодзи вместо спиннера
+        if (!data) return;
+
+        previewData = data;
         const box = document.createElement('div');
         box.className = 'sticker-lottie';
-        el.textContent = '';
-        el.appendChild(box);
+        cells.a.appendChild(box);
         el.classList.add('has-anim');
         const anim = createAnim(box, data);
         anim.goToAndStop(0, true);
@@ -6886,6 +6934,7 @@ function setDiceRolling(on) {
             }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
         }
         ensureLoop();
+        setTimeout(ensurePreviewB, 700);   // второй кубик собираем заранее — раздвоение не подвисает
     };
 
     /* ---------- подготовка выпавшей грани (до начала переезда) ---------- */
@@ -7054,16 +7103,12 @@ function setDiceRolling(on) {
         setPreviewPaused(true);                // освобождаем процессор на время переезда
         prev.classList.add('out');
         await wait(160);
-        setDiceRolling(true);
         rollEl.classList.add('in');
 
         // 2) играет 4 секунды и замирает на последнем кадре
-        try {
-            if (anim) await playRoll(anim, ROLL_MS);
-            else await fallbackRoll(box, roll, ROLL_MS);
-        } catch (e) { setDiceRolling(false); throw e; }
+        if (anim) await playRoll(anim, ROLL_MS);
+        else await fallbackRoll(box, roll, ROLL_MS);
         await wait(400);
-        setDiceRolling(false);
 
         // 3) кубик плавно уходит, появляется галочка / крестик
         rollEl.classList.add('away');
@@ -7085,5 +7130,5 @@ function setDiceRolling(on) {
         await wait(300);
     }
 
-    window.DiceStage = { play, reset, prepare };
+    window.DiceStage = { play, reset, prepare, setCubes };
 })();

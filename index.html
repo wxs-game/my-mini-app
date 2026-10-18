@@ -391,31 +391,12 @@
         <!-- Сколько кубов -->
         <section class="dice-count-row">
             <button class="dice-tile dice-count-btn active" onclick="selectDiceCubes(1, this)">1 КУБ</button>
-            <button class="dice-tile dice-count-btn is-soon" onclick="selectDiceCubes(2, this)">2 КУБА</button>
+            <button class="dice-tile dice-count-btn" onclick="selectDiceCubes(2, this)">2 КУБА</button>
             <button class="dice-tile dice-count-btn is-soon" onclick="selectDiceCubes(3, this)">3 КУБА</button>
         </section>
 
         <!-- Режимы ставки -->
-        <section class="dice-modes" id="diceModes">
-            <button class="dice-tile dice-mode" data-mode="high" onclick="selectDiceMode('high', this)">
-                <span class="dice-mode-name">Больше</span> <span class="dice-mode-coef">(1.95×)</span>
-            </button>
-            <button class="dice-tile dice-mode" data-mode="low" onclick="selectDiceMode('low', this)">
-                <span class="dice-mode-name">Меньше</span> <span class="dice-mode-coef">(1.95×)</span>
-            </button>
-            <button class="dice-tile dice-mode" data-mode="even" onclick="selectDiceMode('even', this)">
-                <span class="dice-mode-name">Чёт</span> <span class="dice-mode-coef">(1.95×)</span>
-            </button>
-            <button class="dice-tile dice-mode" data-mode="odd" onclick="selectDiceMode('odd', this)">
-                <span class="dice-mode-name">Нечёт</span> <span class="dice-mode-coef">(1.95×)</span>
-            </button>
-            <button class="dice-tile dice-mode" data-mode="edges" onclick="selectDiceMode('edges', this)">
-                <span class="dice-mode-name">Края</span> <span class="dice-mode-coef">(2.93×)</span>
-            </button>
-            <button class="dice-tile dice-mode" data-mode="center" onclick="selectDiceMode('center', this)">
-                <span class="dice-mode-name">Центр</span> <span class="dice-mode-coef">(2.93×)</span>
-            </button>
-        </section>
+        <section class="dice-modes" id="diceModes"><!-- плитки режимов рисует renderDiceModes() --></section>
 
         <!-- Крутящийся кубик (animations/dice/preview/cube.tgs) -->
         <div class="dice-stage" id="diceStage">
