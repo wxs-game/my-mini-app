@@ -4072,7 +4072,26 @@ const DICE_MODE_COEFS = {
     edges: 2.93, center: 2.93   // края (1 или 6) / центр (3 или 4)
 };
 
+const DICE_MODE_NAMES = {
+    high: "Больше", low: "Меньше",
+    even: "Чёт", odd: "Нечёт",
+    edges: "Края", center: "Центр"
+};
+
+// Подписи плиток берутся из одной таблицы коэффициентов (DICE_MODE_COEFS),
+// поэтому плитка и кнопка «Играть» всегда показывают одно и то же число.
+function renderDiceModeLabels() {
+    document.querySelectorAll("#diceModes .dice-mode").forEach(btn => {
+        const m = btn.dataset.mode;
+        if (!DICE_MODE_NAMES[m]) return;
+        btn.innerHTML =
+            '<span class="dice-mode-name">' + DICE_MODE_NAMES[m] + '</span> ' +
+            '<span class="dice-mode-coef">(' + DICE_MODE_COEFS[m].toFixed(2) + '×)</span>';
+    });
+}
+
 function openDiceGame() {
+    renderDiceModeLabels();
     showPage("diceGamePage");
     updateNav("games");
     if (typeof window.initDicePreview === "function") window.initDicePreview();
