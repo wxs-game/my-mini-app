@@ -3753,12 +3753,15 @@ input, textarea {
 .dice-roll.from-left  { transform: translateX(-105%) scale(0.94); }
 .dice-roll.from-right { transform: translateX(105%) scale(0.94); }
 .dice-roll.in   { transform: translateX(0) scale(1); opacity: 1; }
+/* прогрев растра до начала переезда: на месте, но практически невидим */
+.dice-roll.warm { transform: none; opacity: 0.01; transition: none; }
 .dice-roll.away { transform: translateY(-8%) scale(0.92); opacity: 0; transition-duration: 0.45s; }
 
 .dice-preview > .sticker-lottie,
 .dice-roll > .sticker-lottie {
     width: var(--dice-size);
     height: var(--dice-size);
+    contain: layout paint style;      /* перерисовка кубика не трогает остальную страницу */
 }
 .dice-preview > .sticker-lottie svg,
 .dice-roll > .sticker-lottie svg,

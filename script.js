@@ -6775,7 +6775,7 @@ window.applyBetMax = applyBetMax;
 (function () {
     const PREVIEW_SRC = 'animations/dice/preview/cube';
     const ROLL_DIR = 'animations/dice/';   // cube1 … cube6
-    const ROLL_MS = 4000;                  // сколько играет выпавший кубик
+    const ROLL_MS = 4000;                  // общее время броска: анимация + удержание последнего кадра
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const raf2 = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const $ = id => document.getElementById(id);
@@ -6870,7 +6870,21 @@ window.applyBetMax = applyBetMax;
             if (data) {
                 st.anim = createAnim(box, data);
                 st.anim.goToAndStop(0, true);
-                await raf2();                        // дать SVG дорисоваться до начала переезда
+                // Прогрев: Chrome не растеризует невидимые слои, и первая отрисовка большого
+                // SVG случалась прямо во время переезда (отсюда «замирание» в начале).
+                // Поэтому на пару кадров ставим слой на место с прозрачностью 1% и
+                // прокручиваем несколько кадров анимации.
+                rollEl.classList.add('warm');
+                await raf2();
+                const total = st.anim.totalFrames || 2;
+                st.anim.goToAndStop(Math.floor(total / 2), true);
+                await raf2();
+                st.anim.goToAndStop(0, true);
+                await raf2();
+                rollEl.style.transition = 'none';
+                rollEl.classList.remove('warm');
+                reflow(rollEl);
+                rollEl.style.transition = '';
             }
             return st;
         })();
@@ -6878,17 +6892,32 @@ window.applyBetMax = applyBetMax;
         return st.ready;
     }
 
-    /* ---------- выпавший кубик: играет ROLL_MS и замирает на последнем кадре ---------- */
-    function playRoll(anim, ms) {
+    /* ---------- выпавший кубик ----------
+       Играет в РОДНОМ темпе файла (кадр в кадр, без растяжения по времени —
+       растяжение 3 с → 4 с давало неравномерные повторы кадров = микро-фризы),
+       затем замирает на последнем кадре, пока не пройдёт totalMs.
+       Если устройство не успевает рисовать SVG (>9 мс на кадр), автоматически
+       переходим на ровные 30 кадров/с — это выглядит плавнее, чем нерегулярные 20-60. */
+    function playRoll(anim, totalMs) {
         return new Promise(resolve => {
+            const fr = anim.frameRate || 60;
             const last = Math.max((anim.totalFrames || 2) - 1, 1);
-            let prevFrame = -1;
+            const nativeMs = last / fr * 1000;
+            let prevTarget = -1, costEma = 0, stride = 1;
             const t0 = performance.now();
             (function step(now) {
-                const p = Math.min((now - t0) / ms, 1);
-                const fi = Math.round(p * last);     // целые кадры
-                if (fi !== prevFrame) { prevFrame = fi; anim.goToAndStop(fi, true); }
-                if (p < 1) requestAnimationFrame(step); else resolve();
+                const f = Math.min(Math.floor((now - t0) / 1000 * fr), last);
+                const target = f >= last ? last : Math.floor(f / stride) * stride;
+                if (target !== prevTarget) {
+                    const c0 = performance.now();
+                    anim.goToAndStop(target, true);
+                    const cost = performance.now() - c0;
+                    costEma = costEma ? costEma * 0.8 + cost * 0.2 : cost;
+                    if (stride === 1 && costEma > 9) stride = 2;
+                    prevTarget = target;
+                }
+                if (f < last) requestAnimationFrame(step);
+                else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
             })(t0);
         });
     }
