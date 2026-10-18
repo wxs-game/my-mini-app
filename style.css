@@ -3655,32 +3655,29 @@ input, textarea {
 
 /* ==========================================================
    КУБ (Telegram Emoji) — страница режима
+   Шрифт, размеры и обводка — как у остальных плиток приложения
+   (см. .mines-count-btn: тёмная плитка, тонкая рамка, жёлтый актив).
 ========================================================== */
 .dice-page {
-    --dice-orange: #ff8c00;
-    --dice-yellow: #ffd400;
-    --dice-hand: 'Caveat', 'Marck Script', 'Comic Sans MS', cursive;
+    --dice-yellow: #ffc800;
 }
 
-/* Общий вид рукописных плиток */
 .dice-tile {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-wrap: wrap;
-    column-gap: 6px;
-    row-gap: 0;
-    background: var(--dice-orange);
-    color: #000000;
-    border: none;
+    background: #141414;
+    border: 1px solid #252525;
     border-radius: 14px;
-    padding: 8px 10px;
-    font-family: var(--dice-hand);
-    font-weight: 700;
-    font-size: 26px;
-    line-height: 1.05;
+    padding: 14px 6px;
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
     text-align: center;
-    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    white-space: nowrap;           /* название и коэффициент всегда в одну строку */
+    transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .dice-tile:active { transform: scale(0.96); }
 
@@ -3688,35 +3685,33 @@ input, textarea {
 .dice-count-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: 8px;
     margin-top: 14px;
 }
-.dice-count-btn {
-    min-height: 54px;
-    font-size: 28px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-}
-.dice-count-btn.is-soon { opacity: 0.55; }
-.dice-count-btn.active {
-    background: var(--dice-yellow);
-    box-shadow: 0 0 18px rgba(255, 212, 0, 0.55);
-}
+.dice-count-btn.is-soon { opacity: 0.5; }
 
 /* Режимы */
 .dice-modes {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-top: 14px;
+    gap: 8px;
+    margin-top: 10px;
 }
-.dice-mode {
-    min-height: 66px;
+.dice-mode-coef {
+    margin-left: 5px;
+    opacity: 0.75;
+    font-weight: 700;
 }
-.dice-mode.selected {
-    background: var(--dice-yellow);
-    box-shadow: 0 0 22px rgba(255, 212, 0, 0.7), 0 0 4px rgba(255, 212, 0, 0.9);
+
+/* Выбранная / активная плитка — жёлтая */
+.dice-tile.selected,
+.dice-count-btn.active {
+    background: #281d09;
+    border-color: var(--dice-yellow);
+    color: var(--dice-yellow);
+    box-shadow: 0 0 14px rgba(255, 200, 0, 0.35);
 }
+.dice-tile.selected .dice-mode-coef { opacity: 1; }
 
 /* Кубик */
 .dice-preview {
@@ -3742,13 +3737,16 @@ input, textarea {
     height: 100% !important;
 }
 
-/* Кнопка «Играть» */
+/* Кнопка «Играть» — как «Начать игру» в Минах */
 .dice-play-btn {
     width: 100%;
-    min-height: 62px;
-    font-size: 34px;
-    text-transform: uppercase;
     background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+    border: none;
+    color: #000000;
+    font-size: 16px;
+    font-weight: 950;
+    padding: 14px;
+    box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3);
 }
 
 /* Блок ставки (как в Минах) */

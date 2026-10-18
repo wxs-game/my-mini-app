@@ -4069,7 +4069,7 @@ const diceGame = { cubes: 1, mode: null };
 const DICE_MODE_COEFS = {
     high: 1.95, low: 1.95,      // 4-6 / 1-3
     even: 1.95, odd: 1.95,      // чёт / нечёт
-    edges: 2.92, center: 2.92   // 1 или 6 / 3 или 4  (шанс 1/3, RTP 97.5%)
+    edges: 2.93, center: 2.93   // края (1 или 6) / центр (3 или 4)
 };
 
 function openDiceGame() {
@@ -4082,7 +4082,7 @@ function updateDicePlayLabel() {
     const btn = document.getElementById("dicePlayBtn");
     if (!btn) return;
     const c = diceGame.mode ? DICE_MODE_COEFS[diceGame.mode] : null;
-    btn.textContent = c ? "Играть (" + c.toFixed(2) + "x)" : "Играть";
+    btn.textContent = c ? "Играть (" + c.toFixed(2) + "×)" : "Играть";
 }
 
 function selectDiceMode(mode, btn) {
