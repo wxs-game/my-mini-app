@@ -3913,7 +3913,4 @@ body.dice-playing .top > *,
 body.dice-playing .bottom-nav {
     background: rgba(18, 18, 20, 0.88) !important;
 }
-/* сцена кубика — отдельный слой, изолированный от остальной страницы */
-.dice-stage { contain: layout paint; transform: translateZ(0); }
 .dice-roll > .sticker-lottie svg { shape-rendering: auto; text-rendering: optimizeSpeed; }
-.dice-page.is-busy * { transition-duration: 0s !important; }
