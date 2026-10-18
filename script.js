@@ -6480,7 +6480,7 @@ window.applyBetMax = applyBetMax;
 
 /* =========================
    TELEGRAM EMOJI — анимации на баннерах режимов
-   Файлы лежат в animations/dice/banner/ :
+   Файлы лежат в animations/dice/banners/ (или banner/) :
    dice, football, basketball, darts, bowling, slots + расширение
    (.tgs рекомендуется, также .json / .webp / .gif / .png).
    Пока файла нет — в баннере показывается эмодзи.
@@ -6490,7 +6490,8 @@ window.applyBetMax = applyBetMax;
    видны на экране (скрытые под нижним меню или за краем стоят на паузе).
 ========================= */
 (function () {
-    const DIR = 'animations/dice/banner/';
+    // Папка с анимациями. Если переименуешь папку — добавь/поменяй путь здесь.
+    const DIRS = ['animations/dice/banners/', 'animations/dice/banner/'];
     const EXTS = ['tgs', 'json', 'webp', 'gif', 'png'];
     const DPR = 1.5;         // разрешение canvas; 1 — легче, 2 — чётче
     let started = false;
@@ -6596,13 +6597,16 @@ window.applyBetMax = applyBetMax;
     }
 
     async function loadInto(el, name) {
-        for (const ext of EXTS) {
-            try {
-                await buildNode(el, DIR + name, ext);
-                el.classList.add('has-anim');
-                return;
-            } catch (e) { /* пробуем следующий формат */ }
+        for (const dir of DIRS) {
+            for (const ext of EXTS) {
+                try {
+                    await buildNode(el, dir + name, ext);
+                    el.classList.add('has-anim');
+                    return;
+                } catch (e) { /* пробуем следующий формат / папку */ }
+            }
         }
+        console.warn('[Telegram Emoji] анимация не найдена для режима:', name);
     }
 
     window.initTgEmojiBanners = async function () {
