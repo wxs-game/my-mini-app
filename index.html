@@ -426,6 +426,52 @@
         </section>
     </main>
 
+    <!-- ==================== ФУТБОЛ (TELEGRAM EMOJI) ==================== -->
+    <main id="footballGamePage" class="dice-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="openTgEmoji()"></button>
+            <h1>Футбол</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <!-- Сколько ударов -->
+        <section class="dice-count-row">
+            <button class="dice-tile dice-count-btn active" onclick="selectFootballKicks(1, this)">1 УДАР</button>
+            <button class="dice-tile dice-count-btn is-soon" onclick="selectFootballKicks(2, this)">2 УДАРА</button>
+            <button class="dice-tile dice-count-btn is-soon" onclick="selectFootballKicks(3, this)">3 УДАРА</button>
+        </section>
+
+        <!-- Режимы ставки -->
+        <section class="dice-modes" id="footballModes"><!-- плитки режимов рисует renderFootballModes() --></section>
+
+        <!-- Анимация футбола (animations/dice/banners/football.tgs loop, потом результат) -->
+        <div class="dice-stage" id="footballStage">
+            <div class="dice-layer dice-preview" id="footballPreview" aria-hidden="true"><span class="tge-spinner big"></span></div>
+            <div class="dice-layer dice-roll" id="footballRoll" aria-hidden="true"></div>
+            <div class="dice-layer dice-result" id="footballResult" aria-live="polite"></div>
+        </div>
+
+        <button class="dice-tile dice-play-btn" id="footballPlayBtn" onclick="handleFootballPlay()">Играть</button>
+
+        <!-- Блок ставки -->
+        <section class="mines-controls dice-bet-box">
+            <div class="ctrl-box" style="margin-bottom: 0;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="footballBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustFootballBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustFootballBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setFootballMaxBet()">MAX</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
     <!-- ==================== КРАШ ==================== -->
     <main id="crashPage" class="crash-page hidden">
         <div class="page-header" style="margin-top: 10px;">

@@ -4069,6 +4069,7 @@ function openTgEmoji() {
 
 function openTgEmojiMode(mode) {
     if (mode === "dice") { openDiceGame(); return; }
+    if (mode === "football") { openFootballGame(); return; }
     // Остальные режимы пока не реализованы
     showMessage("Режим скоро появится");
 }
@@ -4314,6 +4315,199 @@ async function handleDicePlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setDiceBusy(false);
+}
+
+/* ---------- ФУТБОЛ ---------- */
+const footballGame = { kicks: 1, mode: null, busy: false };
+const FOOTBALL_MODE_COEFS = {
+    goal: 1.62,         // Гол
+    miss: 2.43,         // Промах
+    bar: 2.43           // Удар об штангу
+};
+
+// Какие плитки показываем при разном количестве ударов
+const FOOTBALL_MODE_SETS = {
+    1: ["goal", "miss", "bar"]
+};
+
+const FOOTBALL_MODE_NAMES = {
+    goal: "Гол",
+    miss: "Промах",
+    bar: "Удар об штангу"
+};
+
+function renderFootballModes(animate) {
+    const box = document.getElementById("footballModes");
+    if (!box) return;
+    const keys = FOOTBALL_MODE_SETS[footballGame.kicks] || FOOTBALL_MODE_SETS[1];
+    const oldH = box.offsetHeight;
+
+    box.innerHTML = keys.map((k, i) =>
+        '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + k +
+        '" onclick="selectFootballMode(\'' + k + '\', this)">' +
+        '<span class="dice-mode-name">' + FOOTBALL_MODE_NAMES[k] + '</span> ' +
+        '<span class="dice-mode-coef">(' + FOOTBALL_MODE_COEFS[k].toFixed(2) + '×)</span></button>'
+    ).join("");
+
+    if (animate && oldH) {
+        box.style.height = "auto";
+        const newH = box.offsetHeight;
+        box.style.height = oldH + "px";
+        box.classList.add("resizing");
+        void box.offsetHeight;
+        box.style.height = newH + "px";
+        setTimeout(() => { box.style.height = ""; box.classList.remove("resizing"); }, 520);
+    }
+}
+
+function openFootballGame() {
+    renderFootballModes(false);
+    showPage("footballGamePage");
+    updateNav("games");
+    if (typeof window.initFootballPreview === "function") window.initFootballPreview();
+}
+
+function updateFootballPlayLabel() {
+    const btn = document.getElementById("footballPlayBtn");
+    if (!btn) return;
+    const c = footballGame.mode ? FOOTBALL_MODE_COEFS[footballGame.mode] : null;
+    btn.textContent = c ? "Играть (" + c.toFixed(2) + "×)" : "Играть";
+}
+
+function selectFootballMode(mode, btn) {
+    footballGame.mode = mode;
+    document.querySelectorAll("#footballModes .dice-mode").forEach(b => b.classList.remove("selected"));
+    if (btn) btn.classList.add("selected");
+    updateFootballPlayLabel();
+}
+
+function selectFootballKicks(n, btn) {
+    if (n !== 1) { showMessage("Скоро появится"); return; }
+    if (footballGame.busy || n === footballGame.kicks) return;
+    footballGame.kicks = n;
+    footballGame.mode = null;
+    document.querySelectorAll(".dice-count-btn").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+    renderFootballModes(true);
+    updateFootballPlayLabel();
+}
+
+function adjustFootballBet(factor) {
+    applyBetFactor(document.getElementById("footballBetInput"), factor);
+}
+
+function setFootballMaxBet() {
+    applyBetMax(document.getElementById("footballBetInput"));
+}
+
+function setFootballBusy(on) {
+    footballGame.busy = on;
+    const page = document.getElementById("footballGamePage");
+    if (page) page.classList.toggle("is-busy", on);
+}
+
+// Честный бросок 1..5 для футбола
+function rollFootball() {
+    const a = new Uint32Array(1);
+    do { crypto.getRandomValues(a); } while (a[0] >= 4294967295); // 5 * 858993459
+    return (a[0] % 5) + 1;
+}
+
+function calcFootballWin(bet, coef) {
+    const cents = Math.round(bet * 100);
+    const coefHundredths = Math.round(coef * 100);
+    return Math.floor((cents * coefHundredths) / 100) / 100;
+}
+
+// football 1,2 = промах; football 3,4,5 = гол; football 2,4 = штанга
+function isFootballWin(mode, roll) {
+    if (mode === "goal") return roll >= 3;              // football 3,4,5 = гол
+    if (mode === "miss") return roll <= 2;              // football 1,2 = промах
+    if (mode === "bar") return roll === 2 || roll === 4;  // football 2,4 = штанга
+    return false;
+}
+
+async function handleFootballPlay() {
+    if (footballGame.busy) return;
+    if (!footballGame.mode) { showMessage("Выберите режим ставки!"); return; }
+    if (!lockEconomy()) return;
+
+    const input = document.getElementById("footballBetInput");
+    const bet = roundMoney(parseFloat(input.value));
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    setFootballBusy(true);
+    const mode = footballGame.mode;
+    const coef = FOOTBALL_MODE_COEFS[mode];
+
+    // --- 1. списываем ставку ---
+    const snapshot = snapshotBalanceState();
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debit = await placeBetServer(bet, "Футбол");
+    if (!debit.ok) {
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        setFootballBusy(false);
+        unlockEconomy();
+        return;
+    }
+    currentBalance = debit.balance;
+    setUIBalance(currentBalance);
+    const liveBetId = await broadcastLiveBet(bet, "Футбол");
+
+    // --- 2. бросок и расчёт ---
+    const roll = rollFootball();
+    const win = isFootballWin(mode, roll);
+    if (window.FootballStage) window.FootballStage.prepare(roll);
+    const winAmount = win ? calcFootballWin(bet, coef) : 0;
+    let finalBalance = currentBalance;
+
+    if (win) {
+        const afterBet = snapshotBalanceState();
+        currentTotalWin = roundMoney(currentTotalWin + winAmount);
+        currentWinsCount++;
+        if (coef > currentMaxWin) currentMaxWin = coef;
+
+        const credit = await resolveWinServerWithRetry(winAmount, coef, 3);
+        if (!credit.ok) {
+            restoreBalanceState(afterBet);
+            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку.");
+            setFootballBusy(false);
+            unlockEconomy();
+            if (window.FootballStage) window.FootballStage.reset();
+            return;
+        }
+        finalBalance = credit.balance;
+    }
+    unlockEconomy();
+
+    // --- 3. анимация ---
+    const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
+    try {
+        if (window.FootballStage) {
+            await window.FootballStage.play({ roll, win, amountText });
+        }
+    } catch (e) {
+        console.error("Ошибка анимации футбола:", e);
+    }
+
+    // --- 4. итог ---
+    setUIBalance(finalBalance);
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
+    resolveLiveBetWin(liveBetId, bet, winAmount);
+    setFootballBusy(false);
 }
 
 function openMines() {
@@ -5054,6 +5248,12 @@ window.selectDiceCubes = selectDiceCubes;
 window.adjustDiceBet = adjustDiceBet;
 window.setDiceMaxBet = setDiceMaxBet;
 window.handleDicePlay = handleDicePlay;
+window.openFootballGame = openFootballGame;
+window.selectFootballMode = selectFootballMode;
+window.selectFootballKicks = selectFootballKicks;
+window.adjustFootballBet = adjustFootballBet;
+window.setFootballMaxBet = setFootballMaxBet;
+window.handleFootballPlay = handleFootballPlay;
 window.openUpgrader = openUpgrader;
 window.playUpgrader = playUpgrader;
 window.upgSetChance = upgSetChance;
@@ -7245,4 +7445,266 @@ window.applyBetMax = applyBetMax;
     }
 
     window.DiceStage = { play, reset, prepare, setCubes };
+})();
+
+/* ==========================================
+   ФУТБОЛ - АНИМАЦИЯ (FootballStage)
+========================================== */
+(function () {
+    const $ = id => document.getElementById(id);
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const reflow = el => el.offsetHeight;
+    const ROLL_MS = 4000; // длительность анимации удара
+
+    let preview = null;
+    let previewStarted = false;
+    let prepared = null;
+
+    const PREVIEW_SRC = 'animations/dice/banners/football.tgs';
+    const ROLL_SRCS = {
+        1: 'animations/dice/football1.tgs',
+        2: 'animations/dice/football2.tgs',
+        3: 'animations/dice/football3.tgs',
+        4: 'animations/dice/football4.tgs',
+        5: 'animations/dice/football5.tgs'
+    };
+
+    async function load(src) {
+        try {
+            const response = await fetch(src);
+            if (!response.ok) return null;
+            return await response.json();
+        } catch (e) {
+            console.error('Не удалось загрузить', src, e);
+            return null;
+        }
+    }
+
+    function createAnim(box, data) {
+        if (!window.lottie) return null;
+        return window.lottie.loadAnimation({
+            container: box,
+            renderer: 'svg',
+            loop: false,
+            autoplay: false,
+            animationData: data
+        });
+    }
+
+    // Подготовка анимации результата
+    async function prepare(roll) {
+        const src = ROLL_SRCS[roll];
+        if (!src) return { box: null, anim: null };
+
+        const rollEl = $('footballRoll');
+        if (!rollEl) return { box: null, anim: null };
+
+        const data = await load(src);
+        if (!data) return { box: null, anim: null };
+
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        rollEl.appendChild(box);
+
+        const anim = createAnim(box, data);
+        if (anim) anim.goToAndStop(0, true);
+
+        const ready = Promise.resolve({ box, anim });
+        prepared = { roll, ready, used: false };
+        return { box, anim };
+    }
+
+    // Loop превью
+    let rafId = 0, lastTick = 0;
+    function tick(now) {
+        rafId = 0;
+        if (!preview || !preview.visible || preview.paused) return;
+        const dt = lastTick ? now - lastTick : 0;
+        lastTick = now;
+        const step = dt * preview.fr / 1000;
+        preview.frame = (preview.frame + step) % preview.total;
+        const fi = Math.floor(preview.frame);
+        if (fi !== preview.last) {
+            preview.last = fi;
+            preview.anim.goToAndStop(fi, true);
+        }
+        rafId = requestAnimationFrame(tick);
+    }
+    function ensureLoop() {
+        if (!rafId && preview && preview.visible && !preview.paused) {
+            lastTick = 0;
+            rafId = requestAnimationFrame(tick);
+        }
+    }
+    function setPreviewPaused(v) {
+        if (preview) {
+            preview.paused = v;
+            ensureLoop();
+        }
+    }
+
+    // Проигрывание анимации удара
+    function playRoll(anim, totalMs) {
+        return new Promise(resolve => {
+            const fr = anim.frameRate || 60;
+            const last = Math.max((anim.totalFrames || 2) - 1, 1);
+            const t0 = performance.now();
+            let prevTarget = -1;
+
+            (function step(now) {
+                const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
+                if (target !== prevTarget) {
+                    anim.goToAndStop(target, true);
+                    prevTarget = target;
+                }
+                if (target < last) {
+                    requestAnimationFrame(step);
+                } else {
+                    setTimeout(resolve, Math.max(0, totalMs - (now - t0)));
+                }
+            })(t0);
+        });
+    }
+
+    async function fallbackRoll(box, roll, ms) {
+        box.className = 'dice-fallback shaking';
+        box.textContent = '⚽';
+        await wait(ms * 0.75);
+        box.classList.remove('shaking');
+        box.textContent = '⚽';
+        await wait(ms * 0.25);
+    }
+
+    // Результат
+    function sparkles() {
+        const stars = [[26, 60, 0.36], [176, 124, 0.44], [70, 170, 0.50]];
+        const dots = [[58, 32, 0.40], [164, 70, 0.48], [30, 130, 0.54], [130, 176, 0.42]];
+        const star = 'M0-10 L2.6-2.6 L10 0 L2.6 2.6 L0 10 L-2.6 2.6 L-10 0 L-2.6-2.6Z';
+        return stars.map(([x, y, d]) =>
+                '<g transform="translate(' + x + ' ' + y + ')"><path class="dr-spark" style="--d:' + d + 's" d="' + star + '"/></g>').join('') +
+            dots.map(([x, y, d]) =>
+                '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
+    }
+
+    function resultHtml(win, amountText) {
+        const mark = win
+            ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
+            : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
+              '<path class="dr-mark dr-second" pathLength="1" d="M119 81 L81 119"/>';
+        return '' +
+            '<svg class="dr-icon" viewBox="0 0 200 200" aria-hidden="true">' +
+                '<circle class="dr-ring" cx="100" cy="100" r="54"/>' +
+                '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
+                mark + sparkles() +
+            '</svg>' +
+            '<div class="dice-result-title">' + (win ? 'Ставка сыграла' : 'Ставка не сыграла') + '</div>' +
+            '<div class="dice-result-amount">' + amountText + '</div>';
+    }
+
+    function hideResult(slideUp) {
+        const res = $('footballResult');
+        if (!res || !res.classList.contains('show')) return;
+        res.classList.remove('show');
+        if (slideUp) res.classList.add('hide-up');
+        setTimeout(() => { if (!res.classList.contains('show')) res.innerHTML = ''; }, 650);
+    }
+
+    function showPreview() {
+        const prev = $('footballPreview');
+        if (!prev || !prev.classList.contains('out')) return;
+        prev.style.transition = 'none';
+        prev.classList.remove('out');
+        prev.style.opacity = '0';
+        prev.style.transform = 'translateY(40px) scale(0.94)';
+        reflow(prev);
+        prev.style.transition = '';
+        prev.style.opacity = '';
+        prev.style.transform = '';
+        setPreviewPaused(false);
+    }
+
+    function reset() {
+        hideResult(false);
+        showPreview();
+    }
+
+    async function play({ roll, win, amountText }) {
+        const prev = $('footballPreview'), rollEl = $('footballRoll'), res = $('footballResult');
+        if (!prev || !rollEl || !res) return;
+
+        const st = await ((prepared && prepared.roll === roll && !prepared.used) ? prepared.ready : prepare(roll));
+        prepared.used = true;
+        const { box, anim } = st;
+
+        // 1) превью уплывает, заезжает результат удара
+        hideResult(true);
+        setPreviewPaused(true);
+        prev.classList.add('out');
+        await wait(160);
+        rollEl.classList.add('in');
+
+        // 2) играет анимация удара
+        if (anim) await playRoll(anim, ROLL_MS);
+        else await fallbackRoll(box, roll, ROLL_MS);
+        await wait(400);
+
+        // 3) результат уходит, появляется галочка/крестик
+        rollEl.classList.add('away');
+        res.style.transition = 'none';
+        res.classList.remove('show', 'hide-up');
+        res.innerHTML = resultHtml(win, amountText);
+        res.classList.toggle('win', win);
+        res.classList.toggle('lose', !win);
+        reflow(res);
+        res.style.transition = '';
+        res.classList.add('show');
+
+        await wait(1100);
+        if (anim) { try { anim.destroy(); } catch (e) { /* ок */ } }
+        rollEl.innerHTML = '';
+        rollEl.className = 'dice-layer dice-roll';
+        prepared = null;
+        await wait(300);
+    }
+
+    window.initFootballPreview = async function () {
+        if (previewStarted) return;
+        previewStarted = true;
+        const el = $('footballPreview');
+        if (!el) return;
+
+        const data = await load(PREVIEW_SRC);
+        if (!data) {
+            el.innerHTML = '<span class="dice-fallback">⚽</span>';
+            return;
+        }
+
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        el.innerHTML = '';
+        el.appendChild(box);
+        el.classList.add('has-anim');
+
+        const anim = createAnim(box, data);
+        anim.goToAndStop(0, true);
+        preview = {
+            anim,
+            frame: 0,
+            last: -1,
+            total: anim.totalFrames || 1,
+            fr: anim.frameRate || 60,
+            visible: true,
+            paused: false
+        };
+
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(entries => {
+                preview.visible = entries[0].isIntersecting;
+                ensureLoop();
+            }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
+        }
+        ensureLoop();
+    };
+
+    window.FootballStage = { play, reset, prepare };
 })();
