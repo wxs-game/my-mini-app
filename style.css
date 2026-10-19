@@ -23,10 +23,10 @@ body {
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    background: 
-        radial-gradient(circle at 50% 0%, rgba(255, 160, 0, 0.15), transparent 40%),
-        radial-gradient(circle at 80% 50%, rgba(255, 120, 0, 0.05), transparent 50%),
-        #090909;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(30, 100, 200, 0.15), transparent 40%),
+        radial-gradient(circle at 80% 50%, rgba(50, 120, 220, 0.05), transparent 50%),
+        #090920;
     color: #ffffff;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     overflow-x: hidden;
