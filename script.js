@@ -7671,14 +7671,20 @@ window.applyBetMax = applyBetMax;
         if (previewStarted) return;
         previewStarted = true;
         const el = $('footballPreview');
-        if (!el) return;
+        if (!el) {
+            console.log('[Футбол] Элемент footballPreview не найден');
+            return;
+        }
 
+        console.log('[Футбол] Загрузка превью:', PREVIEW_SRC);
         const data = await load(PREVIEW_SRC);
         if (!data) {
+            console.log('[Футбол] Не удалось загрузить превью, показываем эмодзи');
             el.innerHTML = '<span class="dice-fallback">⚽</span>';
             return;
         }
 
+        console.log('[Футбол] Превью загружено, создаём анимацию');
         const box = document.createElement('div');
         box.className = 'sticker-lottie';
         el.innerHTML = '';
@@ -7686,6 +7692,12 @@ window.applyBetMax = applyBetMax;
         el.classList.add('has-anim');
 
         const anim = createAnim(box, data);
+        if (!anim) {
+            console.log('[Футбол] Не удалось создать анимацию');
+            el.innerHTML = '<span class="dice-fallback">⚽</span>';
+            return;
+        }
+
         anim.goToAndStop(0, true);
         preview = {
             anim,
@@ -7696,6 +7708,8 @@ window.applyBetMax = applyBetMax;
             visible: true,
             paused: false
         };
+
+        console.log('[Футбол] Анимация создана, запускаем loop. Кадров:', preview.total);
 
         if ('IntersectionObserver' in window) {
             new IntersectionObserver(entries => {
