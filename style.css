@@ -3932,3 +3932,7 @@ input, textarea {
 
 /* пустая строка суммы (промежуточный результат 1/2) — держит высоту блока */
 .dice-result-amount.is-empty { visibility: hidden; }
+
+
+/* статус «Отменено» в истории операций */
+.tx-status.failed { color: #e74c3c; }

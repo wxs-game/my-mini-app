@@ -4320,6 +4320,7 @@ function openBalance(mode = "deposit") {
     setBalanceMode(mode);
     updateNav("balance");
     renderTransactions();
+    loadWalletHistory(true);      // актуальные пополнения/выводы и баланс с сервера
 }
 
 function openProfile() {
@@ -4364,7 +4365,7 @@ function renderTransactions() {
         const isDep = tx.type === 'deposit';
         const sign = isDep ? '+' : '-';
         const title = isDep ? 'Пополнение' : 'Вывод средств';
-        const statusText = tx.status === 'success' ? 'Успешно' : 'В обработке';
+        const statusText = tx.status === 'success' ? 'Успешно' : tx.status === 'failed' ? 'Отменено' : 'В обработке';
 
         const iconHTML = tx.icon.includes('.')
             ? `<img src="${tx.icon}" style="width: 16px; height: 16px; object-fit: contain; vertical-align: middle;">`
@@ -4471,113 +4472,182 @@ function handleBalanceAction() {
 }
 
 // ==========================================
-// ПОПОЛНЕНИЕ БАЛАНСА
+// РЕАЛЬНЫЕ ПЛАТЕЖИ: CryptoBot (Crypto Pay API)
+// Клиент ничего не зачисляет сам: он только просит Edge Function создать счёт /
+// выплату. Деньги на баланс попадают на сервере — после подписанного вебхука
+// от CryptoBot (см. supabase/functions и CRYPTOBOT_SETUP.md).
 // ==========================================
-function handleDeposit() {
-    const amountInput = document.querySelector('.sum-input-wrap input');
-    const amount = amountInput ? parseFloat(amountInput.value) : 0;
+const WALLET_FN_URL = SUPABASE_URL + '/functions/v1/';
+const MIN_DEPOSIT_UI = 1;
+const MIN_WITHDRAW_UI = 2;
+let walletBusy = false;
+let depositWatchTimer = null;
 
-    if (!amount || amount <= 0) {
-        alert('Пожалуйста, введите корректную сумму');
-        return;
+async function walletCall(fn, body) {
+    try {
+        const res = await fetch(WALLET_FN_URL + fn, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+            body: JSON.stringify(Object.assign({ init_data: tg?.initData || '' }, body || {}))
+        });
+        const data = await res.json().catch(() => null);
+        return data || { ok: false, error: 'BAD_RESPONSE' };
+    } catch (e) {
+        return { ok: false, error: 'NETWORK' };
     }
-
-    const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) {
-        showMessage("Откройте приложение через Telegram, чтобы пополнить баланс.");
-        if (typeof unlockEconomy === 'function') unlockEconomy();
-        return;
-    }
-
-    // Переход напрямую по ссылке Telegram (в зависимости от выбранного способа оплаты)
-    const depositLinks = {
-        'CryptoBot': 'https://t.me/m/M9xJg5ImYzli',
-        'xRocket': 'https://t.me/m/UXK1-ltZODIy'
-    };
-    const targetUrl = depositLinks[selectedMethod] || depositLinks['CryptoBot'];
-
-    if (tg?.openTelegramLink) {
-        tg.openTelegramLink(targetUrl);
-    } else {
-        window.location.href = targetUrl;
-    }
-
-    // Добавление транзакции в локальный список
-    transactions.unshift({
-        type: 'deposit',
-        method: typeof selectedMethod !== 'undefined' ? selectedMethod : 'Telegram',
-        icon: typeof selectedMethodIcon !== 'undefined' ? selectedMethodIcon : '',
-        amount: amount,
-        date: 'Только что',
-        status: 'pending'
-    });
-
-    if (typeof renderTransactions === 'function') renderTransactions();
-    if (typeof unlockEconomy === 'function') unlockEconomy();
 }
 
-// ==========================================
-// ВЫВОД СРЕДСТВ (ЛОКАЛЬНО)
-// ==========================================
-function handleWithdrawal() {
-    const amountInput = document.querySelector('.sum-input-wrap input');
-    const amount = amountInput ? parseFloat(amountInput.value) : 0;
+function walletErrorText(r) {
+    switch (r && r.error) {
+        case 'AMOUNT':             return r.min ? `Минимальная сумма — ${r.min} $` : 'Некорректная сумма';
+        case 'INSUFFICIENT_FUNDS': return 'Недостаточно средств';
+        case 'DEPOSIT_REQUIRED':   return 'Для вывода сначала пополните баланс';
+        case 'WAGER_REQUIRED':     return 'Для вывода нужно отыграть сумму пополнений';
+        case 'TOO_MANY':           return 'Слишком много неоплаченных счетов. Попробуйте позже';
+        case 'PROVIDER':           return 'CryptoBot отклонил операцию. Убедитесь, что вы запускали @CryptoBot, и попробуйте позже';
+        case 'AUTH':               return 'Не удалось подтвердить пользователя. Перезапустите приложение';
+        case 'NETWORK':            return 'Нет соединения с сервером';
+        default:                   return 'Ошибка сервера. Попробуйте позже';
+    }
+}
 
-    if (!amount || amount <= 0) {
-        showMessage("Введите корректную сумму вывода");
-        return;
+function setBalanceActionLoading(on) {
+    const btn = document.getElementById('balanceAction');
+    if (!btn) return;
+    btn.disabled = on;
+    btn.style.opacity = on ? '0.6' : '';
+}
+
+function formatTxDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+// Подтягивает баланс и историю операций с сервера
+async function loadWalletHistory(silent) {
+    if (!tg?.initData) return null;
+    const r = await walletCall('wallet-history');
+    if (!r.ok) {
+        if (!silent) showMessage(walletErrorText(r));
+        return r;
     }
 
-    if (amount > currentBalance) {
-        showMessage("Недостаточно средств");
-        if (typeof unlockEconomy === 'function') unlockEconomy();
-        return;
+    const statusMap = { paid: 'success', completed: 'success', pending: 'pending', processing: 'pending',
+                        review: 'pending', failed: 'failed', expired: 'failed' };
+    transactions.length = 0;
+    r.items.forEach(x => transactions.push({
+        id: x.id,
+        type: x.type,
+        method: 'CryptoBot',
+        icon: 'images/crypto/cryptobot.png',
+        amount: Number(x.amount),
+        date: formatTxDate(x.created_at),
+        status: statusMap[x.status] || 'pending'
+    }));
+    renderTransactions();
+
+    // баланс не трогаем, пока идёт ставка (иначе раньше времени «спойлерим» исход игры)
+    const dice = (typeof diceGame !== 'undefined') ? diceGame : null;
+    if (!isEconomyLocked && !(dice && dice.busy)) {
+        currentDeposits = Number(r.deposits) || 0;
+        currentWithdrawals = Number(r.withdrawals) || 0;
+        setUIBalance(r.balance);
     }
+    return r;
+}
 
-    const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) {
-        showMessage("Откройте приложение через Telegram, чтобы вывести средства.");
-        if (typeof unlockEconomy === 'function') unlockEconomy();
-        return;
-    }
+// После открытия счёта ждём оплату: раз в 4 секунды спрашиваем статус (до 20 минут)
+function watchDeposit(depositId) {
+    if (depositWatchTimer) clearInterval(depositWatchTimer);
+    const started = Date.now();
+    depositWatchTimer = setInterval(async () => {
+        if (Date.now() - started > 20 * 60 * 1000) { clearInterval(depositWatchTimer); depositWatchTimer = null; return; }
+        if (document.visibilityState !== 'visible') return;
+        const r = await loadWalletHistory(true);
+        const tx = r && r.ok && r.items.find(x => x.id === depositId);
+        if (tx && tx.status === 'paid') {
+            clearInterval(depositWatchTimer);
+            depositWatchTimer = null;
+            if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            showMessage(`Пополнение +${Number(tx.amount).toFixed(2)}$ зачислено`);
+        } else if (tx && (tx.status === 'expired' || tx.status === 'failed')) {
+            clearInterval(depositWatchTimer);
+            depositWatchTimer = null;
+        }
+    }, 4000);
+}
 
-    // Переход напрямую по ссылке Telegram (в зависимости от выбранного способа вывода)
-    const withdrawLinks = {
-        'CryptoBot': 'https://t.me/m/s7c5WS1MNTE6',
-        'xRocket': 'https://t.me/m/mVxu1jNsZTJi'
-    };
-    const targetUrl = withdrawLinks[selectedMethod] || withdrawLinks['CryptoBot'];
+// вернулись в приложение из CryptoBot — сразу обновляем баланс
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const onBalance = !document.getElementById('balancePage')?.classList.contains('hidden');
+    if (depositWatchTimer || onBalance) loadWalletHistory(true);
+});
 
-    if (tg?.openTelegramLink) {
-        tg.openTelegramLink(targetUrl);
+function readBalanceAmount() {
+    const input = document.querySelector('.sum-input-wrap input');
+    const amount = input ? Math.round(parseFloat(input.value) * 100) / 100 : 0;
+    return { input, amount };
+}
+
+async function handleDeposit() {
+    if (walletBusy) return;
+    const { input, amount } = readBalanceAmount();
+
+    if (!amount || amount <= 0) { showMessage('Введите корректную сумму'); return; }
+    if (amount < MIN_DEPOSIT_UI) { showMessage(`Минимальное пополнение — ${MIN_DEPOSIT_UI} $`); return; }
+    if (!tg?.initData) { showMessage('Откройте приложение через Telegram, чтобы пополнить баланс.'); return; }
+    if (selectedMethod !== 'CryptoBot') { showMessage(selectedMethod + ' скоро появится'); return; }
+
+    walletBusy = true;
+    setBalanceActionLoading(true);
+    const r = await walletCall('cryptobot-create-invoice', { amount });
+    walletBusy = false;
+    setBalanceActionLoading(false);
+
+    if (!r.ok) { showMessage(walletErrorText(r)); return; }
+
+    // открываем счёт прямо в Telegram (мини-приложение CryptoBot)
+    const url = r.mini_app_url || r.url;
+    if (tg?.openTelegramLink && /^https:\/\/t\.me\//.test(url)) tg.openTelegramLink(url);
+    else if (tg?.openLink) tg.openLink(url);
+    else window.open(url, '_blank', 'noopener');
+
+    if (input) input.value = '';
+    loadWalletHistory(true);
+    watchDeposit(r.deposit_id);
+}
+
+async function handleWithdrawal() {
+    if (walletBusy) return;
+    const { input, amount } = readBalanceAmount();
+
+    if (!amount || amount <= 0) { showMessage('Введите корректную сумму вывода'); return; }
+    if (amount < MIN_WITHDRAW_UI) { showMessage(`Минимальный вывод — ${MIN_WITHDRAW_UI} $`); return; }
+    if (amount > currentBalance) { showMessage('Недостаточно средств'); return; }
+    if (!tg?.initData) { showMessage('Откройте приложение через Telegram, чтобы вывести средства.'); return; }
+    if (selectedMethod !== 'CryptoBot') { showMessage(selectedMethod + ' скоро появится'); return; }
+
+    walletBusy = true;
+    setBalanceActionLoading(true);
+    const r = await walletCall('cryptobot-withdraw', { amount });
+    walletBusy = false;
+    setBalanceActionLoading(false);
+
+    if (typeof r.balance === 'number') setUIBalance(r.balance);   // сервер вернул актуальный баланс (в т.ч. после возврата)
+    if (!r.ok) { showMessage(walletErrorText(r)); loadWalletHistory(true); return; }
+
+    if (input) input.value = '';
+    if (r.status === 'completed') {
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        showMessage(`Выплата ${amount.toFixed(2)} $ отправлена в CryptoBot`);
+    } else if (r.status === 'review') {
+        showMessage(`Заявка на ${amount.toFixed(2)} $ принята — выплата после проверки`);
     } else {
-        window.location.href = targetUrl;
+        showMessage(`Заявка на ${amount.toFixed(2)} $ в обработке`);
     }
-
-    // Списание баланса и обновление статистики локально
-    currentWithdrawals = roundMoney((currentWithdrawals || 0) + amount);
-    currentBalance = roundMoney(currentBalance - amount);
-    
-    if (typeof setUIBalance === 'function') {
-        setUIBalance(currentBalance);
-    }
-
-    // Добавление заявки на вывод в историю
-    transactions.unshift({
-        type: 'withdraw',
-        method: typeof selectedMethod !== 'undefined' ? selectedMethod : 'Withdraw',
-        icon: typeof selectedMethodIcon !== 'undefined' ? selectedMethodIcon : '',
-        amount: amount,
-        date: 'Только что',
-        status: 'pending'
-    });
-
-    if (typeof renderTransactions === 'function') renderTransactions();
-
-    const methodName = typeof selectedMethod !== 'undefined' ? selectedMethod : '';
-    showMessage(`Заявка на вывод ${amount.toFixed(2)} $ ${methodName ? 'через ' + methodName + ' ' : ''}принята`);
-    
-    if (typeof unlockEconomy === 'function') unlockEconomy();
+    loadWalletHistory(true);
 }
 
 function claimBonus() {
