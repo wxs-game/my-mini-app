@@ -510,6 +510,24 @@ function updateProfileUI(data) {
     setUIBalance(data.balance);
 }
 
+// Создание/обновление профиля идёт через Edge Function ensure-player:
+// сервер сам берёт id, ник и аватар из ПОДПИСАННОГО initData, поэтому
+// подменить чужой профиль (отправив чужой telegram_id) больше нельзя.
+async function ensurePlayerSecure() {
+    try {
+        const res = await fetch(SUPABASE_URL + '/functions/v1/ensure-player', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+            body: JSON.stringify({ init_data: tg?.initData || '' })
+        });
+        const j = await res.json().catch(() => null);
+        if (!j || !j.ok || !j.player) return { data: null, error: j?.error || 'BAD_RESPONSE' };
+        return { data: j.player, error: null };
+    } catch (e) {
+        return { data: null, error: 'NETWORK' };
+    }
+}
+
 async function loadUserData() {
     const tgUser = tg?.initDataUnsafe?.user;
 
@@ -558,12 +576,7 @@ async function loadUserData() {
         // теперь идёт через защищённую RPC-функцию ensure_player: стартовый
         // баланс 100.00 $ задаётся на сервере, а не тем, что пришлёт клиент —
         // прямой INSERT/UPDATE в wxs_game с браузера запрещён на уровне БД.
-        const { data: newUser, error: createError } = await supabase.rpc('ensure_player', {
-            p_telegram_id: profileData.telegram_id,
-            p_username: profileData.username,
-            p_nickname: profileData.nickname,
-            p_photo_url: profileData.photo_url
-        });
+        const { data: newUser, error: createError } = await ensurePlayerSecure();
 
         if (createError) {
             console.error('Ошибка создания записи в Supabase:', createError);
@@ -572,12 +585,7 @@ async function loadUserData() {
         }
         data = newUser;
     } else {
-        const { data: updatedUser, error: updateError } = await supabase.rpc('ensure_player', {
-            p_telegram_id: profileData.telegram_id,
-            p_username: profileData.username,
-            p_nickname: profileData.nickname,
-            p_photo_url: profileData.photo_url
-        });
+        const { data: updatedUser, error: updateError } = await ensurePlayerSecure();
         if (!updateError && updatedUser) data = updatedUser;
     }
 
