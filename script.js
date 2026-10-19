@@ -7470,12 +7470,20 @@ window.applyBetMax = applyBetMax;
     };
 
     async function load(src) {
+        const fullUrl = new URL(src, window.location.href).href;
+        console.log('[Футбол] Пытаемся загрузить:', fullUrl);
         try {
             const response = await fetch(src);
-            if (!response.ok) return null;
-            return await response.json();
+            console.log('[Футбол] Ответ сервера:', response.status, response.statusText);
+            if (!response.ok) {
+                console.error('[Футбол] Ошибка загрузки:', response.status, response.statusText);
+                return null;
+            }
+            const data = await response.json();
+            console.log('[Футбол] Файл успешно загружен и распарсен');
+            return data;
         } catch (e) {
-            console.error('Не удалось загрузить', src, e);
+            console.error('[Футбол] Не удалось загрузить', src, e);
             return null;
         }
     }
