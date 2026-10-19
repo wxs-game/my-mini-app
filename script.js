@@ -1,3 +1,17 @@
+// ==========================================
+// 0. SERVICE WORKER ДЛЯ МГНОВЕННОГО ОБНОВЛЕНИЯ
+// ==========================================
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').then(() => {
+        // Проверяем обновления каждые 3 секунды
+        setInterval(() => {
+            navigator.serviceWorker.getRegistration().then(reg => {
+                if (reg) reg.update();
+            });
+        }, 3000);
+    }).catch(e => console.log('SW error:', e));
+}
+
 (function () {
 // ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
