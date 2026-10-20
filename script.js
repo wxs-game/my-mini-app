@@ -4065,6 +4065,7 @@ function openTgEmoji() {
     updateNav("games");
     if (typeof window.initTgEmojiBanners === "function") window.initTgEmojiBanners();
     if (typeof window.preloadDice === "function") window.preloadDice();
+    if (typeof window.preloadFootball === "function") window.preloadFootball();
 }
 
 function openTgEmojiMode(mode) {
@@ -7009,7 +7010,7 @@ window.applyBetMax = applyBetMax;
     };
     function schedulePreload() {
         setTimeout(() => {
-            window.preloadTgEmoji().then(() => { if (window.preloadDice) window.preloadDice(); });
+            window.preloadTgEmoji().then(() => { if (window.preloadDice) window.preloadDice(); }).then(() => { if (window.preloadFootball) window.preloadFootball(); });
         }, 1500);
     }
     if (document.readyState === 'complete') schedulePreload();
@@ -7448,142 +7449,159 @@ window.applyBetMax = applyBetMax;
 })();
 
 /* ==========================================
-   ФУТБОЛ - АНИМАЦИЯ (FootballStage)
+   ФУТБОЛ — сцена: превью → удар → результат
+   Работает по тому же принципу, что и «Куб»:
+     animations/dice/banners/football.tgs  — крутится, пока не нажали «Играть»
+     animations/dice/football1.tgs … football5.tgs — анимация удара
+   • .tgs (gzip) читаются через общий TgsCache (DecompressionStream / pako),
+     а НЕ через response.json() — именно из-за этого футбол раньше не грузился.
+   • SVG-рендерер, только целые кадры, прогрев перед показом.
 ========================================== */
 (function () {
-    const $ = id => document.getElementById(id);
+    const PREVIEW_SRC = 'animations/dice/banners/football';
+    const ROLL_DIR = 'animations/dice/';     // football1 … football5
+    const ROLL_MS = 4000;                    // анимация + удержание последнего кадра
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const reflow = el => el.offsetHeight;
-    const ROLL_MS = 4000; // длительность анимации удара
-
-    let preview = null;
-    let previewStarted = false;
-    let prepared = null;
-
-    const PREVIEW_SRC = 'animations/dice/banners/football.tgs';
-    const ROLL_SRCS = {
-        1: 'animations/dice/football1.tgs',
-        2: 'animations/dice/football2.tgs',
-        3: 'animations/dice/football3.tgs',
-        4: 'animations/dice/football4.tgs',
-        5: 'animations/dice/football5.tgs'
-    };
-
-    async function load(src) {
-        const fullUrl = new URL(src, window.location.href).href;
-        console.log('[Футбол] Пытаемся загрузить:', fullUrl);
-        try {
-            const response = await fetch(src);
-            console.log('[Футбол] Ответ сервера:', response.status, response.statusText);
-            if (!response.ok) {
-                console.error('[Футбол] Ошибка загрузки:', response.status, response.statusText);
-                return null;
-            }
-            const data = await response.json();
-            console.log('[Футбол] Файл успешно загружен и распарсен');
-            return data;
-        } catch (e) {
-            console.error('[Футбол] Не удалось загрузить', src, e);
-            return null;
-        }
-    }
+    const raf2 = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const $ = id => document.getElementById(id);
+    const reflow = el => void el.offsetWidth;
+    const load = base => (window.TgsCache && typeof lottie !== 'undefined')
+        ? window.TgsCache.load(base) : Promise.resolve(null);
 
     function createAnim(box, data) {
-        if (!window.lottie) return null;
-        return window.lottie.loadAnimation({
-            container: box,
-            renderer: 'svg',
-            loop: false,
-            autoplay: false,
-            animationData: data
+        return lottie.loadAnimation({
+            container: box, renderer: 'svg', loop: false, autoplay: false, animationData: data,
+            rendererSettings: { preserveAspectRatio: 'xMidYMid meet', progressiveLoad: false, hideOnTransparent: true }
         });
     }
 
-    // Подготовка анимации результата
-    async function prepare(roll) {
-        const src = ROLL_SRCS[roll];
-        if (!src) return { box: null, anim: null };
+    /* ---------- предзагрузка файлов ---------- */
+    let preloadPromise = null;
+    window.preloadFootball = function () {
+        if (preloadPromise) return preloadPromise;
+        preloadPromise = (async () => {
+            await load(PREVIEW_SRC);
+            for (let n = 1; n <= 5; n++) { await load(ROLL_DIR + 'football' + n); await wait(60); }
+        })();
+        return preloadPromise;
+    };
 
+    /* ---------- превью (крутится постоянно) ---------- */
+    let preview = null;      // { anim, frame, last, total, fr, visible, paused }
+    let rafId = 0, lastTick = 0, previewStarted = false;
+
+    function tick(now) {
+        rafId = 0;
+        if (!preview || !preview.visible || preview.paused) return;
+        rafId = requestAnimationFrame(tick);
+        const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0;
+        lastTick = now;
+        preview.frame += dt * preview.fr;
+        if (preview.frame >= preview.total) preview.frame %= preview.total;
+        const fi = Math.floor(preview.frame);
+        if (fi !== preview.last) { preview.last = fi; preview.anim.goToAndStop(fi, true); }
+    }
+    function ensureLoop() {
+        if (!rafId && preview && preview.visible && !preview.paused) { lastTick = 0; rafId = requestAnimationFrame(tick); }
+    }
+    function setPreviewPaused(v) { if (preview) { preview.paused = v; ensureLoop(); } }
+
+    window.initFootballPreview = async function () {
+        if (previewStarted) return;
+        previewStarted = true;
+        const el = $('footballPreview');
+        if (!el) return;
+        const data = await load(PREVIEW_SRC);          // пока грузится — виден спиннер
+        if (!data) {                                   // файла нет — эмодзи вместо спиннера
+            el.innerHTML = '<span class="dice-fallback">⚽</span>';
+            el.classList.add('is-fallback');
+            return;
+        }
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        el.textContent = '';
+        el.appendChild(box);
+        el.classList.add('has-anim');
+        const anim = createAnim(box, data);
+        anim.goToAndStop(0, true);
+        preview = { anim, frame: 0, last: -1, total: anim.totalFrames || 1, fr: anim.frameRate || 60, visible: true, paused: false };
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(entries => {
+                preview.visible = entries[0].isIntersecting;
+                ensureLoop();
+            }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
+        }
+        ensureLoop();
+    };
+
+    /* ---------- подготовка анимации удара (до начала переезда) ---------- */
+    let prepared = null;   // { roll, side, box, anim, ready, used }
+    function prepare(roll) {
         const rollEl = $('footballRoll');
-        if (!rollEl) return { box: null, anim: null };
+        if (!rollEl) return null;
+        if (prepared && prepared.roll === roll && !prepared.used) return prepared.ready;
+        if (prepared && prepared.anim) { try { prepared.anim.destroy(); } catch (e) { /* ок */ } }
 
-        const data = await load(src);
-        if (!data) return { box: null, anim: null };
-
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        rollEl.className = 'dice-layer dice-roll from-' + side;
+        rollEl.innerHTML = '';
         const box = document.createElement('div');
         box.className = 'sticker-lottie';
         rollEl.appendChild(box);
 
-        const anim = createAnim(box, data);
-        if (anim) anim.goToAndStop(0, true);
-
-        const ready = Promise.resolve({ box, anim });
-        prepared = { roll, ready, used: false };
-        return { box, anim };
+        const st = { roll, side, box, anim: null, used: false };
+        st.ready = (async () => {
+            const data = await load(ROLL_DIR + 'football' + roll);
+            if (data) {
+                st.anim = createAnim(box, data);
+                st.anim.goToAndStop(0, true);
+                // Прогрев: Chrome не растеризует невидимые слои — первая отрисовка большого SVG
+                // иначе случилась бы прямо во время переезда.
+                rollEl.classList.add('warm');
+                await raf2();
+                const total = st.anim.totalFrames || 2;
+                st.anim.goToAndStop(Math.floor(total / 2), true);
+                await raf2();
+                st.anim.goToAndStop(0, true);
+                await raf2();
+                rollEl.style.transition = 'none';
+                rollEl.classList.remove('warm');
+                reflow(rollEl);
+                rollEl.style.transition = '';
+            }
+            return st;
+        })();
+        prepared = st;
+        return st.ready;
     }
 
-    // Loop превью
-    let rafId = 0, lastTick = 0;
-    function tick(now) {
-        rafId = 0;
-        if (!preview || !preview.visible || preview.paused) return;
-        const dt = lastTick ? now - lastTick : 0;
-        lastTick = now;
-        const step = dt * preview.fr / 1000;
-        preview.frame = (preview.frame + step) % preview.total;
-        const fi = Math.floor(preview.frame);
-        if (fi !== preview.last) {
-            preview.last = fi;
-            preview.anim.goToAndStop(fi, true);
-        }
-        rafId = requestAnimationFrame(tick);
-    }
-    function ensureLoop() {
-        if (!rafId && preview && preview.visible && !preview.paused) {
-            lastTick = 0;
-            rafId = requestAnimationFrame(tick);
-        }
-    }
-    function setPreviewPaused(v) {
-        if (preview) {
-            preview.paused = v;
-            ensureLoop();
-        }
-    }
-
-    // Проигрывание анимации удара
+    /* ---------- удар: родной темп файла, затем замирает на последнем кадре ---------- */
     function playRoll(anim, totalMs) {
         return new Promise(resolve => {
             const fr = anim.frameRate || 60;
             const last = Math.max((anim.totalFrames || 2) - 1, 1);
-            const t0 = performance.now();
+            const nativeMs = last / fr * 1000;
             let prevTarget = -1;
-
+            const t0 = performance.now();
             (function step(now) {
                 const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
-                if (target !== prevTarget) {
-                    anim.goToAndStop(target, true);
-                    prevTarget = target;
-                }
-                if (target < last) {
-                    requestAnimationFrame(step);
-                } else {
-                    setTimeout(resolve, Math.max(0, totalMs - (now - t0)));
-                }
+                if (target !== prevTarget) { anim.goToAndStop(target, true); prevTarget = target; }
+                if (target < last) requestAnimationFrame(step);
+                else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
             })(t0);
         });
     }
 
+    // Запасной вариант, если footballN.tgs не найден
     async function fallbackRoll(box, roll, ms) {
         box.className = 'dice-fallback shaking';
         box.textContent = '⚽';
         await wait(ms * 0.75);
         box.classList.remove('shaking');
-        box.textContent = '⚽';
         await wait(ms * 0.25);
     }
 
-    // Результат
+    /* ---------- результат: галочка / крестик ---------- */
     function sparkles() {
         const stars = [[26, 60, 0.36], [176, 124, 0.44], [70, 170, 0.50]];
         const dots = [[58, 32, 0.40], [164, 70, 0.48], [30, 130, 0.54], [130, 176, 0.42]];
@@ -7594,7 +7612,7 @@ window.applyBetMax = applyBetMax;
                 '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
     }
 
-    function resultHtml(win, amountText) {
+    function resultHtml(win, amountText, title) {
         const mark = win
             ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
             : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
@@ -7605,10 +7623,11 @@ window.applyBetMax = applyBetMax;
                 '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
                 mark + sparkles() +
             '</svg>' +
-            '<div class="dice-result-title">' + (win ? 'Ставка сыграла' : 'Ставка не сыграла') + '</div>' +
-            '<div class="dice-result-amount">' + amountText + '</div>';
+            '<div class="dice-result-title">' + (title || (win ? 'Ставка сыграла' : 'Ставка не сыграла')) + '</div>' +
+            '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
+    /* ---------- управление сценой ---------- */
     function hideResult(slideUp) {
         const res = $('footballResult');
         if (!res || !res.classList.contains('show')) return;
@@ -7636,7 +7655,7 @@ window.applyBetMax = applyBetMax;
         showPreview();
     }
 
-    async function play({ roll, win, amountText }) {
+    async function play({ roll, win, amountText, title }) {
         const prev = $('footballPreview'), rollEl = $('footballRoll'), res = $('footballResult');
         if (!prev || !rollEl || !res) return;
 
@@ -7644,23 +7663,23 @@ window.applyBetMax = applyBetMax;
         prepared.used = true;
         const { box, anim } = st;
 
-        // 1) превью уплывает, заезжает результат удара
+        // 1) превью уплывает вверх, заезжает удар
         hideResult(true);
         setPreviewPaused(true);
         prev.classList.add('out');
         await wait(160);
         rollEl.classList.add('in');
 
-        // 2) играет анимация удара
+        // 2) играет анимация удара и замирает на последнем кадре
         if (anim) await playRoll(anim, ROLL_MS);
         else await fallbackRoll(box, roll, ROLL_MS);
         await wait(400);
 
-        // 3) результат уходит, появляется галочка/крестик
+        // 3) анимация уходит, появляется галочка / крестик
         rollEl.classList.add('away');
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
-        res.innerHTML = resultHtml(win, amountText);
+        res.innerHTML = resultHtml(win, amountText, title);
         res.classList.toggle('win', win);
         res.classList.toggle('lose', !win);
         reflow(res);
@@ -7674,59 +7693,6 @@ window.applyBetMax = applyBetMax;
         prepared = null;
         await wait(300);
     }
-
-    window.initFootballPreview = async function () {
-        if (previewStarted) return;
-        previewStarted = true;
-        const el = $('footballPreview');
-        if (!el) {
-            console.log('[Футбол] Элемент footballPreview не найден');
-            return;
-        }
-
-        console.log('[Футбол] Загрузка превью:', PREVIEW_SRC);
-        const data = await load(PREVIEW_SRC);
-        if (!data) {
-            console.log('[Футбол] Не удалось загрузить превью, показываем эмодзи');
-            el.innerHTML = '<span class="dice-fallback">⚽</span>';
-            return;
-        }
-
-        console.log('[Футбол] Превью загружено, создаём анимацию');
-        const box = document.createElement('div');
-        box.className = 'sticker-lottie';
-        el.innerHTML = '';
-        el.appendChild(box);
-        el.classList.add('has-anim');
-
-        const anim = createAnim(box, data);
-        if (!anim) {
-            console.log('[Футбол] Не удалось создать анимацию');
-            el.innerHTML = '<span class="dice-fallback">⚽</span>';
-            return;
-        }
-
-        anim.goToAndStop(0, true);
-        preview = {
-            anim,
-            frame: 0,
-            last: -1,
-            total: anim.totalFrames || 1,
-            fr: anim.frameRate || 60,
-            visible: true,
-            paused: false
-        };
-
-        console.log('[Футбол] Анимация создана, запускаем loop. Кадров:', preview.total);
-
-        if ('IntersectionObserver' in window) {
-            new IntersectionObserver(entries => {
-                preview.visible = entries[0].isIntersecting;
-                ensureLoop();
-            }, { rootMargin: '0px 0px -110px 0px', threshold: 0.3 }).observe(el);
-        }
-        ensureLoop();
-    };
 
     window.FootballStage = { play, reset, prepare };
 })();
