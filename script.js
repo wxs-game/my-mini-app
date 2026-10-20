@@ -4017,7 +4017,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage"];
+    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage", "footballGamePage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -5066,6 +5066,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     startIceArenaLobby();
     applyDesign();
     startCrashEngine().finally(resolveCrashReady);
+    routeStartParam();   // deep link: t.me/бот?startapp=mines → сразу открыть нужную страницу
 
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -5103,6 +5104,45 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     hideAppLoader(assetsReady);
 });
+
+/* =========================
+   DEEP LINKS (startapp)
+   Ссылка вида  https://t.me/wxs_robot?startapp=mines
+   (или https://t.me/wxs_robot/НАЗВАНИЕ_ПРИЛОЖЕНИЯ?startapp=mines)
+   Значение после startapp= приходит в start_param и открывает нужную страницу.
+   В start_param можно только латиницу, цифры, _ и - (до 512 символов).
+========================= */
+const START_ROUTES = {
+    mines:      () => openMines(),
+    crash:      () => openCrash(),
+    upgrader:   () => openUpgrader(),
+    ice:        () => openIceArena(),
+    emoji:      () => openTgEmoji(),
+    dice:       () => { openTgEmoji(); openDiceGame(); },
+    football:   () => { openTgEmoji(); openFootballGame(); },
+    bonus:      () => openBonus(),
+    profile:    () => openProfile(),
+    deposit:    () => openBalance('deposit'),
+    withdraw:   () => openBalance('withdraw')
+};
+
+function getStartParam() {
+    let p = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+    if (!p) {
+        // запасной путь: Telegram кладёт параметр в адрес как tgWebAppStartParam
+        const m = (location.hash + '&' + location.search).match(/tgWebAppStartParam=([^&]+)/);
+        if (m) { try { p = decodeURIComponent(m[1]); } catch (e) { p = m[1]; } }
+    }
+    return p ? String(p).trim().toLowerCase() : '';
+}
+
+function routeStartParam() {
+    const param = getStartParam();
+    if (!param) return;
+    const route = START_ROUTES[param];
+    if (!route) { console.warn('[deeplink] неизвестный параметр:', param); return; }
+    try { route(); } catch (e) { console.error('[deeplink] не удалось открыть', param, e); }
+}
 
 /* =========================
    ПРЕДЗАГРУЗКА РЕСУРСОВ ПРИ СТАРТЕ (во время экрана загрузки)
