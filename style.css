@@ -3796,6 +3796,18 @@ input, textarea {
     width: 100% !important;
     height: 100% !important;
 }
+/* Футбол: превью (ворота с мячом) — по размеру как сам удар, чуть меньше */
+#footballPreview > .sticker-lottie {
+    width: calc(var(--dice-size) * 0.9);
+    height: calc(var(--dice-size) * 0.9);
+    contain: layout paint style;
+}
+#footballPreview > .sticker-lottie svg,
+#footballPreview > .sticker-lottie canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
 .dice-fallback {
     font-size: 120px;
     line-height: 1;
