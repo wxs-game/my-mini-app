@@ -1561,7 +1561,6 @@ body.fairness-modal-open {
 /* Анимированные .tgs стикеры в карточках статистики */
 .stat-icon-bg.has-sticker {
     font-size: 0;
-    background: transparent;
     overflow: hidden;
 }
 .stat-icon-bg.has-sticker > img,
