@@ -6973,6 +6973,25 @@ window.applyBetMax = applyBetMax;
     } else {
         initQuickActionStickers();
     }
+
+    // ---- Стикеры в карточках статистики профиля ----
+    // Файлы: animations/stickers/turnover.tgs, koef.tgs, wins.tgs, bets.tgs
+    const STAT_STICKERS = {
+        statStickerTurnover: 'turnover',
+        statStickerKoef:     'koef',
+        statStickerWins:     'wins',
+        statStickerBets:     'bets'
+    };
+    function initStatStickers() {
+        Object.entries(STAT_STICKERS).forEach(([id, name]) => {
+            loadStickerInto(document.getElementById(id), STICKER_DIR + name);
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initStatStickers);
+    } else {
+        initStatStickers();
+    }
 })();
 
 

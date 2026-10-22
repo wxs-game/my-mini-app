@@ -1558,6 +1558,30 @@ body.fairness-modal-open {
     font-size: 22px;
 }
 
+/* Анимированные .tgs стикеры в карточках статистики */
+.stat-icon-bg.has-sticker {
+    font-size: 0;
+    background: transparent;
+    overflow: hidden;
+}
+.stat-icon-bg.has-sticker > img,
+.stat-icon-bg.has-sticker > .sticker-lottie {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.stat-icon-bg.has-sticker > .sticker-lottie svg,
+.stat-icon-bg.has-sticker > .sticker-lottie canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .stat-val {
     font-size: 20px;
     font-weight: 900;
