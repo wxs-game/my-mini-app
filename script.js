@@ -7748,6 +7748,8 @@ window.applyBetMax = applyBetMax;
         const lens = document.getElementById('navLens');
         if (!nav || !lens) return;
         const items = Array.from(nav.querySelectorAll('.nav-item'));
+        const ua = navigator.userAgent;
+        if (/Chrome\/|Chromium|CriOS/.test(ua) && !/iPhone|iPad|iPod/.test(ua)) nav.classList.add('svgglass');
         const KEYS = ['home', 'games', 'balance', 'bonus', 'profile'];
         const actions = [
             () => goHome(),
