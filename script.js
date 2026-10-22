@@ -4546,6 +4546,7 @@ function updateNav(active) {
     const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
     const activeElement = document.getElementById(map[active]);
     if (activeElement) activeElement.classList.add("active");
+    if (typeof window.navSync === "function") window.navSync(active);
 }
 
 /* =========================
@@ -7735,4 +7736,175 @@ window.applyBetMax = applyBetMax;
     }
 
     window.FootballStage = { play, reset, prepare };
+})();
+
+
+/* ==========================================
+   LIQUID GLASS НИЖНЯЯ ПАНЕЛЬ: тап / зажать и тянуть
+========================================== */
+(function () {
+    function init() {
+        const nav = document.getElementById('bottomNav');
+        const lens = document.getElementById('navLens');
+        if (!nav || !lens) return;
+        const items = Array.from(nav.querySelectorAll('.nav-item'));
+        const KEYS = ['home', 'games', 'balance', 'bonus', 'profile'];
+        const actions = [
+            () => goHome(),
+            () => openGamesMenu(),
+            () => openBalance('deposit'),
+            () => openBonus(),
+            () => openProfile()
+        ];
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const hap = t => { try { window.haptic && window.haptic(t); } catch (e) {} };
+
+        let W = 0, H = 0, itemW = 0, restW = 0, restH = 0, dragW = 0, dragH = 0;
+        const cx = i => (i + 0.5) * itemW;
+        function measure() {
+            W = nav.clientWidth; H = nav.clientHeight;
+            itemW = W / items.length;
+            restW = itemW - 10;  restH = H - 12;
+            dragW = itemW * 1.3; dragH = H + 16;
+        }
+
+        // x — центр линзы, g — «раздутость» (0 плашка, 1 стекло), sq — сжатие о стенку
+        const st = { x: 0, vx: 0, g: 0, vg: 0, sq: 0, vsq: 0, side: 0 };
+        const tgt = { x: 0, g: 0, sq: 0 };
+        let activeIdx = 0, hoverIdx = 0, pressed = false, moved = false;
+        let startX = 0, fingerX = 0, raf = 0, lastFrame = 0;
+
+        function setOn(i) { items.forEach((el, k) => el.classList.toggle('on', k === i)); }
+        function idxAt(x) { return clamp(Math.floor(x / itemW), 0, items.length - 1); }
+        const rubber = o => 9 * (1 - Math.exp(-o / 20));
+
+        function render() {
+            const g = clamp(st.g, 0, 1.08);
+            const sq = clamp(st.sq, 0, 1);
+            const bw = restW + (dragW - restW) * g;
+            const bh = restH + (dragH - restH) * g;
+            const sp = Math.min(Math.abs(st.vx) / 1800, 1) * 0.14 * clamp(g, 0, 1);
+            const sw = bw * (1 + sp);
+            const w = sw * (1 - 0.2 * sq);
+            const h = bh * (1 - sp * 0.35) * (1 + 0.07 * sq);
+            const centered = st.x - w / 2;
+            const pinned = st.side < 0 ? st.x - sw / 2 : st.x + sw / 2 - w;
+            const left = centered + (pinned - centered) * sq;
+            lens.style.width = w + 'px';
+            lens.style.height = h + 'px';
+            lens.style.borderRadius = Math.min(w, h) / 2 + 'px';
+            lens.style.transform = 'translate3d(' + left + 'px,' + (-h / 2) + 'px,0)';
+            lens.style.setProperty('--g', clamp(g, 0, 1).toFixed(3));
+        }
+
+        function step(dt) {
+            const sp = (p, v, t, k, c) => {
+                v += (k * (t - p) - c * v) * dt;
+                return [p + v * dt, v];
+            };
+            [st.x, st.vx]   = sp(st.x, st.vx, tgt.x, 420, 30);
+            [st.g, st.vg]   = sp(st.g, st.vg, tgt.g, 300, 24);
+            [st.sq, st.vsq] = sp(st.sq, st.vsq, tgt.sq, 520, 30);
+        }
+        function frame(now) {
+            let dt = Math.min(0.034, (now - lastFrame) / 1000 || 0.016);
+            lastFrame = now;
+            step(dt / 2); step(dt / 2);
+            render();
+            const settled = !pressed &&
+                Math.abs(st.x - tgt.x) < 0.1 && Math.abs(st.vx) < 0.5 &&
+                Math.abs(st.g - tgt.g) < 0.002 && Math.abs(st.vg) < 0.01 &&
+                Math.abs(st.sq - tgt.sq) < 0.002 && Math.abs(st.vsq) < 0.01;
+            if (settled) {
+                st.x = tgt.x; st.g = tgt.g; st.sq = tgt.sq; st.vx = st.vg = st.vsq = 0;
+                render(); raf = 0; return;
+            }
+            raf = requestAnimationFrame(frame);
+        }
+        function kick() { if (!raf) { lastFrame = performance.now(); raf = requestAnimationFrame(frame); } }
+
+        function updateTarget() {
+            const cmin = cx(0), cmax = cx(items.length - 1);
+            if (fingerX < cmin) {
+                const o = cmin - fingerX;
+                tgt.x = cmin - rubber(o); tgt.sq = Math.min(o / 36, 1); st.side = -1;
+            } else if (fingerX > cmax) {
+                const o = fingerX - cmax;
+                tgt.x = cmax + rubber(o); tgt.sq = Math.min(o / 36, 1); st.side = 1;
+            } else {
+                tgt.x = fingerX; tgt.sq = 0;
+            }
+        }
+        function restTo(i) { tgt.x = cx(i); tgt.g = 0; tgt.sq = 0; kick(); }
+
+        function updateHover() {
+            const i = idxAt(fingerX);
+            if (i !== hoverIdx) { hoverIdx = i; setOn(i); hap('select'); }
+        }
+        function localX(e) {
+            const r = nav.getBoundingClientRect();
+            return e.clientX - r.left - nav.clientLeft;
+        }
+
+        nav.addEventListener('pointerdown', e => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            measure();
+            pressed = true; moved = false;
+            startX = e.clientX; fingerX = localX(e);
+            try { nav.setPointerCapture(e.pointerId); } catch (_) {}
+            hoverIdx = idxAt(fingerX); setOn(hoverIdx);
+            nav.classList.add('pressing');
+            tgt.g = 1; updateTarget(); kick();
+        });
+        nav.addEventListener('pointermove', e => {
+            if (!pressed) return;
+            fingerX = localX(e);
+            if (Math.abs(e.clientX - startX) > 6) moved = true;
+            updateTarget(); updateHover(); kick();
+        });
+        function release(e, cancelled) {
+            if (!pressed) return;
+            pressed = false;
+            nav.classList.remove('pressing');
+            let i;
+            if (cancelled) i = activeIdx;
+            else if (!moved) i = idxAt(fingerX);
+            else i = idxAt(clamp(st.x + st.vx * 0.1, 0, W));
+            hoverIdx = i; setOn(i); restTo(i);
+            if (!cancelled && (!moved || i !== activeIdx)) {
+                hap('light');
+                actions[i]();
+            } else if (cancelled || i === activeIdx) {
+                setOn(activeIdx);
+            }
+        }
+        nav.addEventListener('pointerup', e => release(e, false));
+        nav.addEventListener('pointercancel', e => release(e, true));
+        nav.addEventListener('contextmenu', e => e.preventDefault());
+        // клавиатура / программный click
+        nav.addEventListener('click', e => {
+            if (e.detail !== 0) return;
+            const b = e.target.closest && e.target.closest('.nav-item');
+            if (b) actions[items.indexOf(b)]();
+        });
+
+        window.navSync = function (key) {
+            const i = KEYS.indexOf(key);
+            if (i < 0) return;
+            activeIdx = i;
+            if (!pressed) { setOn(i); restTo(i); }
+        };
+
+        function snap() {
+            measure();
+            st.x = tgt.x = cx(pressed ? hoverIdx : activeIdx);
+            st.g = tgt.g = 0; st.sq = tgt.sq = 0; st.vx = st.vg = st.vsq = 0;
+            render();
+        }
+        measure(); snap();
+        if (window.ResizeObserver) new ResizeObserver(() => { if (!pressed) snap(); }).observe(nav);
+        window.addEventListener('resize', () => { if (!pressed) snap(); });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
 })();
