@@ -329,53 +329,11 @@ async function generateCrashRoundSecrets() {
     return { salt, hash, crashPoint };
 }
 
-// Вызывать ПОСЛЕ завершения раунда (когда произошел краш) — просто
-// показывает уже известный (из строки раунда) секретный ключ в поле.
-function revealCrashRoundKey() {
-    currentCrashState.isFinished = true;
-
-    const keyInput = document.getElementById('crashRoundKeyInput');
-    if (keyInput) keyInput.value = currentCrashState.salt;
-}
-
 // Вызывать при выходе со страницы краша — прячет раскрытый ключ обратно,
 // чтобы при следующем заходе он снова появился только после нового краша.
 function hideCrashRoundKey() {
     const keyInput = document.getElementById('crashRoundKeyInput');
     if (keyInput) keyInput.value = '';
-}
-
-// Добавление коэффициента в ленту истории
-function addCrashHistoryItem(coef) {
-    const historyContainer = document.querySelector('.crash-history-scroll');
-    if (!historyContainer) return;
-
-    const span = document.createElement('span');
-    span.className = 'crash-history-badge';
-    span.textContent = coef.toFixed(2) + 'x';
-
-    if (coef >= 2.0) {
-        span.style.color = '#2ecc71';
-    } else if (coef < 1.5) {
-        span.style.color = '#e74c3c';
-    } else {
-        span.style.color = '#ffd700';
-    }
-
-    span.style.padding = '4px 8px';
-    span.style.background = 'rgba(255,255,255,0.05)';
-    span.style.borderRadius = '8px';
-    span.style.fontSize = '12px';
-    span.style.fontWeight = '800';
-    span.style.cursor = 'pointer';
-
-    span.onclick = () => {
-        if (typeof showMessage === 'function') {
-            showMessage(`Коэффициент раунда: ${coef.toFixed(2)}x`);
-        }
-    };
-
-    historyContainer.insertBefore(span, historyContainer.firstChild);
 }
 
 // ==========================================
@@ -844,23 +802,6 @@ function isLiveTickerItem(bet) {
     return isLiveTickerWin(bet) || isIceArenaLiveBet(bet);
 }
 
-function liveBetCardFingerprint(bet) {
-    return [bet.amount, bet.win_amount, bet.multiplier, bet.game].join('|');
-}
-
-function liveWinCardMetaHtml(bet) {
-    const game = escapeHtml(bet.game || 'Игра');
-    if (isLiveTickerWin(bet)) {
-        return game + ' • ' +
-            '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-            '<span class="live-wins-arrow">→</span>' +
-            '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
-            '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">';
-    }
-    return game + ' • ' +
-        '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-        '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">';
-}
 function renderLiveBetsTicker() {
     const pinned = document.getElementById('liveWinPinned');
     const scroll = document.getElementById('liveWinsScroll');
@@ -1011,14 +952,6 @@ function roundMoney(value) {
     const n = Number(value);
     if (!isFinite(n)) return 0;
     return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
-// Округление ВНИЗ (в пользу заведения, не игрока) — используется там, где
-// нужно отсечь дробные центы в финальной выплате, а не округлить их к игроку.
-function roundMoneyDown(value) {
-    const n = Number(value);
-    if (!isFinite(n)) return 0;
-    return Math.floor((n + Number.EPSILON) * 100) / 100;
 }
 
 /* =========================
@@ -1199,31 +1132,6 @@ async function resolveWinServerWithRetry(winAmount, multiplier, attempts = 2) {
         if (last.ok) return last;
     }
     return last;
-}
-
-async function requestWithdrawalServer(amount) {
-    const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) return { ok: true, balance: currentBalance };
-
-    const runCall = () => supabase.rpc('request_withdrawal', {
-        p_telegram_id: tgUser.id,
-        p_amount: amount
-    });
-
-    const task = saveQueue.then(runCall, runCall);
-    saveQueue = task.then(() => {}, () => {});
-
-    try {
-        const { data, error } = await task;
-        if (error) {
-            console.error('request_withdrawal отклонён сервером:', error);
-            return { ok: false, error };
-        }
-        return { ok: true, balance: Number(data) };
-    } catch (e) {
-        console.error('request_withdrawal: сетевая ошибка:', e);
-        return { ok: false, error: e };
-    }
 }
 
 /* =========================
@@ -5474,29 +5382,6 @@ function leaveIceArena() {
     goHome();
 }
 
-function stopIceArenaLobby() {
-    clearIceArenaTimers();
-    if (iceArena.pollInterval) {
-        clearInterval(iceArena.pollInterval);
-        iceArena.pollInterval = null;
-    }
-    if (iceArena.channel) {
-        try { supabase.removeChannel(iceArena.channel); } catch (e) {}
-        iceArena.channel = null;
-    }
-}
-
-function clearIceArenaTimers() {
-    if (iceArena.countdownInterval) {
-        clearInterval(iceArena.countdownInterval);
-        iceArena.countdownInterval = null;
-    }
-    if (iceArena.reloadTimer) {
-        clearTimeout(iceArena.reloadTimer);
-        iceArena.reloadTimer = null;
-    }
-}
-
 function resetIceArenaVisuals(opts) {
     const hideOverlay = opts?.hideOverlay !== false;
     const resetPuck = opts?.resetPuck !== false;
@@ -8205,8 +8090,22 @@ window.applyBetMax = applyBetMax;
         return rows.filter(r => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 50);
     }
 
+    const dayStr = d => d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : null;
+
     async function fetchRows(metric, period, date) {
         const { from, to } = range(period, date);
+        if (metric === 'balance') {
+            // максимальный баланс игрока за период (дневные пики из wxs_balance_daily)
+            try {
+                const { data, error } = await supabase.rpc('wxs_balance_peaks', {
+                    p_from: dayStr(from), p_to: dayStr(to), p_limit: 50
+                });
+                if (!error && Array.isArray(data)) {
+                    return data.map(r => ({ id: r.telegram_id, name: r.name || 'Игрок', photo: r.photo_url || '', value: num(r.value) }));
+                }
+            } catch (e) { /* функции ещё нет — покажем текущий баланс */ }
+            return fallbackRows('balance', null, null);
+        }
         try {
             const { data, error } = await supabase.rpc('wxs_leaderboard', {
                 p_metric: metric,
@@ -8331,7 +8230,7 @@ window.applyBetMax = applyBetMax;
     }
 
     async function load(force) {
-        const period = st.metric === 'balance' ? 'all' : st.period;
+        const period = st.period;
         const key = st.metric + '|' + period + '|' + (period === 'date' ? st.date : '');
         const hit = st.cache.get(key);
         if (!force && hit && Date.now() - hit.t < TTL) { render(hit.rows); return; }
@@ -8362,7 +8261,6 @@ window.applyBetMax = applyBetMax;
             hap('select');
             st.metric = b.dataset.metric;
             setActive(metrics, 'metric', st.metric);
-            wrap.classList.toggle('collapsed', st.metric === 'balance');
             b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
             load(false);
         });
