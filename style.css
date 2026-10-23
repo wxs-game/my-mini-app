@@ -4264,3 +4264,46 @@ body.anim-page .nav-bg {
     -webkit-backdrop-filter: none;
     background: rgba(44, 44, 48, 0.94);
 }
+
+
+/* ==========================================================
+   ОПТИМИЗАЦИЯ 60 FPS ДЛЯ TELEGRAM EMOJI И ИГР (КУБ, ФУТБОЛ)
+   Аппаратное ускорение слоёв, изоляция перерисовок (contain) и
+   отключение лишних фильтров во время активных анимаций.
+========================================================== */
+.tge-grid {
+    contain: layout style;
+}
+.tge-tile {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+.dice-stage {
+    contain: strict;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+.dice-layer {
+    contain: layout style paint;
+    transform: translate3d(0, 0, 0);
+}
+.dice-preview.out {
+    transform: translate3d(0, -62%, 0) scale(0.94);
+    opacity: 0;
+}
+.dice-roll.from-left  { transform: translate3d(-105%, 0, 0) scale(0.94); }
+.dice-roll.from-right { transform: translate3d(105%, 0, 0) scale(0.94); }
+.dice-roll.in   { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+.dice-roll.away { transform: translate3d(0, -8%, 0) scale(0.92); opacity: 0; transition-duration: 0.45s; }
+.tge-spinner {
+    filter: none;
+    will-change: transform;
+}
+body.anim-page {
+    background: #090909;
+}
+body.anim-page .top {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
