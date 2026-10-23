@@ -4185,3 +4185,40 @@ input, textarea {
 
 /* мини-апп свёрнут — анимации на паузе */
 .app-paused *, .app-paused *::before, .app-paused *::after { animation-play-state: paused !important; }
+
+
+/* КРАШ — игроки, ждущие следующий раунд: подпись слева + тонкая линия */
+.crash-queue-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 2px 0;
+    font-size: 10px;
+    font-weight: 800;
+    color: #6f6f6f;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+}
+
+.crash-queue-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.crash-player-status-wait {
+    color: #ffb84d;
+    background: rgba(255, 184, 77, 0.10);
+    border-color: rgba(255, 184, 77, 0.30);
+}
+
+.crash-wait-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ffb84d;
+    box-shadow: 0 0 6px #ffb84d;
+    opacity: 0.8;
+}

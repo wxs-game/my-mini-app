@@ -1606,6 +1606,9 @@ const CRASH_WAIT_MS = 5000;
 
 const CRASH_ROUNDS_TABLE = 'crash_rounds';
 const CRASH_BETS_TABLE = 'crash_bets';
+// Очередь ставок на следующий раунд (SQL для таблицы — в crash_queue.sql)
+const CRASH_QUEUE_TABLE = 'crash_queue';
+const CRASH_QUEUE_MIN_AGE_MS = 2000;   // не переносим ставку в раунд раньше, чем закончилось её списание
 const CRASH_HISTORY_MAX = 25;       // сколько прошедших раундов видно в ленте
 const CRASH_RESULT_HOLD_MS = 3000;  // пауза с картинкой взрыва перед новым раундом
 
@@ -1771,6 +1774,9 @@ let crashGame = {
     liveBetId: null,     // id строки в live_bets (общая лента всех игр)
     liveBetResolved: false,
     myBetRowId: null,    // id своей строки в crash_bets (для апдейта при кэшауте)
+    queued: null,        // моя ставка в очереди на следующий раунд: {id, amount}
+    queuedGraceUntil: 0, // пока не прошло это время — не сбрасываем queued, даже если опрос ещё не увидел строку
+    queuedLive: null,    // запись в общей ленте для ставки из очереди: {id, amount, fromRoundId}
     startTime: 0,        // момент старта полёта (время сервера, общий для всех)
     waitEndsAt: 0,       // конец обратного отсчёта
     phaseEndsAt: 0,
@@ -1783,6 +1789,9 @@ let crashGame = {
 let crashLobby = {
     round: null,        // последняя известная строка раунда из БД
     bets: [],           // мапленные ставки текущего раунда (для списка игроков)
+    queue: [],          // ставки, ждущие следующий раунд
+    queueMissing: false,// таблицы crash_queue ещё нет в БД
+    promoting: false,
     channel: null,
     pollInterval: null,
     clockInterval: null,
@@ -2081,6 +2090,15 @@ async function startCrashEngine() {
     } catch (e) {
         console.error('Crash realtime:', e);
     }
+    // Очередь — отдельным каналом: если таблицы ещё нет, это не ломает основной канал краша
+    try {
+        supabase
+            .channel('crash_queue_global')
+            .on('postgres_changes', { event: '*', schema: 'public', table: CRASH_QUEUE_TABLE }, () => scheduleCrashReload())
+            .subscribe();
+    } catch (e) {
+        console.error('Crash queue realtime:', e);
+    }
 }
 
 function scheduleCrashReload() {
@@ -2117,6 +2135,158 @@ function scheduleCrashPhaseTimer() {
 
 function myCrashTelegramId() {
     return tg?.initDataUnsafe?.user?.id ?? null;
+}
+
+function mapCrashQueue(rows) {
+    const myId = myCrashTelegramId();
+    return (rows || []).map(q => ({
+        id: q.id,
+        telegramId: Number(q.telegram_id),
+        name: q.name,
+        avatar: q.avatar,
+        amount: Number(q.amount),
+        createdMs: crashParseTime(q.created_at),
+        isUser: myId != null && Number(q.telegram_id) === Number(myId)
+    }));
+}
+
+// Своя ставка в очереди определяется по БД; короткая «льгота» после нажатия
+// нужна, чтобы опрос, пришедший раньше записи, не сбросил состояние.
+function syncMyCrashQueue() {
+    const mine = crashLobby.queue.find(q => q.isUser);
+    if (mine) crashGame.queued = { id: mine.id, amount: mine.amount };
+    else if (Date.now() >= crashGame.queuedGraceUntil) crashGame.queued = null;
+}
+
+// Когда начался новый раунд (ожидание ставок) — переносим все ставки из очереди в него.
+// Делает КАЖДЫЙ открытый клиент: вставка идемпотентна (unique round_id+telegram_id,
+// дубликаты игнорируются), поэтому гонка между клиентами безвредна.
+async function promoteCrashQueue() {
+    const round = crashLobby.round;
+    if (crashLobby.promoting || crashLobby.queueMissing || !crashLobby.queue.length) return;
+    if (!round || round.id !== crashGame.roundId || round.status !== 'waiting' || crashGame.phase !== 'waiting') return;
+    if (crashNow() >= crashGame.waitEndsAt - 300) return;   // поздно — ставка уйдёт в следующий раунд
+
+    const now = crashNow();
+    const ready = crashLobby.queue.filter(q => q.createdMs == null || now - q.createdMs >= CRASH_QUEUE_MIN_AGE_MS);
+    if (!ready.length) return;
+
+    crashLobby.promoting = true;
+    try {
+        for (const q of ready) {
+            const { error } = await supabase.from(CRASH_BETS_TABLE).upsert({
+                round_id: round.id,
+                telegram_id: q.telegramId,
+                name: q.name,
+                avatar: q.avatar,
+                amount: q.amount,
+                status: 'active'
+            }, { onConflict: 'round_id,telegram_id', ignoreDuplicates: true });
+            if (error) { console.error('Crash queue promote:', error); continue; }
+            const { error: delErr } = await supabase.from(CRASH_QUEUE_TABLE).delete().eq('id', q.id);
+            if (delErr) console.error('Crash queue cleanup:', delErr);
+        }
+    } catch (e) {
+        console.error('Crash queue promote:', e);
+    } finally {
+        crashLobby.promoting = false;
+    }
+    scheduleCrashReload();
+}
+
+// Можно ли сейчас поставить «на следующий раунд» (идёт полёт или пауза после краша).
+function crashCanQueue() {
+    if (crashGame.queued) return false;
+    if (crashGame.phase === 'crashed') return true;
+    if (crashGame.phase === 'flying') return !crashGame.betPlaced || crashGame.cashedOut;
+    return false;
+}
+
+function crashCanEditBet() {
+    if (crashGame.queued) return false;
+    if (crashGame.phase === 'waiting') return !crashGame.betPlaced;
+    return crashCanQueue();
+}
+
+async function queueCrashBet() {
+    advanceLocalPhase();
+    if (!crashCanQueue() || crashGame.isProcessing) return;
+    if (crashLobby.queueMissing) {
+        showMessage('Ставки на следующий раунд: таблица crash_queue ещё не создана в базе.');
+        return;
+    }
+    const myId = myCrashTelegramId();
+    if (myId == null) return;
+    if (!lockEconomy()) return;
+
+    const dom = getCrashDom();
+    const bet = roundMoney(parseFloat(dom.betInput?.value));
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    crashGame.isProcessing = true;
+    const fromRoundId = crashGame.roundId;
+    const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
+    const myAvatar = getMyIceArenaAvatar();
+
+    // 1) Сначала занимаем место в очереди (unique по игроку — вторую не создать)
+    const { data: row, error: qErr } = await supabase.from(CRASH_QUEUE_TABLE).insert({
+        telegram_id: myId, name: myName, avatar: myAvatar, amount: bet
+    }).select('id, created_at').single();
+    if (qErr || !row) {
+        if (qErr && qErr.code === '23505') showMessage('Ваша ставка уже стоит в очереди.');
+        else showMessage('Не удалось поставить на следующий раунд. Попробуйте ещё раз.');
+        if (qErr && qErr.code !== '23505') console.error('Crash queue insert:', qErr);
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        scheduleCrashReload();
+        return;
+    }
+
+    // 2) Списываем деньги
+    const snapshot = snapshotBalanceState();
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debitResult = await placeBetServer(bet, 'Краш');
+    if (!debitResult.ok) {
+        restoreBalanceState(snapshot);
+        await supabase.from(CRASH_QUEUE_TABLE).delete().eq('id', row.id);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        scheduleCrashReload();
+        return;
+    }
+    currentBalance = debitResult.balance;
+    setUIBalance(currentBalance);
+
+    crashGame.queued = { id: row.id, amount: bet };
+    crashGame.queuedGraceUntil = Date.now() + 5000;
+    // сразу показываем себя в «Ожидании», не дожидаясь опроса
+    crashLobby.queue = crashLobby.queue.filter(q => !q.isUser).concat([{
+        id: row.id, telegramId: Number(myId), name: myName, avatar: myAvatar,
+        amount: bet, createdMs: crashParseTime(row.created_at), isUser: true
+    }]);
+    renderCrashPlayersList();
+    renderCrashUI();
+
+    const liveId = await broadcastLiveBet(bet, 'Краш');
+    crashGame.queuedLive = { id: liveId, amount: bet, fromRoundId };
+
+    crashGame.isProcessing = false;
+    unlockEconomy();
+    renderCrashUI();
+    scheduleCrashReload();
 }
 
 function mapCrashBetsToPlayers(bets) {
@@ -2205,12 +2375,36 @@ async function refreshCrashState() {
             lastCrashBetsRaw = bets;
         }
 
+        // 5. Очередь ставок на следующий раунд (если таблицы нет — просто пропускаем)
+        let queueRaw = null;
+        if (!crashLobby.queueMissing) {
+            const { data: qd, error: qe } = await supabase
+                .from(CRASH_QUEUE_TABLE)
+                .select('*')
+                .order('created_at', { ascending: true });
+            if (qe) {
+                const missing = qe.code === '42P01' || qe.code === 'PGRST205' ||
+                    /does not exist|could not find the table/i.test(qe.message || '');
+                if (missing) {
+                    crashLobby.queueMissing = true;
+                    console.warn('crash_queue не найдена в БД — выполни crash_queue.sql');
+                } else console.error('Crash queue:', qe);
+            } else {
+                queueRaw = qd || [];
+            }
+        }
+
         // Ответ устарел — пока он летел, уже применился более свежий запрос
         if (seq < crashLobby.appliedSeq) return;
         crashLobby.appliedSeq = seq;
 
+        if (queueRaw) {
+            crashLobby.queue = mapCrashQueue(queueRaw);
+            syncMyCrashQueue();
+        }
         applyCrashRound(round, bets);
         maybeAdvanceCrash();
+        promoteCrashQueue();
     } catch (e) {
         console.error('Crash state:', e);
     }
@@ -2361,6 +2555,13 @@ function applyCrashRound(round, bets) {
         crashGame.betPlaced = true;
         if (mine.status === 'cashed_out') crashGame.cashedOut = true;
         crashGame.myBetRowId = mine.id;
+        // ставка переехала из очереди в этот раунд — подхватываем её запись в ленте
+        const ql = crashGame.queuedLive;
+        if (ql && round.id !== ql.fromRoundId && Math.abs(ql.amount - mine.amount) < 0.005) {
+            crashGame.liveBetId = ql.id;
+            crashGame.liveBetResolved = false;
+            crashGame.queuedLive = null;
+        }
     }
 
     advanceLocalPhase();
@@ -2599,10 +2800,36 @@ function enterWaitingVisual() {
         dom.rocketEl.style.transform = `translate3d(${c.x}px, ${c.y}px, 0px) rotate(45deg)`;
     }
     if (crashRocketAnim) crashRocketAnim.goToAndPlay(0, true);
-    if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced;
+    if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced || !!crashGame.queued;
 
     renderCrashCountdown(true);
     renderCrashUI();
+}
+
+// Номер раунда для показа: +1 только за раунды, в которых была хотя бы одна ставка.
+// game_number в БД — identity и растёт на каждый новый раунд (даже пустой), поэтому
+// считаем сами: сколько раундов ДО текущего имели ставки, плюс 1. Пустые раунды
+// подряд показывают один и тот же номер, пока кто-то не поставит.
+const crashNumCache = { roundId: null, base: null, loading: false };
+function crashDisplayNumber(round) {
+    if (!round || !round.game_number) return null;
+    if (crashNumCache.roundId === round.id && crashNumCache.base !== null) return crashNumCache.base + 1;
+    if (crashNumCache.loading !== round.id) {
+        crashNumCache.loading = round.id;
+        supabase
+            .from(CRASH_ROUNDS_TABLE)
+            .select('id, ' + CRASH_BETS_TABLE + '!inner(id)', { count: 'exact', head: true })
+            .lt('game_number', round.game_number)
+            .then(({ count, error }) => {
+                if (crashNumCache.loading === round.id) crashNumCache.loading = false;
+                if (error || count === null || count === undefined) { console.error('Crash round number:', error); return; }
+                crashNumCache.roundId = round.id;
+                crashNumCache.base = count;
+                updateCrashTopbar();
+            });
+    }
+    // пока считаем — показываем прошлое значение для того же раунда, иначе прочерк
+    return crashNumCache.base !== null && crashNumCache.roundId === round.id ? crashNumCache.base + 1 : null;
 }
 
 // Верхняя панель краша: БАНК (все ставки раунда), ИГРА (#номер раунда
@@ -2617,7 +2844,7 @@ function updateCrashTopbar() {
         bankEl.textContent = bank.toFixed(2) + ' $';
     }
     if (numEl) {
-        const n = crashLobby.round && crashLobby.round.game_number;
+        const n = crashDisplayNumber(crashLobby.round);
         numEl.textContent = n ? '#' + n : '—';
     }
     if (timerEl) {
@@ -2692,7 +2919,7 @@ function showFlyingChrome() {
     setTrailCrashed(dom, false);
     setTrailOpacity(dom, '1');
     setDotCrashed(dom, false);
-    if (dom.betInput) dom.betInput.disabled = true;
+    if (dom.betInput) dom.betInput.disabled = !!crashGame.queued || (crashGame.betPlaced && !crashGame.cashedOut);
 }
 
 function startCrashRaf() {
@@ -2920,7 +3147,7 @@ function resumeCrashVisualsOnOpen() {
 
 async function placeCrashBet() {
     const round = crashLobby.round;
-    if (!round || round.id !== crashGame.roundId || crashGame.phase !== 'waiting' || crashGame.betPlaced) return;
+    if (!round || round.id !== crashGame.roundId || crashGame.phase !== 'waiting' || crashGame.betPlaced || crashGame.queued) return;
     if (crashGame.isProcessing) return;
     if (!lockEconomy()) return;
 
@@ -3046,20 +3273,22 @@ function handleCrashAction() {
     if (crashGame.isProcessing) return;
     advanceLocalPhase();
 
-    if (crashGame.phase === 'waiting' && !crashGame.betPlaced) {
+    if (crashGame.phase === 'waiting' && !crashGame.betPlaced && !crashGame.queued) {
         placeCrashBet();
     } else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
         cashOutCrash();
+    } else if (crashCanQueue()) {
+        queueCrashBet();   // полёт / пауза после краша — ставка уйдёт в следующий раунд
     }
 }
 
 function adjustCrashBet(factor) {
-    if (crashGame.betPlaced) return;
+    if (!crashCanEditBet()) return;
     applyBetFactor(getCrashDom().betInput, factor);
 }
 
 function setCrashMaxBet() {
-    if (crashGame.betPlaced) return;
+    if (!crashCanEditBet()) return;
     applyBetMax(getCrashDom().betInput);
 }
 
@@ -3102,6 +3331,17 @@ function renderCrashPlayersList() {
 
     if (dom.playersCount) dom.playersCount.textContent = String(crashLobby.bets.length);
 
+    const rowHtml = (p, statusHtml) => (
+        '<div class="crash-player-row' + (p.isUser ? ' crash-player-row-user' : '') + '">' +
+            '<div class="crash-player-row-avatar">' + iceAvatarHtml(p.avatar) + '</div>' +
+            '<div class="crash-player-row-info">' +
+                '<div class="crash-player-row-name">' + escapeIceName(p.name) + '</div>' +
+                '<div class="crash-player-row-bet">' + p.amount.toFixed(2) + '$</div>' +
+            '</div>' +
+            statusHtml +
+        '</div>'
+    );
+
     let html;
     if (!crashLobby.bets.length) {
         html = '<div class="crash-players-empty">Пока никто не поставил в этом раунде</div>';
@@ -3136,17 +3376,18 @@ function renderCrashPlayersList() {
                     '</div>';
             }
 
-            return (
-                '<div class="crash-player-row' + (p.isUser ? ' crash-player-row-user' : '') + '">' +
-                    '<div class="crash-player-row-avatar">' + iceAvatarHtml(p.avatar) + '</div>' +
-                    '<div class="crash-player-row-info">' +
-                        '<div class="crash-player-row-name">' + escapeIceName(p.name) + '</div>' +
-                        '<div class="crash-player-row-bet">' + p.amount.toFixed(2) + '$</div>' +
-                    '</div>' +
-                    statusHtml +
-                '</div>'
-            );
+            return rowHtml(p, statusHtml);
         }).join('');
+    }
+
+    // Ставки, ждущие следующий раунд: подпись слева и тонкая линия под активными игроками
+    if (crashLobby.queue.length) {
+        const waitStatus =
+            '<div class="crash-player-status crash-player-status-wait">' +
+                '<span class="crash-status-main"><i class="crash-wait-dot"></i>Ждёт</span>' +
+            '</div>';
+        html += '<div class="crash-queue-divider"><span>Ожидание</span></div>' +
+            crashLobby.queue.map(q => rowHtml(q, waitStatus)).join('');
     }
 
     // Не трогаем DOM, если ничего не изменилось — список не мигает
@@ -3215,17 +3456,19 @@ function renderCrashUI(heavy = true) {
         dom.statusEl.textContent = `Крах на ${crashGame.crashPoint.toFixed(2)}x · Следующий раунд скоро`;
         dom.multEl.textContent = crashGame.crashPoint.toFixed(2) + 'x';
         dom.multEl.style.color = '#e74c3c';
-        dom.actionBtn.textContent = crashGame.cashedOut ? 'Выигрыш забран ✓' : 'Раунд завершён';
-        dom.actionBtn.disabled = true;
+        if (dom.betInput) dom.betInput.disabled = !!crashGame.queued;
+        dom.actionBtn.textContent = crashGame.queued ? 'Ставка в очереди ✓' : 'Поставить на след. раунд';
+        dom.actionBtn.disabled = !!crashGame.queued;
         return;
     }
 
     if (crashGame.phase === 'waiting') {
         // Тяжёлая подготовка сцены — в enterWaitingVisual() (один раз),
         // цифры отсчёта — в renderCrashCountdown(). Здесь только кнопка.
-        if (dom.betInput) dom.betInput.disabled = crashGame.betPlaced;
-        dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : 'Сделать ставку';
-        dom.actionBtn.disabled = crashGame.betPlaced;
+        const hold = crashGame.betPlaced || !!crashGame.queued;
+        if (dom.betInput) dom.betInput.disabled = hold;
+        dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : (crashGame.queued ? 'Ставка в очереди ✓' : 'Сделать ставку');
+        dom.actionBtn.disabled = hold;
         return;
     }
 
@@ -3260,13 +3503,14 @@ function renderCrashUI(heavy = true) {
             const potential = (crashGame.bet * currentM).toFixed(2);
             dom.actionBtn.textContent = `Забрать ${potential}$`;
             dom.actionBtn.disabled = false;
-        } else if (crashGame.cashedOut) {
-            dom.actionBtn.textContent = 'Выигрыш забран ✓';
+        } else if (crashGame.queued) {
+            dom.actionBtn.textContent = 'Ставка в очереди ✓';
             dom.actionBtn.disabled = true;
         } else {
-            dom.actionBtn.textContent = 'Ждите следующего раунда';
-            dom.actionBtn.disabled = true;
+            dom.actionBtn.textContent = 'Поставить на след. раунд';
+            dom.actionBtn.disabled = false;
         }
+        if (dom.betInput) dom.betInput.disabled = !!crashGame.queued || (crashGame.betPlaced && !crashGame.cashedOut);
     }
 
     // Тряска экрана — дешёвый compositor-only transform, оставляем на каждый
@@ -7740,7 +7984,7 @@ window.applyBetMax = applyBetMax;
         // x — центр линзы, g — «раздутость» (0 плашка, 1 стекло), sq — сжатие о стенку
         const st = { x: 0, vx: 0, g: 0, vg: 0, sq: 0, vsq: 0, side: 0 };
         const tgt = { x: 0, g: 0, sq: 0 };
-        let activeIdx = 0, hoverIdx = 0, pressed = false, moved = false;
+        let activeIdx = 0, hoverIdx = 0, pressed = false, moved = false, activePointerId = null;
         let startX = 0, fingerX = 0, raf = 0, lastFrame = 0, busyFrames = 0, slow = 0;
 
         function setOn(i) { items.forEach((el, k) => el.classList.toggle('on', k === i)); }
@@ -7836,6 +8080,9 @@ window.applyBetMax = applyBetMax;
 
         nav.addEventListener('pointerdown', e => {
             if (e.pointerType === 'mouse' && e.button !== 0) return;
+            // уже зажат первый палец — второй игнорируем
+            if (pressed) return;
+            activePointerId = e.pointerId;
             measure();
             pressed = true; moved = false;
             startX = e.clientX; fingerX = localX(e);
@@ -7845,14 +8092,15 @@ window.applyBetMax = applyBetMax;
             tgt.g = 1; updateTarget(); kick();
         });
         nav.addEventListener('pointermove', e => {
-            if (!pressed) return;
+            if (!pressed || e.pointerId !== activePointerId) return;
             fingerX = localX(e);
             if (Math.abs(e.clientX - startX) > 6) moved = true;
             updateTarget(); updateHover(); kick();
         });
         function release(e, cancelled) {
-            if (!pressed) return;
+            if (!pressed || e.pointerId !== activePointerId) return;
             pressed = false;
+            activePointerId = null;
             nav.classList.remove('pressing');
             let i;
             if (cancelled) i = activeIdx;
