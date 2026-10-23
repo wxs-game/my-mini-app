@@ -7778,10 +7778,12 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         const { box, anim } = st;
 
         // 1) превью (или прошлый результат) плавно уплывает вверх, затем заезжает новый кубик
+        const hadResult = res.classList.contains('show');
         hideResult(true);
         setPreviewPaused(true);
         prev.classList.add('out');
-        await nextFrame();
+        if (hadResult) await wait(160);
+        else await nextFrame();
         rollEl.classList.add('in');
 
         // 2) играет в полные 60 FPS и замирает на последнем кадре
@@ -7800,12 +7802,18 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         res.style.transition = '';
         res.classList.add('show');
 
-        await wait(600);
+        // Даём анимации галочки/крестика, искр и текста («Ставка зашла (1/2)»)
+        // полностью доиграть и зафиксироваться на экране перед вылетом второго куба
+        await wait(1150);
         if (box && box.parentNode === rollEl) rollEl.removeChild(box);
         rollEl.className = 'dice-layer dice-roll';
         prepared = null;
-        if (nextRoll) { await prepare(nextRoll); return; }
-        await wait(250);
+        if (nextRoll) {
+            await prepare(nextRoll);
+            await wait(350);
+            return;
+        }
+        await wait(300);
     }
 
     function setPageActive(active) {
