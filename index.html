@@ -247,16 +247,16 @@
 
         <section class="quick-actions">
             <button class="action" onclick="openBalance('deposit')">
-                <div class="action-icon" id="depositSticker">💰</div><b>Пополнить</b><small>Баланс</small>
+                <div class="action-icon" id="depositSticker"><span class="tge-spinner"></span></div><b>Пополнить</b><small>Баланс</small>
             </button>
             <button class="action" onclick="openBalance('withdraw')">
-                <div class="action-icon" id="withdrawSticker">💸</div><b>Вывод</b><small>Средств</small>
+                <div class="action-icon" id="withdrawSticker"><span class="tge-spinner"></span></div><b>Вывод</b><small>Средств</small>
             </button>
             <button class="action" onclick="showMessage('VIP пока в разработке')">
-                <div class="action-icon" id="vipSticker">👑</div><b>VIP</b><small>Статус</small>
+                <div class="action-icon" id="vipSticker"><span class="tge-spinner"></span></div><b>VIP</b><small>Статус</small>
             </button>
             <button class="action" onclick="showMessage('Задания пока в разработке')">
-                <div class="action-icon" id="tasksSticker">📋</div><b>Задания</b><small>ежедневки</small>
+                <div class="action-icon" id="tasksSticker"><span class="tge-spinner"></span></div><b>Задания</b><small>ежедневки</small>
             </button>
         </section>
 
@@ -796,27 +796,27 @@
         <section class="tge-grid">
             <button class="game tge-tile" data-mode="dice" onclick="openTgEmojiMode('dice')">
                 <span class="tge-title">КУБИК</span>
-                <span class="tge-banner" data-banner="dice" data-emoji="🎲"><span class="tge-spinner"></span></span>
+                <span class="tge-banner" data-banner="dice"><span class="tge-spinner"></span></span>
             </button>
             <button class="game tge-tile" data-mode="football" onclick="openTgEmojiMode('football')">
                 <span class="tge-title">ФУТБОЛ</span>
-                <span class="tge-banner" data-banner="football" data-emoji="⚽"><span class="tge-spinner"></span></span>
+                <span class="tge-banner" data-banner="football"><span class="tge-spinner"></span></span>
             </button>
             <button class="game tge-tile" data-mode="basketball" onclick="openTgEmojiMode('basketball')">
                 <span class="tge-title">БАСКЕТБОЛ</span>
-                <span class="tge-banner" data-banner="basketball" data-emoji="🏀"><span class="tge-spinner"></span></span>
+                <span class="tge-banner" data-banner="basketball"><span class="tge-spinner"></span></span>
             </button>
             <button class="game tge-tile" data-mode="darts" onclick="openTgEmojiMode('darts')">
                 <span class="tge-title">ДАРТС</span>
-                <span class="tge-banner" data-banner="darts" data-emoji="🎯"><span class="tge-spinner"></span></span>
+                <span class="tge-banner" data-banner="darts"><span class="tge-spinner"></span></span>
             </button>
             <button class="game tge-tile" data-mode="bowling" onclick="openTgEmojiMode('bowling')">
                 <span class="tge-title">БОУЛИНГ</span>
-                <span class="tge-banner" data-banner="bowling" data-emoji="🎳"><span class="tge-spinner"></span></span>
+                <span class="tge-banner" data-banner="bowling"><span class="tge-spinner"></span></span>
             </button>
             <button class="game tge-tile" data-mode="slots" onclick="openTgEmojiMode('slots')">
                 <span class="tge-title">СЛОТЫ</span>
-                <span class="tge-banner" data-banner="slots" data-emoji="🎰"><span class="tge-spinner"></span></span>
+                <span class="tge-banner" data-banner="slots"><span class="tge-spinner"></span></span>
             </button>
         </section>
     </main>
@@ -894,22 +894,22 @@
 
         <section class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon-bg" id="statStickerTurnover">💰</div>
+                <div class="stat-icon-bg" id="statStickerTurnover"><span class="tge-spinner"></span></div>
                 <div class="stat-val" id="statTurnover">$0.00</div>
                 <div class="stat-lbl">Оборот</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon-bg" id="statStickerKoef">📈</div>
+                <div class="stat-icon-bg" id="statStickerKoef"><span class="tge-spinner"></span></div>
                 <div class="stat-val" id="statMaxMult">x0.00</div>
                 <div class="stat-lbl">Макс. коэффициент</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon-bg" id="statStickerWins">🏆</div>
+                <div class="stat-icon-bg" id="statStickerWins"><span class="tge-spinner"></span></div>
                 <div class="stat-val" id="statTotalWin">$0.00</div>
                 <div class="stat-lbl">Общий выигрыш</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon-bg" id="statStickerBets">🎯</div>
+                <div class="stat-icon-bg" id="statStickerBets"><span class="tge-spinner"></span></div>
                 <div class="stat-val" id="statBetsCount">0</div>
                 <div class="stat-lbl">Кол-во ставок</div>
             </div>

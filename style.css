@@ -4222,3 +4222,32 @@ input, textarea {
     box-shadow: 0 0 6px #ffb84d;
     opacity: 0.8;
 }
+
+
+/* Спиннер вместо эмодзи, пока грузится .tgs */
+.action-icon > .tge-spinner,
+.stat-icon-bg > .tge-spinner {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+}
+.crash-anim-spinner {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: -17px 0 0 -17px;
+}
+
+
+/* Появление любой страницы/игры — как во вкладке «Топ» */
+.page-enter {
+    animation: pageItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(var(--pi, 0) * 55ms);
+}
+@keyframes pageItemIn {
+    from { transform: translateY(18px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .page-enter { animation: none !important; }
+}

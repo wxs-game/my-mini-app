@@ -1905,10 +1905,7 @@ function initCrashRocketAnim() {
     const animationData = getLottieData('ROCKET');
 
     if (typeof lottie === 'undefined' || !animationData) {
-        dom.rocketEl.textContent = '🚀';
-        dom.rocketEl.style.fontSize = '34px';
-        dom.rocketEl.style.lineHeight = '54px';
-        dom.rocketEl.style.textAlign = 'center';
+        dom.rocketEl.innerHTML = '<span class="tge-spinner crash-anim-spinner"></span>';
         return;
     }
 
@@ -1934,10 +1931,7 @@ function initCrashExplosionAnim() {
     const animationData = getLottieData('EXPLOSION');
 
     if (typeof lottie === 'undefined' || !animationData) {
-        dom.explosionEl.textContent = '💥';
-        dom.explosionEl.style.fontSize = '100px';
-        dom.explosionEl.style.lineHeight = '200px';
-        dom.explosionEl.style.textAlign = 'center';
+        dom.explosionEl.innerHTML = '<span class="tge-spinner crash-anim-spinner"></span>';
         return;
     }
 
@@ -3030,7 +3024,7 @@ function playCrashExplosion() {
     dom.explosionEl.style.display = 'block';
 
     if (!crashExplosionAnim) {
-        // нет Lottie — показываем запасной эмодзи и сами убираем
+        // нет Lottie — показываем запасной спиннер и сами убираем
         crashExplosionHideTimeout = setTimeout(hideExplosionSmoothly, 900);
         return;
     }
@@ -4204,6 +4198,24 @@ function showPage(id) {
     if (page) page.classList.remove("hidden");
     window.scrollTo(0, 0);
     document.body.scrollTop = 0;
+    playPageEnter(page);
+}
+
+// Появление страницы/игры: блоки по очереди «вылетают» снизу (как во вкладке «Топ»).
+// Только opacity + translateY — размеры и раскладка не меняются, поэтому игры
+// (canvas, Lottie, замеры сцены) работают как раньше. У «Топ» своя анимация.
+function playPageEnter(page) {
+    if (!page || page.id === 'topPage') return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const kids = Array.from(page.children).filter(el => el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE');
+    kids.forEach(el => el.classList.remove('page-enter'));
+    void page.offsetWidth;   // один перезапуск анимации сразу для всех блоков
+    kids.forEach((el, i) => {
+        el.style.setProperty('--pi', Math.min(i, 8));
+        el.classList.add('page-enter');
+    });
+    clearTimeout(page._enterTimer);
+    page._enterTimer = setTimeout(() => kids.forEach(el => el.classList.remove('page-enter')), 1100);
 }
 
 function goHome() {
@@ -7037,7 +7049,7 @@ window.applyBetMax = applyBetMax;
    СТИКЕРЫ ВМЕСТО ЭМОДЗИ В БЫСТРЫХ ДЕЙСТВИЯХ (Пополнить, Вывод, VIP, Задания)
    Положи по ОДНОМУ файлу в animations/stickers/: deposit, withdraw, vip, tasks + <расширение>:
    .tgs (рекомендуется, весит ~20 КБ), .json (Lottie), .webp или .gif.
-   Если файла нет или он не загрузился — остаётся эмодзи 💰.
+   Пока файл грузится — спиннер; если файла нет, иконка остаётся пустой.
 ========================= */
 (function () {
     const STICKER_DIR = 'animations/stickers/';
@@ -7123,7 +7135,8 @@ window.applyBetMax = applyBetMax;
                 return;
             } catch (e) { /* пробуем следующий формат */ }
         }
-        // ни один файл не подошёл — остаётся эмодзи
+        // ни один файл не подошёл — убираем спиннер, эмодзи не показываем
+        el.textContent = '';
     }
 
     // id иконки в index.html -> имя файла в animations/stickers/ (без расширения)
@@ -7327,9 +7340,9 @@ window.applyBetMax = applyBetMax;
                 } catch (e) { /* дальше */ }
             }
         }
-        // файла действительно нет — показываем эмодзи вместо спиннера
+        // файла действительно нет — убираем спиннер (эмодзи не показываем)
         console.warn('[Telegram Emoji] анимация не найдена для режима:', name);
-        el.textContent = el.dataset.emoji || '';
+        el.textContent = '';
     }
 
     window.initTgEmojiBanners = async function () {
@@ -7568,10 +7581,9 @@ window.applyBetMax = applyBetMax;
 
     // Запасной вариант, если cubeN.tgs не найден
     async function fallbackRoll(box, roll, ms) {
-        box.className = 'dice-fallback shaking';
-        box.textContent = '🎲';
+        box.className = 'dice-fallback';
+        box.innerHTML = '<span class="tge-spinner big"></span>';
         await wait(ms * 0.75);
-        box.classList.remove('shaking');
         box.textContent = '⚀⚁⚂⚃⚄⚅'[roll - 1];
         await wait(ms * 0.25);
     }
@@ -7824,10 +7836,10 @@ window.applyBetMax = applyBetMax;
 
     // Запасной вариант, если footballN.tgs не найден
     async function fallbackRoll(box, roll, ms) {
-        box.className = 'dice-fallback shaking';
-        box.textContent = '⚽';
+        box.className = 'dice-fallback';
+        box.innerHTML = '<span class="tge-spinner big"></span>';
         await wait(ms * 0.75);
-        box.classList.remove('shaking');
+        box.textContent = '';
         await wait(ms * 0.25);
     }
 
