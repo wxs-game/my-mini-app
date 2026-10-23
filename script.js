@@ -7712,7 +7712,7 @@ window.applyBetMax = applyBetMax;
         const chromium = /Chrome\/|Chromium|CriOS/.test(ua) && !/iPhone|iPad|iPod/.test(ua);
         let tier = chromium ? 2 : 0;
         try {
-            const saved = localStorage.getItem('navGlassTier');
+            const saved = localStorage.getItem('navGlassTier2');
             if (saved !== null && +saved < tier) tier = +saved;
         } catch (e) {}
         function applyTier() {
@@ -7786,10 +7786,10 @@ window.applyBetMax = applyBetMax;
             if (tier > 0 && st.g > 0.3) {
                 busyFrames++;
                 if (busyFrames > 10) {
-                    slow = raw > 0.026 ? slow + 1 : Math.max(0, slow - 1);
-                    if (slow >= 14) {
+                    slow = raw > 0.034 ? slow + 1 : Math.max(0, slow - 1);
+                    if (slow >= 40) {
                         tier--; applyTier(); slow = 0; busyFrames = 0;
-                        try { localStorage.setItem('navGlassTier', String(tier)); } catch (e) {}
+                        try { localStorage.setItem('navGlassTier2', String(tier)); } catch (e) {}
                     }
                 }
             } else { busyFrames = 0; }
