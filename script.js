@@ -538,7 +538,7 @@ async function loadUserData() {
 
         if (createError) {
             console.error('Ошибка создания записи в Supabase:', createError);
-            showMessage("Не удалось создать профиль. Проверьте соединение и перезапустите приложение.");
+            showMessage("Не удалось создать профиль. Проверьте соединение и перезапустите приложение. (код: " + (typeof createError === 'string' ? createError : 'ERR') + ")");
             return;
         }
         data = newUser;
@@ -4193,12 +4193,14 @@ function showPage(id) {
         hideCrashRoundKey();
     }
 
-    hideAllPages();
     const page = document.getElementById(id);
+    // Тап по вкладке/играми, где уже находимся, — анимацию появления не повторяем
+    const alreadyOpen = !!page && !page.classList.contains("hidden");
+    hideAllPages();
     if (page) page.classList.remove("hidden");
     window.scrollTo(0, 0);
     document.body.scrollTop = 0;
-    playPageEnter(page);
+    if (!alreadyOpen) playPageEnter(page);
 }
 
 // Появление страницы/игры: блоки по очереди «вылетают» снизу (как во вкладке «Топ»).
@@ -8551,8 +8553,11 @@ window.applyBetMax = applyBetMax;
     }
 
     window.openTop = function () {
+        const pg = $('topPage');
+        const alreadyOpen = !!pg && !pg.classList.contains('hidden');
         window.showPage('topPage');
         window.updateNav('top');
+        if (alreadyOpen) return;     // повторный тап по «Топ» — без перерисовки и повтора анимации
         bind();
         load(false);
         loadDollar().then(startDollarLoop);
