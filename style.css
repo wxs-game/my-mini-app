@@ -4179,3 +4179,6 @@ input, textarea {
 @media (prefers-reduced-motion: reduce) {
     .lb-block, .lb-col-body, .lb-row, .lb-empty, .lb-skel { animation: none !important; }
 }
+
+/* мини-апп свёрнут — анимации на паузе */
+.app-paused *, .app-paused *::before, .app-paused *::after { animation-play-state: paused !important; }

@@ -3958,7 +3958,7 @@ function showPage(id) {
     hideAllPages();
     const page = document.getElementById(id);
     if (page) page.classList.remove("hidden");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo(0, 0);
 }
 
 function goHome() {
@@ -7710,7 +7710,8 @@ window.applyBetMax = applyBetMax;
         // Если кадры начинают проседать, панель сама переключается на уровень ниже и запоминает это.
         const ua = navigator.userAgent;
         const chromium = /Chrome\/|Chromium|CriOS/.test(ua) && !/iPhone|iPad|iPod/.test(ua);
-        let tier = chromium ? 2 : 0;
+        const strong = (navigator.hardwareConcurrency || 4) >= 8 && (navigator.deviceMemory || 4) >= 6;
+        let tier = chromium ? (strong ? 2 : 1) : 0;
         try {
             const saved = localStorage.getItem('navGlassTier2');
             if (saved !== null && +saved < tier) tier = +saved;
@@ -7763,6 +7764,8 @@ window.applyBetMax = applyBetMax;
             const go = clamp((g - 0.05) / 0.55, 0, 1);
             glass.style.opacity = go;
             rim.style.opacity = go;
+            const vis = go > 0.01 ? 'visible' : 'hidden';
+            if (glass.style.visibility !== vis) { glass.style.visibility = vis; rim.style.visibility = vis; }
             pill.style.opacity = 1 - clamp(g * 2, 0, 1);
         }
 
@@ -7786,8 +7789,8 @@ window.applyBetMax = applyBetMax;
             if (tier > 0 && st.g > 0.3) {
                 busyFrames++;
                 if (busyFrames > 10) {
-                    slow = raw > 0.034 ? slow + 1 : Math.max(0, slow - 1);
-                    if (slow >= 40) {
+                    slow = raw > 0.030 ? slow + 1 : Math.max(0, slow - 1);
+                    if (slow >= 20) {
                         tier--; applyTier(); slow = 0; busyFrames = 0;
                         try { localStorage.setItem('navGlassTier2', String(tier)); } catch (e) {}
                     }
@@ -8294,3 +8297,8 @@ window.applyBetMax = applyBetMax;
         loadDollar().then(startDollarLoop);
     };
 })();
+
+/* Свернули мини-апп — не крутим бесконечные CSS-анимации */
+document.addEventListener('visibilitychange', function () {
+    document.documentElement.classList.toggle('app-paused', document.hidden);
+});
