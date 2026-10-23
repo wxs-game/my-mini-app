@@ -5292,6 +5292,9 @@ window.handleMinesAction = handleMinesAction;
 window.onCustomMinesInputChange = onCustomMinesInputChange;
 window.openBalance = openBalance;
 window.openBonus = openBonus;
+window.showPage = showPage;
+window.updateNav = updateNav;
+window.wxsSupabase = supabase;   // клиент Supabase (window.supabase — это сама библиотека CDN)
 window.openCrash = openCrash;
 window.openGamesMenu = openGamesMenu;
 window.openMines = openMines;
@@ -8013,6 +8016,7 @@ window.applyBetMax = applyBetMax;
 ========================================== */
 (function () {
     const $ = id => document.getElementById(id);
+    const supabase = window.wxsSupabase;
     const TTL = 20000;
     const st = { metric: 'turnover', period: 'all', date: null, seq: 0, cache: new Map(), bound: false };
 
@@ -8385,8 +8389,8 @@ window.applyBetMax = applyBetMax;
     }
 
     window.openTop = function () {
-        showPage('topPage');
-        updateNav('top');
+        window.showPage('topPage');
+        window.updateNav('top');
         bind();
         load(false);
         loadDollar().then(startDollarLoop);
