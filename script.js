@@ -472,18 +472,30 @@ function updateProfileUI(data) {
 // сервер сам берёт id, ник и аватар из ПОДПИСАННОГО initData, поэтому
 // подменить чужой профиль (отправив чужой telegram_id) больше нельзя.
 async function ensurePlayerSecure() {
-    try {
-        const res = await fetch(SUPABASE_URL + '/functions/v1/ensure-player', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
-            body: JSON.stringify({ init_data: tg?.initData || '' })
-        });
-        const j = await res.json().catch(() => null);
-        if (!j || !j.ok || !j.player) return { data: null, error: j?.error || 'BAD_RESPONSE' };
-        return { data: j.player, error: null };
-    } catch (e) {
-        return { data: null, error: 'NETWORK' };
+    // Мобильная сеть бывает нестабильной: при сетевой ошибке или битом ответе
+    // пробуем ещё до 2 раз с паузой (ошибки сервера вроде INVALID_INIT_DATA не повторяем).
+    let last = { data: null, error: 'NETWORK' };
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await new Promise(r => setTimeout(r, attempt * 900));
+        try {
+            const res = await fetch(SUPABASE_URL + '/functions/v1/ensure-player', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                },
+                body: JSON.stringify({ init_data: tg?.initData || '' })
+            });
+            const j = await res.json().catch(() => null);
+            if (j && j.ok && j.player) return { data: j.player, error: null };
+            last = { data: null, error: j?.error || ('HTTP_' + res.status) };
+            if (j && j.error) return last;          // сервер ответил осмысленной ошибкой
+        } catch (e) {
+            last = { data: null, error: 'NETWORK' };
+        }
     }
+    return last;
 }
 
 async function loadUserData() {
