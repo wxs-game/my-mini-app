@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#090909">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>WXS Game</title>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://telegram.org/js/telegram-widget.js?22"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- eruda (консоль отладки) грузим только по запросу: открой мини-апп с ?debug=1 (выключить: ?debug=0).
+         Постоянно включённая, она перехватывает каждый запрос и console.log и заметно тормозит приложение. -->
+    <script>
+    (function () {
+        try {
+            var q = location.search.match(/[?&]debug=([01])/);
+            if (q) localStorage.setItem('wxsDebug', q[1]);
+            if (localStorage.getItem('wxsDebug') !== '1') return;
+        } catch (e) { return; }
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+        s.onload = function () { try { eruda.init(); } catch (e) {} };
+        document.head.appendChild(s);
+    })();
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+    <!-- pako — запасной распаковщик .tgs для старых WebView без DecompressionStream -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+
+    <script>document.write('<link rel="stylesheet" href="style.css?v=' + Date.now() + '">');</script>
+
+    <!-- Шрифт для большого таймера обратного отсчёта в Краше -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <!-- Шрифт заголовков режимов Telegram Emoji (кириллица) -->
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+
+    <style>
+        .crash-countdown {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', 'Arial Black', sans-serif;
+            font-weight: 900;
+            font-size: 130px;
+            line-height: 1;
+            background-size: 250% 250%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            pointer-events: none;
+            user-select: none;
+            z-index: 6;
+            will-change: transform;
+            animation: crashCountdownPulse 0.9s ease-in-out infinite;
+        }
+        .crash-countdown.cc-green {
+            background-image: linear-gradient(120deg, #0aff6e, #baffd8, #0aff6e, #05a648, #0aff6e);
+            filter: drop-shadow(0 0 16px #0aff6e) drop-shadow(0 0 44px rgba(10,255,110,0.6));
+        }
+        .crash-countdown.cc-yellow {
+            background-image: linear-gradient(120deg, #fff200, #fffabf, #fff200, #c9a600, #fff200);
+            filter: drop-shadow(0 0 16px #fff200) drop-shadow(0 0 44px rgba(255,242,0,0.6));
+        }
+        .crash-countdown.cc-red {
+            background-image: linear-gradient(120deg, #ff2b2b, #ffb3b3, #ff2b2b, #a10000, #ff2b2b);
+            filter: drop-shadow(0 0 16px #ff2b2b) drop-shadow(0 0 44px rgba(255,43,43,0.6));
+        }
+        @keyframes crashCountdownShimmer {
+            0%   { background-position: 0% 50%; }
+            50%  { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes crashCountdownPulse {
+            0%, 100% { transform: scale(1); }
+            50%      { transform: scale(1.1); }
+        }
+
+        /* Свечение следа — полупрозрачные слои вместо filter: drop-shadow
+           (drop-shadow пересчитывался на каждом кадре и фризил телефон).
+           Точка двигается через transform, а не cx/cy — это бесплатно для GPU. */
+        /* Свечение — НЕпрозрачные формы внутри группы с общей прозрачностью:
+           линия и кружок на конце сливаются в один цвет без тёмного наложения.
+           Размеры точки = размерам шлейфа: сердцевина 22px, свечение 46px. */
+        #crashTrailGlowGroup { opacity: 0.28; }
+        #crashTrailGlow, #crashTrailLine, #crashTrailDot, #crashTrailDotGlow { transition: opacity 0.9s ease; }
+        #crashTrailDot { transform-box: fill-box; transform-origin: center; }
+        @keyframes crashDotPulse {
+            0%, 100% { transform: scale(1);    fill-opacity: 1; }
+            50%      { transform: scale(0.62); fill-opacity: 0.65; }
+        }
+        #crashTrailDot.crash-dot-live { animation: crashDotPulse 1s ease-in-out infinite; }
+        #crashTrailLine.crash-trail-crashed,
+        #crashTrailGlow.crash-trail-crashed { stroke: #ff3b3b; }
+        #crashTrailDot.crash-trail-crashed { fill: #ffdada; animation: none; }
+        #crashTrailDotGlow.crash-trail-crashed { fill: #ff3b3b; }
+        #crashTrail { contain: layout paint; }
+        /* ---- Верхняя панель краша: банк / номер игры / старт через ---- */
+        .crash-topbar { margin-bottom: 0; }
+        .crash-topbar .ice-arena-info-box strong {
+            display: block; font-size: 17px; line-height: 24px; min-height: 24px;
+            font-variant-numeric: tabular-nums;
+        }
+        .crash-timer-box strong { font-size: 22px; transition: color 0.2s ease; }
+        .crash-timer-box strong.tb-green  { color: #3dff9a; text-shadow: 0 0 12px rgba(61,255,154,0.75); }
+        .crash-timer-box strong.tb-yellow { color: #ffd21f; text-shadow: 0 0 12px rgba(255,210,31,0.75); }
+        .crash-timer-box strong.tb-red    { color: #ff4d4d; text-shadow: 0 0 12px rgba(255,77,77,0.8); }
+        .crash-timer-box strong.tb-pop    { animation: crashTbPop 0.35s ease-out; }
+        @keyframes crashTbPop {
+            0%   { transform: scale(1.45); }
+            100% { transform: scale(1); }
+        }
+
+        .crash-mult-topleft {
+            position: absolute;
+            top: 14px;
+            left: 18px;
+            font-family: 'Orbitron', 'Arial Black', sans-serif;
+            font-weight: 900;
+            font-size: 38px;
+            line-height: 1;
+            letter-spacing: 0.5px;
+            color: #3dff9a;
+            text-shadow: 0 0 14px rgba(61,255,154,0.85);
+            z-index: 7;
+            display: none;
+            pointer-events: none;
+            transition: color 0.15s ease;
+        }
+        .crash-mult-topleft.crashed {
+            color: #ff4d4d;
+            text-shadow: 0 0 14px rgba(255,77,77,0.85);
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- ================================================================
+     БЛОКИРОВКА ДОСТУПА ВНЕ TELEGRAM.
+================================================================== -->
+<div id="tgBlockScreen" class="tg-block-screen">
+    <div class="tg-block-inner">
+        <div class="tg-block-icon">✈️</div>
+        <div class="tg-block-title">Доступ только через Telegram</div>
+        <p class="tg-block-text">Это приложение работает только внутри Telegram. Откройте его через бота, чтобы продолжить.</p>
+    </div>
+</div>
+<script>
+(function () {
+    var tg = window.Telegram && window.Telegram.WebApp;
+    var isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
+    if (isRealTelegramLaunch) {
+        var block = document.getElementById('tgBlockScreen');
+        if (block) block.style.display = 'none';
+    }
+})();
+</script>
+
+<div id="appLoader" class="app-loader">
+    <div class="app-loader-inner">
+        <div class="app-loader-moon-wrap">
+            <div class="app-loader-ring app-loader-ring-1"></div>
+            <div class="app-loader-ring app-loader-ring-2"></div>
+            <div class="app-loader-moon">
+                <span class="app-loader-moon-crater app-loader-moon-crater-a"></span>
+                <span class="app-loader-moon-crater app-loader-moon-crater-b"></span>
+                <span class="app-loader-moon-crater app-loader-moon-crater-c"></span>
+                <span class="app-loader-moon-crater app-loader-moon-crater-d"></span>
+                <span class="app-loader-moon-crater app-loader-moon-crater-e"></span>
+                <span class="app-loader-moon-crater app-loader-moon-crater-f"></span>
+                <span class="app-loader-moon-text">WXS</span>
+            </div>
+        </div>
+
+        <div class="app-loader-title"><span class="w">WXS</span> <span class="g">GAME</span></div>
+        <div class="app-loader-subtitle">Загрузка...</div>
+
+        <div class="app-loader-progress-track">
+            <div class="app-loader-progress-fill" id="appLoaderProgressFill"></div>
+        </div>
+    </div>
+</div>
+
+<div class="app">
+
+    <header class="top">
+        <div class="profile-card" onclick="openProfile()">
+            <div class="avatar-frame">
+                <div class="avatar" id="avatar">👤</div>
+            </div>
+            <div class="profile-info">
+                <div class="username" id="username">Игрок</div>
+                <div class="level" id="homeLevelText">Уровень 1</div>
+                <div class="level-line"><div id="homeLevelBar" style="width: 0%;"></div></div>
+            </div>
+        </div>
+        <div class="balance">
+            <div class="balance-info">
+                <small>Баланс</small>
+                <span id="topBalance">0.00 $</span>
+            </div>
+            <button class="balance-add" onclick="openBalance('deposit')">+</button>
+        </div>
+    </header>
+
+    <main id="homePage">
+        <section class="hero" style="margin-top: 10px;">
+            <div class="hero-content">
+                <div class="hero-small">ДОБРО ПОЖАЛОВАТЬ!</div>
+                <h1>Играй и<br><span>поднимай!</span></h1>
+                <p>Больше игр —<br>больше бонусов</p>
+                <button class="bonus-button" onclick="openBonus()">
+                    <span>🎁</span> Ежедневный бонус
+                </button>
+            </div>
+            <div class="money-orb">
+                <div class="money-ring"></div>
+                <span>$</span>
+            </div>
+        </section>
+
+        <section class="live-wins-section">
+            <div class="live-wins-header">
+                <span class="live-wins-dot"></span>
+                <span class="live-wins-title">Live Wins</span>
+            </div>
+            <div class="live-wins-row">
+                <div class="live-win-pinned" id="liveWinPinned">
+                    <span class="live-win-pinned-label">🏆 Выигрыш дня</span>
+                    <span class="live-wins-empty-pinned">Пока нет</span>
+                </div>
+                <div class="live-wins-scroll" id="liveWinsScroll">
+                    <span class="live-wins-empty">Пока нет крупных выигрышей</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="quick-actions">
+            <button class="action" onclick="openBalance('deposit')">
+                <div class="action-icon" id="depositSticker"><span class="tge-spinner"></span></div><b>Пополнить</b><small>Баланс</small>
+            </button>
+            <button class="action" onclick="openBalance('withdraw')">
+                <div class="action-icon" id="withdrawSticker"><span class="tge-spinner"></span></div><b>Вывод</b><small>Средств</small>
+            </button>
+            <button class="action" onclick="showMessage('VIP пока в разработке')">
+                <div class="action-icon" id="vipSticker"><span class="tge-spinner"></span></div><b>VIP</b><small>Статус</small>
+            </button>
+            <button class="action" onclick="showMessage('Задания пока в разработке')">
+                <div class="action-icon" id="tasksSticker"><span class="tge-spinner"></span></div><b>Задания</b><small>ежедневки</small>
+            </button>
+        </section>
+
+        <section class="games-section" id="gamesListSection">
+            <div class="games">
+                <button class="game" onclick="openCrash()">
+                    <img class="game-image crash-img" src="images/banners/rocket_game.png" alt="Краш" draggable="false">
+                </button>
+                <button class="game" onclick="openMines()">
+                    <img class="game-image mines-img" src="images/banners/mines_game.png" alt="Мины" draggable="false">
+                </button>
+                <button class="game" onclick="openUpgrader()">
+                    <img class="game-image upg-img" src="images/banners/upgrader_game.png" alt="Апгрейдер" draggable="false">
+                </button>
+                <button class="game" onclick="openIceArena()">
+                    <div class="game-image ice-arena-tile">
+                        <span class="ice-arena-tile-icon">🧊</span>
+                        <span class="ice-arena-tile-label">Айс Арена</span>
+                    </div>
+                </button>
+                <!-- Telegram Emoji — баннер на всю ширину (2 обычных поля) -->
+                <button class="game game-banner" aria-label="Telegram Emoji" onclick="openTgEmoji()">
+                    <img class="game-banner-img" src="images/banners/telegram_emoji_banner.jpg" alt="Telegram Emoji" draggable="false">
+                </button>
+            </div>
+        </section>
+    </main>
+
+<!-- ==================== АПГРЕЙДЕР ==================== -->
+<main id="upgraderPage" class="upgrader-page hidden">
+    <div class="page-header" style="margin-top: 10px;">
+        <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+        <h1>Апгрейдер</h1>
+        <div class="header-space"></div>
+    </div>
+
+    <section class="wheel-card upg-card">
+        <canvas id="upgCanvas" class="upg-canvas" aria-label="Колесо апгрейдера"></canvas>
+        <div id="upgResult" class="upg-result"></div>
+        <div id="upgInfo" class="upg-info"></div>
+
+        <div class="upg-panel">
+            <div class="mines-bet-header">
+                <label>СУММА СТАВКИ</label>
+                <div class="card-input-wrap">
+                    <input type="number" id="upgBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" oninput="upgOnBetInput()" onblur="clampBetInputOnBlur(event); upgOnBetInput()" onkeydown="blockInvalidBetKeys(event)">
+                    <span class="currency-symbol">$</span>
+                </div>
+            </div>
+            <div class="ctrl-btns-row" style="margin-top: 10px;">
+                <button class="pct-btn" onclick="upgBetFactor(0.5)">½</button>
+                <button class="pct-btn" onclick="upgBetFactor(2)">x2</button>
+                <button class="pct-btn" onclick="upgBetMax()">MAX</button>
+            </div>
+
+            <div class="mines-bet-header" style="margin-top: 16px;">
+                <label>ШАНС ПОБЕДЫ</label>
+                <div class="card-input-wrap">
+                    <input type="number" id="upgChanceInput" value="50" min="1" max="90" step="1" inputmode="numeric" oninput="upgOnChanceInput(false)" onblur="upgOnChanceInput(true)" onkeydown="blockInvalidBetKeys(event)">
+                    <span class="currency-symbol">%</span>
+                </div>
+            </div>
+            <div class="upg-chance-row">
+                <button class="pct-btn" data-chance="10" onclick="upgSetChance(10)">10%</button>
+                <button class="pct-btn" data-chance="25" onclick="upgSetChance(25)">25%</button>
+                <button class="pct-btn" data-chance="50" onclick="upgSetChance(50)">50%</button>
+                <button class="pct-btn" data-chance="75" onclick="upgSetChance(75)">75%</button>
+                <button class="pct-btn" data-chance="90" onclick="upgSetChance(90)">90%</button>
+            </div>
+            <div class="ctrl-btns-row" style="margin-top: 6px; grid-template-columns: 1fr 1fr;">
+                <button class="pct-btn" onclick="upgAdjustChance(-5)">−5%</button>
+                <button class="pct-btn" onclick="upgAdjustChance(5)">+5%</button>
+            </div>
+
+            <button class="mines-main-btn" id="upgPlayBtn" onclick="playUpgrader()" style="margin-top: 14px; width: 100%;">ИГРАТЬ</button>
+        </div>
+    </section>
+</main>
+
+    <!-- ==================== МИНЫ ==================== -->
+    <main id="minesPage" class="mines-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Мины</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="mines-card">
+            <div class="mines-coef-bar" id="minesCoefBar"></div>
+
+            <div class="mines-grid" id="minesGrid"></div>
+
+            <div class="mines-controls">
+                <div class="control-row">
+                    <div class="ctrl-box">
+                        <div class="mines-bet-header">
+                            <label>СУММА СТАВКИ</label>
+                            <div class="card-input-wrap">
+                                <input type="number" id="minesBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                                <span class="currency-symbol">$</span>
+                            </div>
+                        </div>
+                        <div class="ctrl-btns-row" style="margin-top: 10px;">
+                            <button class="pct-btn" onclick="adjustMinesBet(0.5)">½</button>
+                            <button class="pct-btn" onclick="adjustMinesBet(2)">x2</button>
+                            <button class="pct-btn" onclick="setMinesMaxBet()">MAX</button>
+                        </div>
+                    </div>
+
+                    <div class="ctrl-box">
+                        <label>МИНЫ</label>
+                        <div class="mines-count-selector">
+                            <button class="mines-count-btn active" onclick="selectMinesCount(3, this)">3</button>
+                            <button class="mines-count-btn" onclick="selectMinesCount(5, this)">5</button>
+                            <button class="mines-count-btn" onclick="selectMinesCount(10, this)">10</button>
+                            <button class="mines-count-btn" onclick="selectMinesCount(24, this)">24</button>
+                        </div>
+
+                        <!-- Капсула ручного выбора / изменения мин -->
+                        <div class="mines-stepper-capsule" style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 2px 8px;">
+                            <button type="button" class="stepper-btn" id="minesStepDec" onclick="changeMinesBy(-1)" style="background: none; border: none; color: rgba(255, 255, 255, 0.25); font-size: 18px; font-weight: 900; cursor: pointer; padding: 0 6px; min-width: 24px; flex-shrink: 0; user-select: none;">-</button>
+                            <input type="number" id="customMinesInput" value="3" min="3" max="24" oninput="onCustomMinesInputChange(this.value)" style="background: transparent; border: none; color: #fff; font-size: 22px; font-weight: 900; text-align: center; flex: 1; min-width: 0; outline: none; -moz-appearance: textfield;">
+                            <button type="button" class="stepper-btn" id="minesStepInc" onclick="changeMinesBy(1)" style="background: none; border: none; color: rgba(255, 255, 255, 0.25); font-size: 18px; font-weight: 900; cursor: pointer; padding: 0 6px; min-width: 24px; flex-shrink: 0; user-select: none;">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mines-actions">
+                    <button class="mines-main-btn" id="minesActionBtn" onclick="handleMinesAction()">
+                        Начать игру
+                    </button>
+                    <button class="mines-auto-btn" id="minesAutoBtn" onclick="autoPickMinesTile()" disabled>
+                        Автовыбор
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== КУБ (TELEGRAM EMOJI) ==================== -->
+    <main id="diceGamePage" class="dice-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="openTgEmoji()"></button>
+            <h1>Куб</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <!-- Сколько кубов -->
+        <section class="dice-count-row">
+            <button class="dice-tile dice-count-btn active" onclick="selectDiceCubes(1, this)">1 КУБ</button>
+            <button class="dice-tile dice-count-btn" onclick="selectDiceCubes(2, this)">2 КУБА</button>
+            <button class="dice-tile dice-count-btn is-soon" onclick="selectDiceCubes(3, this)">3 КУБА</button>
+        </section>
+
+        <!-- Режимы ставки -->
+        <section class="dice-modes" id="diceModes"><!-- плитки режимов рисует renderDiceModes() --></section>
+
+        <!-- Крутящийся кубик (animations/dice/preview/cube.tgs) -->
+        <div class="dice-stage" id="diceStage">
+            <div class="dice-layer dice-preview" id="dicePreview" aria-hidden="true"><span class="tge-spinner big"></span></div>
+            <div class="dice-layer dice-roll" id="diceRoll" aria-hidden="true"></div>
+            <div class="dice-layer dice-result" id="diceResult" aria-live="polite"></div>
+        </div>
+
+        <button class="dice-tile dice-play-btn" id="dicePlayBtn" onclick="handleDicePlay()">Играть</button>
+
+        <!-- Блок ставки — как в Минах -->
+        <section class="mines-controls dice-bet-box">
+            <div class="ctrl-box" style="margin-bottom: 0;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="diceBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustDiceBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustDiceBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setDiceMaxBet()">MAX</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== ФУТБОЛ (TELEGRAM EMOJI) ==================== -->
+    <main id="footballGamePage" class="dice-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="openTgEmoji()"></button>
+            <h1>Футбол</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <!-- Сколько ударов -->
+        <section class="dice-count-row">
+            <button class="dice-tile dice-count-btn active" onclick="selectFootballKicks(1, this)">1 УДАР</button>
+            <button class="dice-tile dice-count-btn is-soon" onclick="selectFootballKicks(2, this)">2 УДАРА</button>
+            <button class="dice-tile dice-count-btn is-soon" onclick="selectFootballKicks(3, this)">3 УДАРА</button>
+        </section>
+
+        <!-- Режимы ставки -->
+        <section class="dice-modes" id="footballModes"><!-- плитки режимов рисует renderFootballModes() --></section>
+
+        <!-- Анимация футбола (animations/dice/banners/football.tgs loop, потом результат) -->
+        <div class="dice-stage" id="footballStage">
+            <div class="dice-layer dice-preview" id="footballPreview" aria-hidden="true"><span class="tge-spinner big"></span></div>
+            <div class="dice-layer dice-roll" id="footballRoll" aria-hidden="true"></div>
+            <div class="dice-layer dice-result" id="footballResult" aria-live="polite"></div>
+        </div>
+
+        <button class="dice-tile dice-play-btn" id="footballPlayBtn" onclick="handleFootballPlay()">Играть</button>
+
+        <!-- Блок ставки -->
+        <section class="mines-controls dice-bet-box">
+            <div class="ctrl-box" style="margin-bottom: 0;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="footballBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustFootballBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustFootballBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setFootballMaxBet()">MAX</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== КРАШ ==================== -->
+    <main id="crashPage" class="crash-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Краш</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card">
+
+            <div class="ice-arena-topbar crash-topbar">
+                <div class="ice-arena-info-box">
+                    <small>БАНК</small>
+                    <strong id="crashBankValue">0.00 $</strong>
+                </div>
+                <div class="ice-arena-info-box">
+                    <small>ИГРА</small>
+                    <strong id="crashGameNumber">—</strong>
+                </div>
+                <div class="ice-arena-info-box crash-timer-box" id="crashTimerBox">
+                    <small>СТАРТ ЧЕРЕЗ</small>
+                    <strong id="crashTimerValue">—</strong>
+                </div>
+            </div>
+
+            <div id="crashStage" style="position: relative; height: 340px; margin: 16px 0; border-radius: 16px; background: linear-gradient(180deg, #10131a 0%, #05060a 100%); border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
+                <svg id="crashTrail" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
+                    <g id="crashTrailGlowGroup">
+                        <path id="crashTrailGlow" d="" fill="none" stroke="#3dff9a" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle id="crashTrailDotGlow" cx="0" cy="0" r="23" fill="#3dff9a" transform="translate(-100,-100)" style="opacity:0;"/>
+                    </g>
+                    <path id="crashTrailLine" d="" fill="none" stroke="#3dff9a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+                    <g id="crashTrailHead" transform="translate(-100,-100)">
+                        <circle id="crashTrailDot" cx="0" cy="0" r="11" fill="#eafff2" style="opacity:0;"/>
+                    </g>
+                </svg>
+                <div id="crashRocket" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; will-change: transform;"></div>
+                <div id="crashExplosion" style="position:absolute; left:16px; bottom:16px; width:200px; height:200px; text-align:center; display:none; will-change: transform, opacity; transition: opacity 0.3s ease;"></div>
+                <div id="crashCenterInfo" style="position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); text-align:center; width: 100%;">
+                    <strong id="crashMultiplier" style="display:block; font-size: 34px; font-weight: 900; color:#fff;">1.00x</strong>
+                    <div id="crashStatus" style="font-size: 12px; color:#888; font-weight:700; margin-top:4px;">Загрузка...</div>
+                </div>
+                <div id="crashMultTopLeft" class="crash-mult-topleft">1.00x</div>
+                <div id="crashCountdown" class="crash-countdown"></div>
+
+                <!-- Круглая кнопка с "#" внизу справа на экране игры Crash -->
+                <button id="crashFairnessBtn" class="crash-fairness-trigger" title="Доказуемая честность" onclick="openCrashFairnessModal()">
+                    <span>#</span>
+                </button>
+            </div>
+
+            <div id="crashHistoryList" class="crash-history-scroll"></div>
+
+            <div class="crash-players-box">
+                <div class="crash-players-header">
+                    <span>Игроки в раунде</span>
+                    <span id="crashPlayersCount" class="crash-players-count">0</span>
+                </div>
+                <div id="crashPlayersList" class="crash-players-list"></div>
+            </div>
+
+            <div class="ctrl-box">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="crashBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustCrashBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustCrashBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setCrashMaxBet()">MAX</button>
+                </div>
+            </div>
+
+            <button class="mines-main-btn" id="crashActionBtn" onclick="handleCrashAction()" style="margin-top: 14px; width: 100%;">
+                Сделать ставку
+            </button>
+        </section>
+    </main>
+
+<!-- МОДАЛЬНОЕ ОКНО "ДОКАЗУЕМАЯ ЧЕСТНОСТЬ" -->
+<!-- Закругленное всплывающее меню (Bottom Sheet) -->
+<div id="crashFairnessModal" class="crash-fairness-modal hidden">
+    <div class="crash-fairness-backdrop" id="crashFairnessBackdrop" onclick="closeCrashFairnessModal()"></div>
+    <div class="crash-fairness-content" id="crashFairnessContent">
+        <div class="crash-fairness-drag-handle-area" id="crashFairnessDragHandle">
+            <div class="crash-fairness-drag-handle"></div>
+        </div>
+        <div class="crash-fairness-header">
+            <h3>Доказуемая честность</h3>
+        </div>
+
+        <div class="crash-fairness-body">
+            <div class="fairness-field-group">
+                <label><img src="images/ui/lock.png" class="fairness-label-icon" alt="" draggable="false"> Хеш раунда</label>
+                <div class="fairness-input-box">
+                    <input type="text" id="crashRoundHashInput" readonly placeholder="Генерация..." />
+                    <button id="copyCrashHashBtn" class="copy-btn" onclick="copyCrashHash()"><img src="images/ui/copy.png" class="copy-btn-icon" alt="Копировать" draggable="false"></button>
+                </div>
+            </div>
+
+            <div class="fairness-field-group">
+                <label><img src="images/ui/key.png" class="fairness-label-icon" alt="" draggable="false"> SHA-256 Ключ</label>
+                <div class="fairness-input-box">
+                    <input type="text" id="crashRoundKeyInput" readonly placeholder="Раскроется сервером после раунда" />
+                    <button id="copyCrashKeyBtn" class="copy-btn" onclick="copyCrashKey()"><img src="images/ui/copy.png" class="copy-btn-icon" alt="Копировать" draggable="false"></button>
+                </div>
+            </div>
+
+            <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" rel="noopener" class="fairness-verify-link">
+                Проверить честность ↗
+            </a>
+        </div>
+    </div>
+</div>
+
+<div id="iceHistoryModal" class="ice-history-modal hidden">
+    <div class="ice-history-backdrop" id="iceHistoryBackdrop" onclick="closeIceArenaHistory()"></div>
+    <div class="ice-history-content" id="iceHistoryContent">
+        <div class="ice-history-drag-handle-area" id="iceHistoryDragHandle">
+            <div class="ice-history-drag-handle"></div>
+        </div>
+
+        <div class="ice-history-list-view" id="iceHistoryListView">
+            <div class="ice-history-header">
+                <h3>История игр</h3>
+            </div>
+            <div class="ice-history-list" id="iceHistoryList"></div>
+        </div>
+
+        <div class="ice-history-detail-view hidden" id="iceHistoryDetailView">
+            <div class="ice-history-header ice-history-header-detail">
+                <button class="ice-history-back-btn" onclick="showIceArenaHistoryList()">‹ Назад</button>
+                <h3>Раунд <span id="iceHistoryDetailGame">—</span></h3>
+            </div>
+
+            <div class="ice-history-preview-field" id="iceHistoryPreviewField">
+                <div class="ice-puck hidden" id="iceHistoryPuck">
+                    <div class="ice-puck-arrow"></div>
+                </div>
+                <button class="ice-history-replay-btn" id="iceHistoryReplayBtn" onclick="replayIceArenaHistoryRound()">▶ Replay</button>
+            </div>
+
+            <div class="ice-history-detail-info" id="iceHistoryDetailInfo"></div>
+        </div>
+    </div>
+</div>
+
+    <!-- ==================== БАЛАНС ==================== -->
+    <main id="balancePage" class="balance-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Баланс</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <div class="balance-gold-card">
+            <div class="bg-label">ТЕКУЩИЙ БАЛАНС</div>
+            <div class="bg-amount" id="balanceCardValue">0.00 $</div>
+        </div>
+
+        <div class="balance-mode-toggle">
+            <button class="mode-btn active" id="depositTab" onclick="setBalanceMode('deposit')">
+                <span>+</span> Пополнить
+            </button>
+            <button class="mode-btn" id="withdrawTab" onclick="setBalanceMode('withdraw')">
+                <span>↗</span> Вывести
+            </button>
+        </div>
+
+        <section class="form-box">
+            <h2 id="formTitle">Пополнение баланса</h2>
+            <p class="sub-text" id="formSubtitle">Выберите удобный способ пополнения</p>
+
+            <div class="input-group">
+                <label>МЕТОД</label>
+                <div class="custom-select" onclick="toggleMethods()">
+                    <div class="select-selected">
+                        <img class="m-icon" id="selectedMethodIcon" src="images/crypto/cryptobot.png" alt="CryptoBot" style="width: 26px; height: 26px; object-fit: contain;">
+                        <div class="m-text">
+                            <strong id="selectedMethod">CryptoBot</strong>
+                            <small id="selectedMethodSub">Криптовалюта</small>
+                        </div>
+                        <span class="arrow" id="methodArrow">▼</span>
+                    </div>
+                    <div class="select-items" id="methodsDropdown">
+                        <div onclick="event.stopPropagation(); selectMethod('CryptoBot', 'images/crypto/cryptobot.png', 'Криптовалюта')">
+                            <img src="images/crypto/cryptobot.png" alt="CryptoBot" style="width: 24px; height: 24px; object-fit: contain;"> 
+                            <div><strong>CryptoBot</strong><small>Криптовалюта</small></div>
+                        </div>
+                        <div onclick="event.stopPropagation(); selectMethod('xRocket', 'images/crypto/xrocket.png', 'Криптовалюта')">
+                            <img src="images/crypto/xrocket.png" alt="xRocket" style="width: 24px; height: 24px; object-fit: contain;"> 
+                            <div><strong>xRocket</strong><small>Криптовалюта</small></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>СУММА</label>
+                <div class="sum-input-wrap">
+                    <input type="number" id="amountInput" placeholder="0.00">
+                    <span class="currency-symbol">$</span>
+                </div>
+            </div>
+
+            <button class="main-action-btn" id="balanceAction" onclick="handleBalanceAction()">Пополнить</button>
+        </section>
+
+        <section class="history-box">
+            <div class="history-header">
+                <h2>Последние транзакции</h2>
+                <small id="txCount">3 операции</small>
+            </div>
+            <div class="history-list" id="historyList"></div>
+        </section>
+    </main>
+
+    <!-- ==================== АЙС АРЕНА (GLOBAL LOBBY) ==================== -->
+    <main id="iceArenaPage" class="ice-arena-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="leaveIceArena()"></button>
+            <h1>Айс Арена</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card ice-arena-card">
+            <div class="ice-arena-topbar">
+                <div class="ice-arena-info-box">
+                    <small>БАНК</small>
+                    <strong id="iceBankValue">0.00 $</strong>
+                </div>
+                <div class="ice-arena-info-box">
+                    <small>ИГРА</small>
+                    <strong id="iceGameNumber">—</strong>
+                </div>
+                <div class="ice-arena-info-box ice-arena-timer-box" id="iceTimerBox">
+                    <small>СТАРТ ЧЕРЕЗ</small>
+                    <strong id="iceCountdownValue">—</strong>
+                </div>
+            </div>
+
+            <div class="ice-arena-field-wrap" id="iceFieldWrap">
+                <div class="ice-arena-field" id="iceField">
+                    <div class="ice-arena-empty-state" id="iceEmptyState">
+                        ❄️ Ждём игроков...<br>Чем выше ставка - больше шанс забрать всё!
+                    </div>
+
+                    <div class="ice-puck hidden" id="icePuck">
+                        <div class="ice-puck-arrow"></div>
+                    </div>
+                </div>
+
+                <div class="ice-result-overlay hidden" id="iceResultOverlay">
+                    <div class="ice-result-avatar" id="iceResultAvatar">🏒</div>
+                    <div class="ice-result-name" id="iceResultName">—</div>
+                    <div class="ice-result-chance">ШАНС НА ПОБЕДУ: <span id="iceResultChance">0%</span></div>
+                    <div class="ice-result-win" id="iceResultWin"></div>
+                    <div class="ice-result-actions">
+                        <button class="main-action-btn" onclick="restartIceArena()">Играть снова</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кэфы последних игр — под игровым полем. Клик по кэфу сразу
+                 открывает реплей этого раунда, минуя список истории. -->
+            <div class="ice-history-strip" id="iceHistoryStrip"></div>
+
+            <button class="ice-history-open-btn" id="iceHistoryOpenBtn" onclick="openIceArenaHistory()">
+                <span class="ice-history-open-icon">🕓</span> История игр
+            </button>
+
+            <div class="ice-arena-players-list" id="iceArenaPlayersList"></div>
+
+            <div class="ctrl-box" style="margin-top: 14px;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="iceBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="applyBetFactor(document.getElementById('iceBetInput'), 0.5)">½</button>
+                    <button class="pct-btn" onclick="applyBetFactor(document.getElementById('iceBetInput'), 2)">x2</button>
+                    <button class="pct-btn" onclick="applyBetMax(document.getElementById('iceBetInput'))">MAX</button>
+                </div>
+            </div>
+
+            <button class="mines-main-btn ice-arena-bet-btn" id="iceArenaBetBtn" onclick="placeIceArenaBet()" style="width: 100%; margin-top: 12px;">
+                СДЕЛАТЬ СТАВКУ
+        </section>
+    </main>
+
+    <!-- ==================== TELEGRAM EMOJI (ВЫБОР РЕЖИМА) ==================== -->
+    <main id="tgEmojiPage" class="tge-page hidden">
+
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Telegram Emoji</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="tge-grid">
+            <button class="game tge-tile" data-mode="dice" onclick="openTgEmojiMode('dice')">
+                <span class="tge-title">КУБИК</span>
+                <span class="tge-banner" data-banner="dice"><span class="tge-spinner"></span></span>
+            </button>
+            <button class="game tge-tile" data-mode="football" onclick="openTgEmojiMode('football')">
+                <span class="tge-title">ФУТБОЛ</span>
+                <span class="tge-banner" data-banner="football"><span class="tge-spinner"></span></span>
+            </button>
+            <button class="game tge-tile" data-mode="basketball" onclick="openTgEmojiMode('basketball')">
+                <span class="tge-title">БАСКЕТБОЛ</span>
+                <span class="tge-banner" data-banner="basketball"><span class="tge-spinner"></span></span>
+            </button>
+            <button class="game tge-tile" data-mode="darts" onclick="openTgEmojiMode('darts')">
+                <span class="tge-title">ДАРТС</span>
+                <span class="tge-banner" data-banner="darts"><span class="tge-spinner"></span></span>
+            </button>
+            <button class="game tge-tile" data-mode="bowling" onclick="openTgEmojiMode('bowling')">
+                <span class="tge-title">БОУЛИНГ</span>
+                <span class="tge-banner" data-banner="bowling"><span class="tge-spinner"></span></span>
+            </button>
+            <button class="game tge-tile" data-mode="slots" onclick="openTgEmojiMode('slots')">
+                <span class="tge-title">СЛОТЫ</span>
+                <span class="tge-banner" data-banner="slots"><span class="tge-spinner"></span></span>
+            </button>
+        </section>
+    </main>
+
+    <!-- ==================== ПРОФИЛЬ ==================== -->
+    <main id="topPage" class="top-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Топ</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <div class="lb-chips lb-metrics" id="lbMetrics">
+            <button class="lb-chip active" type="button" data-metric="turnover">Оборот</button>
+            <button class="lb-chip" type="button" data-metric="wins">Выигрыши</button>
+            <button class="lb-chip" type="button" data-metric="balance">Баланс</button>
+            <button class="lb-chip" type="button" data-metric="losses">Проигрыши</button>
+        </div>
+
+        <div class="lb-periods-wrap" id="lbPeriodsWrap">
+            <div class="lb-periods-inner">
+                <div class="lb-chips lb-periods" id="lbPeriods">
+                    <button class="lb-chip lb-chip-sm" type="button" data-period="today">Сегодня</button>
+                    <button class="lb-chip lb-chip-sm" type="button" data-period="yesterday">Вчера</button>
+                    <button class="lb-chip lb-chip-sm" type="button" data-period="week">Неделя</button>
+                    <button class="lb-chip lb-chip-sm" type="button" data-period="month">Месяц</button>
+                    <button class="lb-chip lb-chip-sm active" type="button" data-period="all">Всё время</button>
+                </div>
+                <label class="lb-date-btn" id="lbDateBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+                    <span id="lbDateLabel">Выбрать дату</span>
+                    <input type="date" id="lbDateInput" class="lb-date-input" aria-label="Выбрать дату">
+                </label>
+            </div>
+        </div>
+
+        <section class="lb-podium" id="lbPodium"></section>
+        <section class="lb-list" id="lbList"></section>
+    </main>
+
+    <main id="profilePage" class="profile-page hidden">
+        <section class="profile-header-card profile-cover" id="profileCover" style="margin-top: 10px; position: relative; overflow: hidden;">
+            <div style="position: relative; z-index: 2;">
+                <div class="profile-avatar-wrapper" style="position: relative; display: inline-block;">
+                    <div class="profile-avatar-circle" id="profileAvatar">👤</div>
+                </div>
+
+                <h1 id="profileName">Игрок</h1>
+                <div class="profile-tag" id="profileUsername">@username</div>
+
+                <div class="profile-level-block">
+                    <div class="level-info">
+                        <span id="profileLevelText">Уровень 1 · Новичок</span>
+                        <span id="profileLevelPercent">0%</span>
+                    </div>
+                    <div class="level-progress-bar">
+                        <div class="level-progress-fill" id="profileLevelFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <button class="pct-btn" onclick="toggleProfileCustomizer()" style="margin-top: 14px; width: 100%; padding: 8px; color: #ffc800; border: 1px solid rgba(255,200,0,0.3); border-radius: 12px; cursor: pointer; font-weight: 700;">
+                    ⚙️ Настроить профиль
+                </button>
+
+                <div id="customizerBox" class="hidden" style="margin-top: 12px; background: rgba(0,0,0,0.7); padding: 14px; border-radius: 16px; text-align: left; border: 1px solid #282828;">
+                    <span style="font-size:11px; color:#aaa; font-weight:700;">Цвет фона шапки:</span>
+                    <div class="color-picker-grid" id="colorPickerGrid"></div>
+
+                    <button class="main-action-btn" onclick="saveProfileCustomization()" style="width:100%; margin-top:14px; padding:10px; font-size:13px;">
+                        Сохранить
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon-bg" id="statStickerTurnover"><span class="tge-spinner"></span></div>
+                <div class="stat-val" id="statTurnover">$0.00</div>
+                <div class="stat-lbl">Оборот</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon-bg" id="statStickerKoef"><span class="tge-spinner"></span></div>
+                <div class="stat-val" id="statMaxMult">x0.00</div>
+                <div class="stat-lbl">Макс. коэффициент</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon-bg" id="statStickerWins"><span class="tge-spinner"></span></div>
+                <div class="stat-val" id="statTotalWin">$0.00</div>
+                <div class="stat-lbl">Общий выигрыш</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon-bg" id="statStickerBets"><span class="tge-spinner"></span></div>
+                <div class="stat-val" id="statBetsCount">0</div>
+                <div class="stat-lbl">Кол-во ставок</div>
+            </div>
+        </section>
+
+        <div class="profile-balance-banner">
+            <div class="p-bal-left">
+                <small>Текущий баланс</small>
+                <strong id="profileBalance">0.00 $</strong>
+            </div>
+            <button class="p-deposit-btn" onclick="openBalance('deposit')">Пополнить</button>
+        </div>
+    </main>
+
+    <!-- ==================== БОНУС ==================== -->
+    <main id="bonusPage" class="bonus-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Бонусы</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="wheel-card promo-card">
+            <div class="promo-label">ПРОМОКОД</div>
+            <h2 class="promo-title">Активировать бонус</h2>
+            <div class="promo-row">
+                <input type="text" id="promoCodeInput" class="promo-input" placeholder="Введите промокод" autocomplete="off">
+                <button class="promo-apply-btn" id="promoApplyBtn" onclick="applyPromoCode()" disabled>Применить</button>
+            </div>
+        </section>
+        <script>
+        // Логика включения/выключения кнопки "Применить" вынесена прямо
+        // сюда, в index.html, а не в script.js. Так она гарантированно
+        // работает даже если внешний script.js на сервере/в кеше ещё
+        // старый — этому блоку не нужно ничего, кроме самой страницы.
+        (function () {
+            var promoInput = document.getElementById('promoCodeInput');
+            var promoBtn = document.getElementById('promoApplyBtn');
+            if (!promoInput || !promoBtn) return;
+
+            function refreshPromoBtn() {
+                promoBtn.disabled = promoInput.value.trim().length < 5;
+            }
+
+            promoInput.addEventListener('input', refreshPromoBtn);
+            refreshPromoBtn();
+
+            // Дублируем глобально — applyPromoCode() из script.js вызывает
+            // эту функцию после очистки поля, чтобы кнопка снова стала серой.
+            window.updatePromoButtonState = refreshPromoBtn;
+        })();
+        </script>
+
+        <section class="wheel-card">
+            <h2>Ежедневный бонус</h2>
+            <p class="wheel-subtitle">Заходите каждый день и получайте бесплатные средства!</p>
+            <div style="font-size: 60px; margin: 20px 0;">🎁</div>
+            <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
+        </section>
+        
+            <button class="main-action-btn share-invite-btn" id="shareInviteBtn" onclick="sharePreparedInvite()">
+                Отправить…
+            </button>
+    </main>
+
+    <!-- НИЖНЕЕ МЕНЮ -->
+        <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><filter id="lg-refract" filterUnits="objectBoundingBox" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feImage href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22 preserveAspectRatio=%22none%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%220%22%3E%3Cstop offset=%220%22 stop-color=%22rgb(40,0,0)%22/%3E%3Cstop offset=%220.08%22 stop-color=%22rgb(120,0,0)%22/%3E%3Cstop offset=%220.28%22 stop-color=%22rgb(160,0,0)%22/%3E%3Cstop offset=%220.5%22 stop-color=%22rgb(128,0,0)%22/%3E%3Cstop offset=%220.72%22 stop-color=%22rgb(96,0,0)%22/%3E%3Cstop offset=%220.92%22 stop-color=%22rgb(136,0,0)%22/%3E%3Cstop offset=%221%22 stop-color=%22rgb(216,0,0)%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22100%22 height=%22100%22 fill=%22url(%23g)%22/%3E%3C/svg%3E" preserveAspectRatio="none" result="mx"/><feImage href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22 preserveAspectRatio=%22none%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%220%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22rgb(0,40,0)%22/%3E%3Cstop offset=%220.08%22 stop-color=%22rgb(0,120,0)%22/%3E%3Cstop offset=%220.28%22 stop-color=%22rgb(0,160,0)%22/%3E%3Cstop offset=%220.5%22 stop-color=%22rgb(0,128,0)%22/%3E%3Cstop offset=%220.72%22 stop-color=%22rgb(0,96,0)%22/%3E%3Cstop offset=%220.92%22 stop-color=%22rgb(0,136,0)%22/%3E%3Cstop offset=%221%22 stop-color=%22rgb(0,216,0)%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22100%22 height=%22100%22 fill=%22url(%23g)%22/%3E%3C/svg%3E" preserveAspectRatio="none" result="my"/><feBlend in="mx" in2="my" mode="screen" result="map"/><feImage href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22 preserveAspectRatio=%22none%22%3E%3Cdefs%3E%3Cfilter id=%22b%22 x=%22-20%25%22 y=%22-20%25%22 width=%22140%25%22 height=%22140%25%22%3E%3CfeGaussianBlur stdDeviation=%225%22/%3E%3C/filter%3E%3C/defs%3E%3Crect x=%226%22 y=%226%22 width=%2288%22 height=%2288%22 rx=%2244%22 ry=%2244%22 fill=%22%23fff%22 filter=%22url(%23b)%22/%3E%3C/svg%3E" preserveAspectRatio="none" result="hm"/><feDisplacementMap in="SourceGraphic" in2="map" scale="30" xChannelSelector="R" yChannelSelector="G" result="dr"/><feColorMatrix in="dr" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="cr"/><feDisplacementMap in="SourceGraphic" in2="map" scale="36" xChannelSelector="R" yChannelSelector="G" result="dg"/><feColorMatrix in="dg" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="cg"/><feDisplacementMap in="SourceGraphic" in2="map" scale="42" xChannelSelector="R" yChannelSelector="G" result="db"/><feColorMatrix in="db" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="cb"/><feBlend in="cr" in2="cg" mode="screen" result="rg"/><feBlend in="rg" in2="cb" mode="screen" result="refr"/><feSpecularLighting in="hm" surfaceScale="6" specularConstant="0.8" specularExponent="30" lighting-color="#ffffff" result="s1"><feDistantLight azimuth="225" elevation="25"/></feSpecularLighting><feSpecularLighting in="hm" surfaceScale="6" specularConstant="0.45" specularExponent="30" lighting-color="#ffffff" result="s2"><feDistantLight azimuth="45" elevation="25"/></feSpecularLighting><feComposite in="s1" in2="s2" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="sp"/><feComposite in="refr" in2="sp" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/></filter><filter id="lg-refract-lite" filterUnits="objectBoundingBox" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feImage href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAqElEQVR42u3aMQ6AIBAF0VHoKOAo3v9uGAtjoTZWktUhFIRGX/ZvSJRpWajQoEGFAgkS5GNxmfs+0GE9Zr8tnqwvmzx4boLC6YUzldAj0wQMBoSPUIkOSAIGA7IVECBAgADPASswbMwQvQI9OmAVIMAeEGCEjJAAe8AICbAHjJAAe8AIGSErIMAeeH184Nuo/wesgAABAgR4DliBPwPC31r06rGAf0doA/sCOJp3fVF7AAAAAElFTkSuQmCC" preserveAspectRatio="none" result="map"/><feImage href="data:image/png;base64,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" preserveAspectRatio="none" result="hm"/><feDisplacementMap in="SourceGraphic" in2="map" scale="34" xChannelSelector="R" yChannelSelector="G" result="refr"/><feSpecularLighting in="hm" surfaceScale="6" specularConstant="0.8" specularExponent="30" lighting-color="#ffffff" result="s1"><feDistantLight azimuth="225" elevation="25"/></feSpecularLighting><feComposite in="refr" in2="s1" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/></filter></defs></svg>
+    <nav class="bottom-nav" id="bottomNav">
+        <div class="nav-bg"></div>
+        <div class="nav-pill" id="navPill"></div>
+        <button class="nav-item active on" id="homeNav" type="button" aria-label="Главная">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path class="sh" d="M4 11.4 11.1 4.9a1.3 1.3 0 0 1 1.8 0l7.1 6.5V19a1.7 1.7 0 0 1-1.7 1.7H5.7A1.7 1.7 0 0 1 4 19z"/><path class="dt" d="M10 20.7v-3.9a2 2 0 0 1 4 0v3.9"/></svg></span><small>Главная</small>
+        </button>
+        <button class="nav-item" id="balanceNav" type="button" aria-label="Баланс">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 6.6 15.6 3.9a1.7 1.7 0 0 1 2.1 1.6v1.1"/><rect class="sh" x="3" y="6.6" width="18" height="13.7" rx="3.4"/><path class="dt" d="M21 12.1h-4.1a2.3 2.3 0 0 0 0 4.6H21"/><circle class="dtf" cx="16.9" cy="14.4" r=".95" stroke="none"/></svg></span><small>Баланс</small>
+        </button>
+        <button class="nav-item" id="bonusNav" type="button" aria-label="Бонусы">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect class="sh" x="3.7" y="10.4" width="16.6" height="10.1" rx="2.3"/><rect class="sh" x="2.7" y="7.1" width="18.6" height="3.7" rx="1.5"/><path class="dt" d="M12 7.1v13.4"/><path d="M12 7.1C10.9 4 7 3.7 7 5.6c0 1.6 3.6 1.5 5 1.5zm0 0c1.1-3.1 5-3.4 5-1.5 0 1.6-3.6 1.5-5 1.5z"/></svg></span><small>Бонусы</small>
+        </button>
+        <button class="nav-item" id="topNav" type="button" aria-label="Топ">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7.4 5.8H5.2a.9.9 0 0 0-.9 1c.3 2.4 1.8 3.9 3.9 4.2M16.6 5.8h2.2a.9.9 0 0 1 .9 1c-.3 2.4-1.8 3.9-3.9 4.2"/><path class="sh" d="M7.4 3.8h9.2v5.4a4.6 4.6 0 0 1-9.2 0z"/><path d="M12 13.9v3.1"/><path class="sh" d="M9.3 17h5.4l.8 3.2H8.5z"/></svg></span><small>Топ</small>
+        </button>
+        <button class="nav-item" id="profileNav" type="button" aria-label="Профиль">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle class="sh" cx="12" cy="7.9" r="4.1"/><path class="sh" d="M4.4 20.4c.6-3.7 3.6-6 7.6-6s7 2.3 7.6 6z"/></svg></span><small>Профиль</small>
+        </button>
+        <div class="nav-lens" id="navLens"><i class="lens-glass"></i><i class="lens-rim"></i></div>
+    </nav>
+</div>
+
+<!-- Скрипты анимации ракеты -->
+<script src="animations/crash/rocket-data-part1.js"></script>
+<script src="animations/crash/rocket-data-part2.js"></script>
+<script src="animations/crash/rocket-data-part3.js"></script>
+<script src="animations/crash/rocket-data-part4.js"></script>
+<script src="animations/crash/rocket-data-part5.js"></script>
+<script src="animations/crash/rocket-data-part6.js"></script>
+<script src="animations/crash/rocket-data-part7.js"></script>
+<script src="animations/crash/rocket-data-part8.js"></script>
+<script src="animations/crash/explosion-data-part1.js"></script>
+<script src="animations/crash/explosion-data-part2.js"></script>
+<script src="animations/crash/explosion-data-part3.js"></script>
+<script src="animations/crash/explosion-data-part4.js"></script>
+<script src="animations/crash/explosion-data-part5.js"></script>
+<script src="animations/crash/explosion-data-part6.js"></script>
+<script src="animations/crash/explosion-data-part7.js"></script>
+<script src="animations/crash/explosion-data-part8.js"></script>
+<!-- Исполняемый скрипт логики приложения -->
+<script>document.write('<script src="script.js?v=' + Date.now() + '"><\/script>');</script>
+</body>
+</html>
