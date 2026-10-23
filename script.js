@@ -478,7 +478,7 @@ async function ensurePlayerSecure() {
     for (let attempt = 0; attempt < 3; attempt++) {
         if (attempt) await new Promise(r => setTimeout(r, attempt * 900));
         try {
-            const res = await fetch(SUPABASE_URL + '/functions/v1/ensure-player', {
+            const res = await fetch(SUPABASE_URL + '/functions/v1/ensure_player', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
