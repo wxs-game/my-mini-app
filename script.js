@@ -96,9 +96,9 @@ tg.expand();
         }
 
         // Вертикально: блокируем только когда страница уже у верха/низа (нет "оттягивания")
-        const se = document.scrollingElement || document.documentElement;
+        const se = document.body;   // страница прокручивается body (окно не скроллится)
         const pageAtTop = se.scrollTop <= 0;
-        const pageAtBottom = se.scrollTop + window.innerHeight >= se.scrollHeight - 1;
+        const pageAtBottom = se.scrollTop + se.clientHeight >= se.scrollHeight - 1;
         if ((dy > 0 && pageAtTop) || (dy < 0 && pageAtBottom)) {
             if (e.cancelable) e.preventDefault();
         }
@@ -3959,6 +3959,7 @@ function showPage(id) {
     const page = document.getElementById(id);
     if (page) page.classList.remove("hidden");
     window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
 }
 
 function goHome() {
