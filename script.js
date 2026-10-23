@@ -4030,7 +4030,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage", "footballGamePage"];
+    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "topPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage", "footballGamePage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4556,10 +4556,10 @@ function updateNav(active) {
     const navItems = document.querySelectorAll(".nav-item");
     navItems.forEach(item => item.classList.remove("active"));
 
-    const map = { home: "homeNav", games: "gamesNav", balance: "balanceNav", bonus: "bonusNav", profile: "profileNav" };
+    const map = { home: "homeNav", games: "homeNav", balance: "balanceNav", bonus: "bonusNav", top: "topNav", profile: "profileNav" };
     const activeElement = document.getElementById(map[active]);
     if (activeElement) activeElement.classList.add("active");
-    if (typeof window.navSync === "function") window.navSync(active);
+    if (typeof window.navSync === "function") window.navSync(active === "games" ? "home" : active);
 }
 
 /* =========================
@@ -7807,12 +7807,12 @@ window.applyBetMax = applyBetMax;
         const glass = lens.querySelector('.lens-glass');
         const rim = lens.querySelector('.lens-rim');
         const items = Array.from(nav.querySelectorAll('.nav-item'));
-        const KEYS = ['home', 'games', 'balance', 'bonus', 'profile'];
+        const KEYS = ['home', 'balance', 'bonus', 'top', 'profile'];
         const actions = [
             () => goHome(),
-            () => openGamesMenu(),
             () => openBalance('deposit'),
             () => openBonus(),
+            () => openTop(),
             () => openProfile()
         ];
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -8003,4 +8003,392 @@ window.applyBetMax = applyBetMax;
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
+})();
+
+
+/* ==========================================
+   ВКЛАДКА «ТОП»: рейтинг игроков
+   Данные: RPC wxs_leaderboard (см. leaderboard.sql). Если функции в базе ещё нет —
+   считаем напрямую из wxs_game / live_bets.
+========================================== */
+(function () {
+    const $ = id => document.getElementById(id);
+    const TTL = 20000;
+    const st = { metric: 'turnover', period: 'all', date: null, seq: 0, cache: new Map(), bound: false };
+
+    /* ---------- анимированный доллар (dollar.tgs) ----------
+       Один раз раскладываем анимацию на кадры и рисуем их во все маленькие canvas одним таймером —
+       так даже 50 строк с анимированным значком почти ничего не стоят. */
+    const DOLLAR = 'animations/stickers/dollar';
+    const dollarCanvases = new Set();
+    let dollarSprite, dollarPromise = null, dRaf = 0, dLast = -1;
+
+    async function readLottieJson(buf) {
+        const bytes = new Uint8Array(buf);
+        if (!(bytes[0] === 0x1f && bytes[1] === 0x8b)) return JSON.parse(new TextDecoder().decode(bytes));
+        if (typeof DecompressionStream !== 'undefined') {
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return JSON.parse(await new Response(stream).text());
+        }
+        if (window.pako) return JSON.parse(window.pako.ungzip(bytes, { to: 'string' }));
+        throw new Error('no gzip');
+    }
+    function buildFrames(data) {
+        return new Promise(resolve => {
+            const host = document.createElement('div');
+            host.style.cssText = 'position:fixed;left:-9999px;top:0;width:72px;height:72px;pointer-events:none;visibility:hidden';
+            document.body.appendChild(host);
+            const anim = lottie.loadAnimation({
+                container: host, renderer: 'canvas', loop: false, autoplay: false, animationData: data,
+                rendererSettings: { clearCanvas: true, dpr: 1, preserveAspectRatio: 'xMidYMid meet' }
+            });
+            const run = () => {
+                try {
+                    const src = host.querySelector('canvas');
+                    const total = Math.max(1, Math.floor(anim.totalFrames || 1));
+                    const n = Math.min(total, 40);
+                    const frames = [];
+                    for (let i = 0; i < n; i++) {
+                        anim.goToAndStop(Math.floor(i * total / n), true);
+                        const c = document.createElement('canvas');
+                        c.width = c.height = 72;
+                        c.getContext('2d').drawImage(src, 0, 0, 72, 72);
+                        frames.push(c);
+                    }
+                    const dur = Math.max(400, total / (anim.frameRate || 30) * 1000);
+                    anim.destroy(); host.remove();
+                    resolve({ frames, dur });
+                } catch (e) { try { anim.destroy(); } catch (_) {} host.remove(); resolve(null); }
+            };
+            if (anim.isLoaded) run(); else anim.addEventListener('DOMLoaded', run);
+        });
+    }
+    function tryImage(url) {
+        return new Promise((res, rej) => { const i = new Image(); i.alt = ''; i.draggable = false; i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    }
+    function loadDollar() {
+        if (dollarPromise) return dollarPromise;
+        dollarPromise = (async () => {
+            if (typeof lottie !== 'undefined') {
+                for (const ext of ['tgs', 'json']) {
+                    try {
+                        const r = await fetch(DOLLAR + '.' + ext);
+                        if (!r.ok) continue;
+                        const sprite = await buildFrames(await readLottieJson(await r.arrayBuffer()));
+                        if (sprite) return sprite;
+                    } catch (e) {}
+                }
+            }
+            for (const ext of ['webp', 'gif', 'png']) {
+                try { return { img: await tryImage(DOLLAR + '.' + ext) }; } catch (e) {}
+            }
+            return null;
+        })().then(s => { dollarSprite = s; return s; });
+        return dollarPromise;
+    }
+    function paintDollar(c, frame) {
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, c.width, c.height);
+        ctx.drawImage(frame, 0, 0, c.width, c.height);
+    }
+    function topVisible() { const p = $('topPage'); return !!p && !p.classList.contains('hidden'); }
+    function dTick(now) {
+        dRaf = 0;
+        const s = dollarSprite;
+        if (!s || !s.frames || !dollarCanvases.size || !topVisible() || document.hidden) return;
+        const idx = Math.floor((now % s.dur) / s.dur * s.frames.length);
+        if (idx !== dLast) {
+            dLast = idx;
+            dollarCanvases.forEach(c => { if (!c.isConnected) dollarCanvases.delete(c); else paintDollar(c, s.frames[idx]); });
+        }
+        dRaf = requestAnimationFrame(dTick);
+    }
+    function startDollarLoop() { if (!dRaf && dollarSprite && dollarSprite.frames) dRaf = requestAnimationFrame(dTick); }
+    document.addEventListener('visibilitychange', startDollarLoop);
+
+    function dollarEl() {
+        const c = document.createElement('canvas');
+        const px = Math.round(20 * Math.min(window.devicePixelRatio || 1, 2));
+        c.width = c.height = px;
+        c.className = 'lb-dollar';
+        loadDollar().then(s => {
+            if (!c.isConnected && !c.parentNode) return;
+            if (s && s.frames) {
+                paintDollar(c, s.frames[0]);
+                dollarCanvases.add(c);
+                startDollarLoop();
+            } else {
+                const f = s && s.img ? s.img.cloneNode() : document.createElement('span');
+                if (s && s.img) f.className = 'lb-dollar'; else { f.className = 'lb-dollar-fb'; f.textContent = '$'; }
+                c.replaceWith(f);
+            }
+        });
+        return c;
+    }
+
+    /* ---------- данные ---------- */
+    const num = v => Number(v) || 0;
+    const fmt = v => num(v).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+    const pname = r => r.nickname || r.username || 'Игрок';
+
+    function range(period, date) {
+        const now = new Date();
+        const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const DAY = 86400000;
+        switch (period) {
+            case 'today': return { from: sod, to: null };
+            case 'yesterday': return { from: new Date(sod - DAY), to: sod };
+            case 'week': return { from: new Date(now - 7 * DAY), to: null };
+            case 'month': return { from: new Date(now - 30 * DAY), to: null };
+            case 'date': {
+                const [y, m, d] = String(date).split('-').map(Number);
+                const a = new Date(y, m - 1, d);
+                return { from: a, to: new Date(a.getTime() + DAY) };
+            }
+            default: return { from: null, to: null };
+        }
+    }
+
+    async function fallbackRows(metric, from, to) {
+        let rows = null;
+        if (metric === 'balance' || (!from && !to)) {
+            const col = metric === 'balance' ? 'balance' : (metric === 'wins' ? 'total_win' : 'turnover');
+            const { data, error } = await supabase
+                .from('wxs_game')
+                .select('telegram_id,nickname,username,photo_url,balance,turnover,total_win')
+                .order(col, { ascending: false })
+                .limit(metric === 'losses' ? 300 : 50);
+            if (error || !data) return null;
+            rows = data.map(r => ({
+                id: r.telegram_id, name: pname(r), photo: r.photo_url || '',
+                value: metric === 'balance' ? num(r.balance)
+                     : metric === 'turnover' ? num(r.turnover)
+                     : metric === 'wins' ? num(r.total_win)
+                     : Math.max(0, num(r.turnover) - num(r.total_win))
+            }));
+        } else {
+            const agg = new Map();
+            for (let p = 0; p < 5; p++) {
+                let q = supabase.from('live_bets').select('telegram_id,name,amount,win_amount,resolved_at').not('telegram_id', 'is', null);
+                if (from) q = q.gte('created_at', from.toISOString());
+                if (to) q = q.lt('created_at', to.toISOString());
+                const { data, error } = await q.order('id', { ascending: false }).range(p * 1000, p * 1000 + 999);
+                if (error || !data) { if (p === 0) return null; break; }
+                data.forEach(b => {
+                    const a = agg.get(b.telegram_id) || { id: b.telegram_id, name: b.name || 'Игрок', photo: '', turnover: 0, wins: 0, loss: 0 };
+                    const amount = num(b.amount), win = num(b.win_amount);
+                    a.turnover += amount; a.wins += win;
+                    if (b.resolved_at) a.loss += amount - win;
+                    agg.set(b.telegram_id, a);
+                });
+                if (data.length < 1000) break;
+            }
+            rows = Array.from(agg.values()).map(a => ({
+                id: a.id, name: a.name, photo: '',
+                value: metric === 'turnover' ? a.turnover : metric === 'wins' ? a.wins : Math.max(0, a.loss)
+            }));
+            rows = rows.filter(r => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 50);
+            if (rows.length) {
+                try {
+                    const { data } = await supabase.from('wxs_game')
+                        .select('telegram_id,nickname,username,photo_url')
+                        .in('telegram_id', rows.map(r => r.id));
+                    const map = new Map((data || []).map(r => [r.telegram_id, r]));
+                    rows.forEach(r => { const u = map.get(r.id); if (u) { r.name = pname(u); r.photo = u.photo_url || ''; } });
+                } catch (e) {}
+            }
+        }
+        return rows.filter(r => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 50);
+    }
+
+    async function fetchRows(metric, period, date) {
+        const { from, to } = range(period, date);
+        try {
+            const { data, error } = await supabase.rpc('wxs_leaderboard', {
+                p_metric: metric,
+                p_from: from ? from.toISOString() : null,
+                p_to: to ? to.toISOString() : null,
+                p_limit: 50
+            });
+            if (!error && Array.isArray(data)) {
+                return data.map(r => ({ id: r.telegram_id, name: r.name || 'Игрок', photo: r.photo_url || '', value: num(r.value) }));
+            }
+        } catch (e) { /* функции ещё нет — считаем напрямую */ }
+        return fallbackRows(metric, from, to);
+    }
+
+    /* ---------- отрисовка ---------- */
+    const MEDAL_COLORS = { 1: ['#ffe27a', '#f0a500', '#e0301e'], 2: ['#e4ebff', '#9db0e6', '#3a63d8'], 3: ['#ffc58a', '#e08a3c', '#d4401e'] };
+    function medalSVG(n) {
+        const [a, b, r] = MEDAL_COLORS[n];
+        return '<svg class="lb-medal" viewBox="0 0 34 40" aria-hidden="true">' +
+            '<path d="M9 22 5 37l6-3 3 5 3-13z" fill="' + r + '"/><path d="M25 22l4 15-6-3-3 5-3-13z" fill="' + r + '"/>' +
+            '<circle cx="17" cy="15" r="13" fill="' + b + '"/><circle cx="17" cy="15" r="10.4" fill="' + a + '"/>' +
+            '<text x="17" y="21" text-anchor="middle" font-size="16" font-weight="900" fill="#3a2600" font-family="system-ui,sans-serif">' + n + '</text></svg>';
+    }
+    function letterOf(name) { return (String(name || '?').trim()[0] || '?').toUpperCase(); }
+    function avatarEl(row) {
+        const a = document.createElement('div');
+        a.className = 'lb-av';
+        const letter = () => { a.textContent = letterOf(row.name); };
+        if (row.photo) {
+            const img = new Image();
+            img.alt = ''; img.decoding = 'async'; img.loading = 'lazy'; img.draggable = false;
+            img.onerror = () => { img.remove(); letter(); };
+            img.src = row.photo;
+            a.appendChild(img);
+        } else letter();
+        return a;
+    }
+    function amountEl(v) {
+        const s = document.createElement('span');
+        s.className = 'lb-amt';
+        const t = document.createElement('span');
+        t.textContent = fmt(v);
+        s.append(t, dollarEl());
+        return s;
+    }
+    function myId() { return (typeof tg !== 'undefined' && tg?.initDataUnsafe?.user?.id) || null; }
+
+    function render(rows) {
+        const podium = $('lbPodium'), list = $('lbList');
+        dollarCanvases.clear(); dLast = -1;
+        podium.classList.remove('lb-dim'); list.classList.remove('lb-dim');
+        podium.textContent = ''; list.textContent = '';
+
+        if (!rows || !rows.length) {
+            podium.style.minHeight = '0';
+            const e = document.createElement('div');
+            e.className = 'lb-empty';
+            e.textContent = 'Пока нет данных за этот период';
+            list.appendChild(e);
+            return;
+        }
+        podium.style.minHeight = '';
+        const order = [1, 0, 2];
+        order.forEach((ri, pos) => {
+            const row = rows[ri];
+            const col = document.createElement('div');
+            col.className = 'lb-col lb-col--' + (ri + 1) + (row ? '' : ' lb-col--empty');
+            const delay = ri === 0 ? 120 : ri === 1 ? 0 : 60;
+            col.style.setProperty('--d', delay);
+            const body = document.createElement('div');
+            body.className = 'lb-col-body';
+            if (row) {
+                const medal = document.createElement('div');
+                medal.innerHTML = medalSVG(ri + 1);
+                const name = document.createElement('div');
+                name.className = 'lb-name'; name.textContent = row.name;
+                body.append(medal.firstChild, avatarEl(row), name, amountEl(row.value));
+            }
+            const block = document.createElement('div');
+            block.className = 'lb-block';
+            block.textContent = ri + 1;
+            col.append(body, block);
+            podium.appendChild(col);
+        });
+
+        const me = myId();
+        rows.slice(3).forEach((row, i) => {
+            const el = document.createElement('div');
+            el.className = 'lb-row' + (me && String(row.id) === String(me) ? ' me' : '');
+            el.style.setProperty('--d', Math.min(i * 35, 500) + 250);
+            const rank = document.createElement('div');
+            rank.className = 'lb-rank'; rank.textContent = i + 4;
+            const name = document.createElement('div');
+            name.className = 'lb-name'; name.textContent = row.name;
+            el.append(rank, avatarEl(row), name, amountEl(row.value));
+            list.appendChild(el);
+        });
+        startDollarLoop();
+    }
+
+    function renderLoading() {
+        const podium = $('lbPodium'), list = $('lbList');
+        if (podium.childElementCount === 0 && list.childElementCount === 0) {
+            podium.style.minHeight = '0';
+            for (let i = 0; i < 4; i++) { const s = document.createElement('div'); s.className = 'lb-skel'; list.appendChild(s); }
+        } else {
+            podium.classList.add('lb-dim'); list.classList.add('lb-dim');
+        }
+    }
+    function renderError() {
+        const podium = $('lbPodium'), list = $('lbList');
+        podium.textContent = ''; list.textContent = ''; podium.style.minHeight = '0';
+        podium.classList.remove('lb-dim'); list.classList.remove('lb-dim');
+        const e = document.createElement('div');
+        e.className = 'lb-empty';
+        e.textContent = 'Не удалось загрузить рейтинг';
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'lb-retry'; b.textContent = 'Повторить';
+        b.onclick = () => load(true);
+        e.append(document.createElement('br'), b);
+        list.appendChild(e);
+    }
+
+    async function load(force) {
+        const period = st.metric === 'balance' ? 'all' : st.period;
+        const key = st.metric + '|' + period + '|' + (period === 'date' ? st.date : '');
+        const hit = st.cache.get(key);
+        if (!force && hit && Date.now() - hit.t < TTL) { render(hit.rows); return; }
+        const seq = ++st.seq;
+        renderLoading();
+        let rows = null;
+        try { rows = await fetchRows(st.metric, period, st.date); } catch (e) { rows = null; }
+        if (seq !== st.seq) return;               // пока грузили, выбрали другое
+        if (!rows) { renderError(); return; }
+        st.cache.set(key, { t: Date.now(), rows });
+        render(rows);
+    }
+
+    /* ---------- управление ---------- */
+    const hap = t => { try { window.haptic && window.haptic(t); } catch (e) {} };
+    function setActive(container, attr, value) {
+        container.querySelectorAll('.lb-chip').forEach(b => b.classList.toggle('active', b.dataset[attr] === value));
+    }
+    function bind() {
+        if (st.bound) return;
+        st.bound = true;
+        const metrics = $('lbMetrics'), periods = $('lbPeriods'), wrap = $('lbPeriodsWrap');
+        const dateBtn = $('lbDateBtn'), dateIn = $('lbDateInput'), dateLabel = $('lbDateLabel');
+        dateIn.max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+        metrics.addEventListener('click', e => {
+            const b = e.target.closest('.lb-chip'); if (!b || b.dataset.metric === st.metric) return;
+            hap('select');
+            st.metric = b.dataset.metric;
+            setActive(metrics, 'metric', st.metric);
+            wrap.classList.toggle('collapsed', st.metric === 'balance');
+            b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+            load(false);
+        });
+        periods.addEventListener('click', e => {
+            const b = e.target.closest('.lb-chip'); if (!b) return;
+            if (b.dataset.period === st.period && !st.date) return;
+            hap('select');
+            st.period = b.dataset.period; st.date = null;
+            dateIn.value = ''; dateLabel.textContent = 'Выбрать дату'; dateBtn.classList.remove('active');
+            setActive(periods, 'period', st.period);
+            b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+            load(false);
+        });
+        dateIn.addEventListener('change', () => {
+            if (!dateIn.value) return;
+            hap('select');
+            st.period = 'date'; st.date = dateIn.value;
+            const [y, m, d] = st.date.split('-').map(Number);
+            dateLabel.textContent = new Date(y, m - 1, d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+            dateBtn.classList.add('active');
+            periods.querySelectorAll('.lb-chip').forEach(b => b.classList.remove('active'));
+            load(false);
+        });
+    }
+
+    window.openTop = function () {
+        showPage('topPage');
+        updateNav('top');
+        bind();
+        load(false);
+        loadDollar().then(startDollarLoop);
+    };
 })();
