@@ -4251,3 +4251,16 @@ input, textarea {
 @media (prefers-reduced-motion: reduce) {
     .page-enter { animation: none !important; }
 }
+
+
+/* ==========================================================
+   ПРОИЗВОДИТЕЛЬНОСТЬ: страницы Telegram Emoji (баннеры, Куб, Футбол)
+   Пока на экране идут Lottie-анимации, нижнее меню рисуется без
+   backdrop-filter (размытие фона пересчитывалось на каждом кадре).
+   Вид почти не меняется — фон меню просто чуть плотнее.
+========================================================== */
+body.anim-page .nav-bg {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(44, 44, 48, 0.94);
+}

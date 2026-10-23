@@ -4210,6 +4210,9 @@ function showPage(id) {
     const alreadyOpen = !!page && !page.classList.contains("hidden");
     hideAllPages();
     if (page) page.classList.remove("hidden");
+    // На страницах с Lottie-анимациями отключаем размытие фона у нижнего меню:
+    // иначе браузер пересчитывает blur на каждом кадре анимации.
+    document.body.classList.toggle("anim-page", id === "tgEmojiPage" || id === "diceGamePage" || id === "footballGamePage");
     window.scrollTo(0, 0);
     document.body.scrollTop = 0;
     if (!alreadyOpen) playPageEnter(page);
@@ -7193,6 +7196,19 @@ window.applyBetMax = applyBetMax;
 
 
 /* =========================
+   ЛИМИТ КАДРОВ ДЛЯ АНИМАЦИЙ TELEGRAM EMOJI
+   Раньше Lottie-анимации (6 баннеров, кубик, футбол) перерисовывались на каждом
+   кадре экрана (60-120 раз/с) — для WebView Telegram это слишком тяжело.
+   30 к/с глазом почти не отличить, а нагрузка падает вдвое. На слабых
+   устройствах (<=4 ядер или <=3 ГБ памяти) — 24 к/с.
+========================= */
+window.WXS_ANIM_FRAME_MS = (function () {
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem = navigator.deviceMemory || 4;
+    return (cores <= 4 || mem <= 3) ? 1000 / 24 : 1000 / 30;
+})();
+
+/* =========================
    TELEGRAM EMOJI — анимации на баннерах режимов
    Файлы лежат в animations/dice/banners/ (или banner/) :
    dice, football, basketball, darts, bowling, slots + расширение
@@ -7208,7 +7224,7 @@ window.applyBetMax = applyBetMax;
 (function () {
     const DIRS = ['animations/dice/banners/', 'animations/dice/banner/'];
     const IMG_EXTS = ['webp', 'gif', 'png'];
-    const DPR = 1.5;                       // разрешение canvas
+    const DPR = 1.25;                      // разрешение canvas (было 1.5 — дороже на ~40%)
     const SVG_BANNERS = new Set(['dice']); // какие баннеры рисовать через SVG вместо canvas
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const nextFrame = () => new Promise(r => requestAnimationFrame(r));
@@ -7288,12 +7304,21 @@ window.applyBetMax = applyBetMax;
 
         const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0;
         lastTick = now;
+        // Кадр анимации сменяется не чаще лимита (30 к/с) — а время считаем честно,
+        // поэтому скорость анимации не меняется. Баннеры перерисовываем по очереди
+        // (не все 6 в одном кадре), чтобы не было пиков нагрузки.
+        const minGap = window.WXS_ANIM_FRAME_MS - 2;
+        let slot = 0;
         players.forEach(p => {
             if (!p.visible) return;
             p.frame += dt * p.fr;
             if (p.frame >= p.total) p.frame %= p.total;
             const fi = Math.floor(p.frame);          // только целые кадры — без «рваной» интерполяции
-            if (fi !== p.last) { p.last = fi; p.anim.goToAndStop(fi, true); }
+            if (fi === p.last) return;
+            if (now - (p.lastRender || 0) < minGap) return;
+            p.last = fi; p.lastRender = now;
+            if (slot++ < 3) p.anim.goToAndStop(fi, true);   // максимум 3 баннера за кадр
+            else { p.last = -1; p.lastRender = 0; }          // остальные дорисуются в следующем кадре
         });
     }
     function ensureLoop() { if (!rafId) { lastTick = 0; rafId = requestAnimationFrame(tick); } }
@@ -7423,8 +7448,9 @@ window.applyBetMax = applyBetMax;
         preview.frame += dt * preview.fr;
         if (preview.frame >= preview.total) preview.frame %= preview.total;
         const fi = Math.floor(preview.frame);
-        if (fi !== preview.last) {
+        if (fi !== preview.last && now - (preview.lastRender || 0) >= window.WXS_ANIM_FRAME_MS - 2) {
             preview.last = fi;
+            preview.lastRender = now;
             preview.anim.goToAndStop(fi, true);
             if (pairActive && previewB) previewB.goToAndStop(fi, true);   // второй кубик в такт первому
         }
@@ -7562,7 +7588,7 @@ window.applyBetMax = applyBetMax;
             const last = Math.max((anim.totalFrames || 2) - 1, 1);
             const nativeMs = last / fr * 1000;
             let prevTarget = -1;
-            let lastNow = 0, maxDt = 0, slow = 0;
+            let lastNow = 0, maxDt = 0, slow = 0, lastRenderAt = 0;
             let renders = 0, renderMs = 0;
             const t0 = performance.now();
             (function step(now) {
@@ -7574,7 +7600,9 @@ window.applyBetMax = applyBetMax;
                 lastNow = now;
 
                 const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
-                if (target !== prevTarget) {
+                // кадры рисуем не чаще лимита, но последний кадр — всегда
+                if (target !== prevTarget && (target === last || now - lastRenderAt >= window.WXS_ANIM_FRAME_MS - 2)) {
+                    lastRenderAt = now;
                     const c0 = performance.now();
                     anim.goToAndStop(target, true);
                     renderMs += performance.now() - c0;
@@ -7755,7 +7783,10 @@ window.applyBetMax = applyBetMax;
         preview.frame += dt * preview.fr;
         if (preview.frame >= preview.total) preview.frame %= preview.total;
         const fi = Math.floor(preview.frame);
-        if (fi !== preview.last) { preview.last = fi; preview.anim.goToAndStop(fi, true); }
+        if (fi !== preview.last && now - (preview.lastRender || 0) >= window.WXS_ANIM_FRAME_MS - 2) {
+            preview.last = fi; preview.lastRender = now;
+            preview.anim.goToAndStop(fi, true);
+        }
     }
     function ensureLoop() {
         if (!rafId && preview && preview.visible && !preview.paused) { lastTick = 0; rafId = requestAnimationFrame(tick); }
@@ -7837,11 +7868,14 @@ window.applyBetMax = applyBetMax;
             const fr = anim.frameRate || 60;
             const last = Math.max((anim.totalFrames || 2) - 1, 1);
             const nativeMs = last / fr * 1000;
-            let prevTarget = -1;
+            let prevTarget = -1, lastRenderAt = 0;
             const t0 = performance.now();
             (function step(now) {
                 const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
-                if (target !== prevTarget) { anim.goToAndStop(target, true); prevTarget = target; }
+                if (target !== prevTarget && (target === last || now - lastRenderAt >= window.WXS_ANIM_FRAME_MS - 2)) {
+                    lastRenderAt = now;
+                    anim.goToAndStop(target, true); prevTarget = target;
+                }
                 if (target < last) requestAnimationFrame(step);
                 else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
             })(t0);
