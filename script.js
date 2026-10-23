@@ -1482,7 +1482,7 @@ async function cashoutMines() {
 async function resumeMinesGame() {
     if (!tg?.initData) return;
     const res = await minesApi('/api/mines/state');
-    if (!res.ok || !res.active) return;
+    if (!res || !res.ok || !res.active) return;
     if (!minesGame.active) minesGame.liveBetId = null;
     minesGame.active = true;
     minesGame.bet = res.bet;
@@ -7312,6 +7312,39 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
     function isTgEmojiPageVisible() {
         const pg = document.getElementById('tgEmojiPage');
         return !!(pg && !pg.classList.contains('hidden')) && !document.hidden;
+    }
+
+    // --- ИСПРАВЛЕНИЕ: эти функции/переменные использовались, но не были объявлены,
+    // из-за чего goHome() падал с "stopLoop is not defined" и приложение не запускалось ---
+    const observer = ('IntersectionObserver' in window)
+        ? new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                const p = players.get(e.target);
+                if (p) p.visible = e.isIntersecting;
+            });
+            ensureLoop();
+        }, { threshold: 0.01 })
+        : null;
+
+    function ensureLoop() {
+        if (!rafId && pageActive && players.size && isTgEmojiPageVisible()) {
+            lastTick = 0;
+            rafId = requestAnimationFrame(tick);
+        }
+    }
+
+    function stopLoop() {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    }
+
+    function tryImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.draggable = false;
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('image load failed: ' + src));
+            img.src = src;
+        });
     }
 
 function tick(now) {
