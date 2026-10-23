@@ -426,9 +426,7 @@ main {
     border-radius: 30px;
     
     /* Liquid Glass Effect */
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    background: linear-gradient(180deg, rgba(36, 28, 18, 0.95), rgba(22, 17, 10, 0.93));
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 
         0 10px 30px rgba(0, 0, 0, 0.5),
@@ -445,8 +443,6 @@ main {
     border-radius: 24px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -531,8 +527,6 @@ main {
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
 }
 
 .balance-info {
@@ -1275,9 +1269,7 @@ main {
 .crash-fairness-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.8);
 }
 
 .crash-fairness-content {
@@ -2207,8 +2199,8 @@ body.fairness-modal-open {
     inset: 0;
     border-radius: 33px;
     background: rgba(62, 62, 66, 0.62);
-    backdrop-filter: blur(22px) saturate(180%);
-    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
     border: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow:
         0 12px 30px rgba(0, 0, 0, 0.5),
@@ -2892,9 +2884,7 @@ body.fairness-modal-open {
 .ice-history-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.8);
 }
 
 .ice-history-content {
@@ -3191,8 +3181,7 @@ body.ice-history-modal-open {
     gap: 6px;
     text-align: center;
     padding: 20px;
-    background: rgba(6, 4, 20, 0.72);
-    backdrop-filter: blur(3px);
+    background: rgba(6, 4, 20, 0.84);
     border-radius: 28px;
     animation: iceResultFadeIn 0.4s ease;
 }

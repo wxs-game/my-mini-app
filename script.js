@@ -2127,6 +2127,19 @@ function computeCrashMultAt(elapsedMs, crashPointCap) {
 // раунды крутятся всё время, пока хотя бы у одного игрока открыто
 // приложение, независимо от того, на какой странице он сейчас находится
 // (ровно как уже сделано для Айс Арены).
+function makePagePoller(pageId, fn, offEvery) {
+    let n = 0;
+    return function () {
+        if (document.hidden) return;
+        const pg = document.getElementById(pageId);
+        if (pg && pg.classList.contains('hidden')) {
+            n = (n + 1) % offEvery;
+            if (n !== 0) return;
+        }
+        fn();
+    };
+}
+
 async function startCrashEngine() {
     if (crashLoopStarted) return;
     crashLoopStarted = true;
@@ -2148,7 +2161,7 @@ async function startCrashEngine() {
     startCrashClock();
 
     if (!crashLobby.pollInterval) {
-        crashLobby.pollInterval = setInterval(refreshCrashState, 1000);
+        crashLobby.pollInterval = setInterval(makePagePoller('crashPage', refreshCrashState, 3), 1000);
     }
     if (crashLobby.channel) return;
     try {
@@ -5524,7 +5537,7 @@ async function startIceArenaLobby() {
     await refreshIceArenaState();
     startIceArenaClock();
     if (!iceArena.pollInterval) {
-        iceArena.pollInterval = setInterval(() => refreshIceArenaState(), 1200);
+        iceArena.pollInterval = setInterval(makePagePoller('iceArenaPage', () => refreshIceArenaState(), 3), 1200);
     }
     if (iceArena.channel) return;
     try {
@@ -6921,6 +6934,28 @@ window.applyBetMax = applyBetMax;
         });
     }
 
+    // Анимации играют только пока видны на экране (и вкладка активна).
+    // Раньше все 8 SVG-стикеров крутились всегда, даже на скрытых страницах.
+    const stickerRecs = new Map();
+    function syncSticker(rec) {
+        if (rec.visible && !document.hidden) rec.anim.play(); else rec.anim.pause();
+    }
+    const stickerIO = ('IntersectionObserver' in window)
+        ? new IntersectionObserver(entries => {
+            entries.forEach(e => {
+                const rec = stickerRecs.get(e.target);
+                if (rec) { rec.visible = e.isIntersecting; syncSticker(rec); }
+            });
+        }, { threshold: 0.01 })
+        : null;
+    document.addEventListener('visibilitychange', () => stickerRecs.forEach(syncSticker));
+    function trackSticker(box, anim) {
+        if (anim.setSubframe) anim.setSubframe(false);      // только целые кадры
+        const rec = { anim, visible: !stickerIO };
+        stickerRecs.set(box, rec);
+        if (stickerIO) stickerIO.observe(box); else syncSticker(rec);
+    }
+
     async function buildStickerNode(base, ext) {
         const url = base + '.' + ext;
         if (ext === 'tgs' || ext === 'json') {
@@ -6930,13 +6965,15 @@ window.applyBetMax = applyBetMax;
             const data = await readLottieJson(await res.arrayBuffer());
             const box = document.createElement('div');
             box.className = 'sticker-lottie';
-            lottie.loadAnimation({
+            const anim = lottie.loadAnimation({
                 container: box,
                 renderer: 'svg',
                 loop: true,
-                autoplay: true,
-                animationData: data
+                autoplay: false,
+                animationData: data,
+                rendererSettings: { progressiveLoad: true, hideOnTransparent: true, preserveAspectRatio: 'xMidYMid meet' }
             });
+            trackSticker(box, anim);
             return box;
         }
         return tryImage(url);
