@@ -7765,10 +7765,11 @@ window.applyBetMax = applyBetMax;
     function init() {
         const nav = document.getElementById('bottomNav');
         const lens = document.getElementById('navLens');
-        if (!nav || !lens) return;
+        const pill = document.getElementById('navPill');
+        if (!nav || !lens || !pill) return;
+        const glass = lens.querySelector('.lens-glass');
+        const rim = lens.querySelector('.lens-rim');
         const items = Array.from(nav.querySelectorAll('.nav-item'));
-        const ua = navigator.userAgent;
-        if (/Chrome\/|Chromium|CriOS/.test(ua) && !/iPhone|iPad|iPod/.test(ua)) nav.classList.add('svgglass');
         const KEYS = ['home', 'games', 'balance', 'bonus', 'profile'];
         const actions = [
             () => goHome(),
@@ -7780,6 +7781,21 @@ window.applyBetMax = applyBetMax;
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
         const hap = t => { try { window.haptic && window.haptic(t); } catch (e) {} };
 
+        // Качество стекла: 2 — полное, 1 — облегчённое, 0 — только размытие.
+        // Если кадры начинают проседать, панель сама переключается на уровень ниже и запоминает это.
+        const ua = navigator.userAgent;
+        const chromium = /Chrome\/|Chromium|CriOS/.test(ua) && !/iPhone|iPad|iPod/.test(ua);
+        let tier = chromium ? 2 : 0;
+        try {
+            const saved = localStorage.getItem('navGlassTier');
+            if (saved !== null && +saved < tier) tier = +saved;
+        } catch (e) {}
+        function applyTier() {
+            nav.classList.toggle('svgglass', tier === 2);
+            nav.classList.toggle('svglite', tier === 1);
+        }
+        applyTier();
+
         let W = 0, H = 0, itemW = 0, restW = 0, restH = 0, dragW = 0, dragH = 0;
         const cx = i => (i + 0.5) * itemW;
         function measure() {
@@ -7787,35 +7803,42 @@ window.applyBetMax = applyBetMax;
             itemW = W / items.length;
             restW = itemW - 10;  restH = H - 12;
             dragW = itemW * 1.3; dragH = H + 16;
+            // размеры задаём один раз: фильтр стекла работает с постоянным размером
+            pill.style.width = restW + 'px';  pill.style.height = restH + 'px';
+            pill.style.borderRadius = restH / 2 + 'px';
+            lens.style.width = dragW + 'px';  lens.style.height = dragH + 'px';
+            lens.style.borderRadius = dragH / 2 + 'px';
         }
 
         // x — центр линзы, g — «раздутость» (0 плашка, 1 стекло), sq — сжатие о стенку
         const st = { x: 0, vx: 0, g: 0, vg: 0, sq: 0, vsq: 0, side: 0 };
         const tgt = { x: 0, g: 0, sq: 0 };
         let activeIdx = 0, hoverIdx = 0, pressed = false, moved = false;
-        let startX = 0, fingerX = 0, raf = 0, lastFrame = 0;
+        let startX = 0, fingerX = 0, raf = 0, lastFrame = 0, busyFrames = 0, slow = 0;
 
         function setOn(i) { items.forEach((el, k) => el.classList.toggle('on', k === i)); }
         function idxAt(x) { return clamp(Math.floor(x / itemW), 0, items.length - 1); }
         const rubber = o => 9 * (1 - Math.exp(-o / 20));
 
         function render() {
-            const g = clamp(st.g, 0, 1.08);
+            const g = clamp(st.g, 0, 1.06);
             const sq = clamp(st.sq, 0, 1);
             const bw = restW + (dragW - restW) * g;
             const bh = restH + (dragH - restH) * g;
-            const sp = Math.min(Math.abs(st.vx) / 1800, 1) * 0.14 * clamp(g, 0, 1);
+            const sp = Math.min(Math.abs(st.vx) / 1800, 1) * 0.14 * Math.min(g, 1);
             const sw = bw * (1 + sp);
             const w = sw * (1 - 0.2 * sq);
             const h = bh * (1 - sp * 0.35) * (1 + 0.07 * sq);
             const centered = st.x - w / 2;
             const pinned = st.side < 0 ? st.x - sw / 2 : st.x + sw / 2 - w;
             const left = centered + (pinned - centered) * sq;
-            lens.style.width = w + 'px';
-            lens.style.height = h + 'px';
-            lens.style.borderRadius = Math.min(w, h) / 2 + 'px';
-            lens.style.transform = 'translate3d(' + left + 'px,' + (-h / 2) + 'px,0)';
-            lens.style.setProperty('--g', clamp(g, 0, 1).toFixed(3));
+            // только transform и opacity — без пересчёта layout
+            lens.style.transform = 'translate3d(' + left + 'px,' + (-dragH / 2) + 'px,0) scale(' + (w / dragW) + ',' + (h / dragH) + ')';
+            pill.style.transform = 'translate3d(' + (st.x - restW / 2) + 'px,' + (-restH / 2) + 'px,0)';
+            const go = clamp((g - 0.05) / 0.55, 0, 1);
+            glass.style.opacity = go;
+            rim.style.opacity = go;
+            pill.style.opacity = 1 - clamp(g * 2, 0, 1);
         }
 
         function step(dt) {
@@ -7828,11 +7851,26 @@ window.applyBetMax = applyBetMax;
             [st.sq, st.vsq] = sp(st.sq, st.vsq, tgt.sq, 520, 30);
         }
         function frame(now) {
-            let dt = Math.min(0.034, (now - lastFrame) / 1000 || 0.016);
+            const raw = (now - lastFrame) / 1000 || 0.016;
+            const dt = Math.min(0.034, raw);
             lastFrame = now;
             step(dt / 2); step(dt / 2);
             render();
-            const settled = !pressed &&
+
+            // авто-снижение качества, если стекло тормозит
+            if (tier > 0 && st.g > 0.3) {
+                busyFrames++;
+                if (busyFrames > 10) {
+                    slow = raw > 0.026 ? slow + 1 : Math.max(0, slow - 1);
+                    if (slow >= 14) {
+                        tier--; applyTier(); slow = 0; busyFrames = 0;
+                        try { localStorage.setItem('navGlassTier', String(tier)); } catch (e) {}
+                    }
+                }
+            } else { busyFrames = 0; }
+
+            // когда всё успокоилось (в т.ч. палец стоит на месте) — цикл останавливается
+            const settled =
                 Math.abs(st.x - tgt.x) < 0.1 && Math.abs(st.vx) < 0.5 &&
                 Math.abs(st.g - tgt.g) < 0.002 && Math.abs(st.vg) < 0.01 &&
                 Math.abs(st.sq - tgt.sq) < 0.002 && Math.abs(st.vsq) < 0.01;

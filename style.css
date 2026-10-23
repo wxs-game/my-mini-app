@@ -2247,7 +2247,7 @@ body.fairness-modal-open {
 .nav-item.on .nav-icon .sh { fill-opacity: 1; }
 .nav-item.on .nav-icon .dt { stroke: #4a4a4f; }
 .nav-item.on .nav-icon .dtf { fill: #4a4a4f; }
-.bottom-nav.pressing .nav-item.on .nav-icon { transform: translateY(-1px) scale(1.1); }
+.bottom-nav.pressing .nav-item.on .nav-icon { transform: translateY(-1px) scale(1.06); }
 
 .nav-item small {
     font-size: 10px;
@@ -2257,89 +2257,60 @@ body.fairness-modal-open {
 }
 .nav-item.on small { font-weight: 700; }
 
-/* «Линза»: в покое — мягкая плашка, при зажатии — жидкое стекло с реальным преломлением */
-.nav-lens {
-    --g: 0;
+/* Плашка под активным разделом (в покое) */
+.nav-pill {
     position: absolute;
     left: 0;
     top: 50%;
-    width: 60px;
-    height: 54px;
-    border-radius: 27px;
+    z-index: 0;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.12);
+    will-change: transform, opacity;
+}
+
+/* Линза: фиксированного размера, двигается и масштабируется только transform'ом (без layout) */
+.nav-lens {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 90px;
+    height: 80px;
+    border-radius: 40px;
     z-index: 2;
     pointer-events: none;
-    will-change: transform, width, height;
-    background: linear-gradient(180deg,
-        rgba(255, 255, 255, calc(0.13 + 0.05 * var(--g))),
-        rgba(255, 255, 255, calc(0.08 + 0.03 * var(--g))));
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, calc(0.07 + 0.1 * var(--g))),
-        inset 0 -9px 12px -7px rgba(255, 255, 255, calc(0.4 * var(--g))),
-        inset 0 7px 10px -6px rgba(255, 255, 255, calc(0.35 * var(--g))),
-        0 calc(10px * var(--g)) calc(26px * var(--g)) rgba(0, 0, 0, calc(0.35 * var(--g)));
+    transform-origin: 0 50%;
+    will-change: transform;
 }
-.lens-glass, .lens-fringe, .lens-ring, .lens-gloss, .lens-cap { position: absolute; display: block; pointer-events: none; }
+.lens-glass, .lens-rim { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
 
-/* стеклянный слой: преломление фона. Fallback (Safari) — лёгкое размытие и осветление */
+/* Стекло. Fallback (Safari / слабые устройства) — размытие и осветление */
 .lens-glass {
-    inset: 0;
-    border-radius: inherit;
-    opacity: var(--g);
-    backdrop-filter: blur(1.5px) brightness(1.18) saturate(1.7);
-    -webkit-backdrop-filter: blur(1.5px) brightness(1.18) saturate(1.7);
+    backdrop-filter: blur(1.5px) brightness(1.15) saturate(1.6);
+    -webkit-backdrop-filter: blur(1.5px) brightness(1.15) saturate(1.6);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 10px 24px rgba(0, 0, 0, 0.3);
 }
+/* Полное: настоящее преломление + дисперсия + блики по карте высот */
 .bottom-nav.svgglass .lens-glass {
-    backdrop-filter: url(#lg-refract) blur(0.4px) brightness(1.12) saturate(1.75);
-    -webkit-backdrop-filter: url(#lg-refract) blur(0.4px) brightness(1.12) saturate(1.75);
+    backdrop-filter: url(#lg-refract) brightness(1.08) saturate(1.6);
+    -webkit-backdrop-filter: url(#lg-refract) brightness(1.08) saturate(1.6);
 }
-
-/* цветная дисперсия на кромке */
-.lens-fringe {
-    inset: 0;
-    border-radius: inherit;
-    opacity: calc(var(--g) * 0.8);
-    box-shadow:
-        inset 4px 2px 8px -4px rgba(255, 80, 160, 0.55),
-        inset -4px -2px 8px -4px rgba(80, 190, 255, 0.55);
+/* Облегчённое: одно преломление + блик */
+.bottom-nav.svglite .lens-glass {
+    backdrop-filter: url(#lg-refract-lite) brightness(1.08) saturate(1.6);
+    -webkit-backdrop-filter: url(#lg-refract-lite) brightness(1.08) saturate(1.6);
 }
-/* тонкая кромка: свет сверху-слева и снизу-справа, как от окна */
-.lens-ring {
-    inset: 0;
-    border-radius: inherit;
+/* Тонкая кромка нужна только в fallback: при SVG-стекле блики считает сам фильтр */
+.lens-rim {
     padding: 1.5px;
-    opacity: calc(var(--g) * 0.95);
     background: conic-gradient(from -45deg,
-        rgba(255,255,255,.95) 0deg, rgba(255,255,255,.4) 25deg, rgba(110,190,255,.3) 60deg,
-        rgba(255,255,255,.08) 110deg, rgba(255,255,255,.1) 150deg, rgba(255,255,255,.85) 180deg,
-        rgba(255,140,190,.3) 215deg, rgba(255,255,255,.1) 260deg, rgba(255,255,255,.12) 320deg,
-        rgba(255,255,255,.95) 360deg);
+        rgba(255,255,255,.8) 0deg, rgba(255,255,255,.08) 90deg,
+        rgba(255,255,255,.7) 180deg, rgba(255,255,255,.08) 270deg, rgba(255,255,255,.8) 360deg);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
-/* мягкий верхний блик */
-.lens-gloss {
-    top: 3px;
-    left: 14%;
-    right: 14%;
-    height: 38%;
-    border-radius: 50% 50% 60% 60% / 80% 80% 100% 100%;
-    background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
-    opacity: calc(var(--g) * 0.5);
-    filter: blur(1.2px);
-}
-/* тёмные «полосы» преломления сверху и снизу — размытые, без цветных пятен */
-.lens-cap {
-    left: 50%;
-    width: 44%;
-    height: 8px;
-    border-radius: 6px;
-    transform: translateX(-50%);
-    filter: blur(2.4px);
-    opacity: calc(var(--g) * 0.6);
-}
-.lens-cap.top { top: 5px;    background: rgba(10, 16, 48, 0.9); }
-.lens-cap.bot { bottom: 5px; background: rgba(36, 20, 8, 0.85); }
+.bottom-nav.svgglass .lens-rim, .bottom-nav.svglite .lens-rim { display: none; }
 
 /* ==========================================
    ЗАГОЛОВКИ СТРАНИЦ И ШАПКИ (PAGE HEADERS)
