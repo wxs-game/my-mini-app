@@ -4767,6 +4767,11 @@ const EMOJI_SLOT_SYMBOLS = {
     seven: '7️⃣'
 };
 
+// Раскладка бросков по номерам — та же, что у Куба и Футбола: сначала
+// выпадает номер броска (darts1…darts6, basketball1…basketball5,
+// bowling1…bowling6), по нему проигрывается соответствующая .tgs-анимация,
+// и уже по номеру решается, зашла ставка или нет. Поле wins — это номера
+// бросков, на которых выбранный режим считается выигрышным.
 const EMOJI_GAME_CONFIGS = {
     basketball: {
         title: 'Баскетбол',
@@ -4774,15 +4779,19 @@ const EMOJI_GAME_CONFIGS = {
         animation: 'basketball',
         maxAttempts: 3,
         fallback: '🏀',
+        rolls: 5,
+        attemptLabels: ['1 БРОСОК', '2 БРОСКА', '3 БРОСКА'],
         modes: [
-            { key: 'clean', name: 'Чистый гол', coef: 5.00, winText: 'Чистый гол!', loseText: 'Мяч не залетел' },
-            { key: 'bounce', name: 'Отскок', coef: 5.00, winText: 'Отскок от щита!', loseText: 'Отскока не было' },
-            { key: 'close', name: 'Близко', coef: 5.00, winText: 'Мяч рядом с кольцом!', loseText: 'Далеко от кольца' },
-            { key: 'stuck', name: 'Застрял', coef: 5.00, winText: 'Мяч застрял!', loseText: 'Мяч не застрял' },
-            { key: 'edge', name: 'Попал с краем', coef: 5.00, winText: 'Попал с краем!', loseText: 'Край не попал' },
-            { key: 'spin', name: 'Прокрут', coef: 2.50, winText: 'Мяч прокрутился в кольцо!', loseText: 'Прокрута не было' },
-            { key: 'anyGoal', name: 'Любой гол', coef: 2.50, winText: 'Гол!', loseText: 'Промах' },
-            { key: 'miss', name: 'Промах', coef: 1.66, winText: 'Промах!', loseText: 'Мяч попал' }
+            // 1 — отскок, 2 — близко, 3 — застрял, 4 — попал с краем, 5 — чистый гол
+            { key: 'bounce', name: 'Отскок', coef: 5.00, wins: [1] },
+            { key: 'close', name: 'Близко', coef: 5.00, wins: [2] },
+            { key: 'stuck', name: 'Застрял', coef: 5.00, wins: [3] },
+            { key: 'edge', name: 'Попал с краем', coef: 5.00, wins: [4] },
+            { key: 'clean', name: 'Чистый гол', coef: 5.00, wins: [5] },
+            // Прокрут — мяч крутится по кольцу: либо мимо (2), либо всё же в кольцо (4).
+            { key: 'spin', name: 'Прокрут', coef: 2.50, wins: [2, 4] },
+            { key: 'anyGoal', name: 'Любой гол', coef: 2.50, wins: [4, 5] },
+            { key: 'miss', name: 'Промах', coef: 1.66, wins: [1, 2, 3] }
         ]
     },
     darts: {
@@ -4791,16 +4800,20 @@ const EMOJI_GAME_CONFIGS = {
         animation: 'darts',
         maxAttempts: 3,
         fallback: '🎯',
+        rolls: 6,
+        attemptLabels: ['1 ДРОТИК', '2 ДРОТИКА', '3 ДРОТИКА'],
         modes: [
-            { key: 'center', name: 'Центр', coef: 6.00, winText: 'В центр!', loseText: 'Не в центр' },
-            { key: 'miss', name: 'Промах', coef: 6.00, winText: 'Промах!', loseText: 'Дротик попал' },
-            { key: 's1red', name: 'Сектор 1 🔴', coef: 6.00, winText: 'Красный сектор 1!', loseText: 'Другой сектор' },
-            { key: 's1white', name: 'Сектор 1 ⚪️', coef: 6.00, winText: 'Белый сектор 1!', loseText: 'Другой сектор' },
-            { key: 's2red', name: 'Сектор 2 🔴', coef: 6.00, winText: 'Красный сектор 2!', loseText: 'Другой сектор' },
-            { key: 's2white', name: 'Сектор 2 ⚪️', coef: 6.00, winText: 'Белый сектор 2!', loseText: 'Другой сектор' },
-            { key: 'anySector', name: 'Любой сектор', coef: 1.50, winText: 'Попадание в сектор!', loseText: 'Мимо сектора' },
-            { key: 'redCenter', name: '🔴 Сектор или центр', coef: 2.00, winText: 'Красный сектор или центр!', loseText: 'Не красный и не центр' },
-            { key: 'whiteBounce', name: '⚪️ Сектор или отскок', coef: 2.00, winText: 'Белый сектор или отскок!', loseText: 'Не белый и не отскок' }
+            // 1 — отскок, 2 — красный сектор 1, 3 — белый сектор 1,
+            // 4 — красный сектор 2, 5 — белый сектор 2, 6 — центр
+            { key: 'center', name: 'Центр', coef: 6.00, wins: [6] },
+            { key: 'miss', name: 'Промах', coef: 6.00, wins: [1] },
+            { key: 's1red', name: 'Сектор 1 🔴', coef: 6.00, wins: [2] },
+            { key: 's1white', name: 'Сектор 1 ⚪️', coef: 6.00, wins: [3] },
+            { key: 's2red', name: 'Сектор 2 🔴', coef: 6.00, wins: [4] },
+            { key: 's2white', name: 'Сектор 2 ⚪️', coef: 6.00, wins: [5] },
+            { key: 'anySector', name: 'Любой сектор', coef: 1.50, wins: [2, 3, 4, 5] },
+            { key: 'redCenter', name: '🔴 Сектор или центр', coef: 2.00, wins: [2, 4, 6] },
+            { key: 'whiteBounce', name: '⚪️ Сектор или отскок', coef: 2.00, wins: [1, 3, 5] }
         ]
     },
     bowling: {
@@ -4809,13 +4822,17 @@ const EMOJI_GAME_CONFIGS = {
         animation: 'bowling',
         maxAttempts: 3,
         fallback: '🎳',
+        rolls: 6,
+        attemptLabels: ['1 ШАР', '2 ШАРА', '3 ШАРА'],
         modes: [
-            { key: 'miss', name: 'Промах', coef: 6.00, winText: 'Промах!', loseText: 'Кегли сбиты' },
-            { key: 'pin1', name: 'Сбито 1 / 6', coef: 6.00, winText: 'Сбита 1 кегля!', loseText: 'Другой результат' },
-            { key: 'pin3', name: 'Сбито 3 / 6', coef: 6.00, winText: 'Сбито 3 кегли!', loseText: 'Другой результат' },
-            { key: 'pin4', name: 'Сбито 4 / 6', coef: 6.00, winText: 'Сбито 4 кегли!', loseText: 'Другой результат' },
-            { key: 'pin5', name: 'Сбито 5 / 6', coef: 6.00, winText: 'Сбито 5 кеглей!', loseText: 'Другой результат' },
-            { key: 'strike', name: 'Страйк', coef: 6.00, winText: 'Страйк!', loseText: 'Не страйк' }
+            // 1 — промах, 2 — сбито 1 из 6, 3 — сбито 3 из 6,
+            // 4 — сбито 4 из 6, 5 — сбито 5 из 6, 6 — страйк
+            { key: 'miss', name: 'Промах', coef: 6.00, wins: [1] },
+            { key: 'pin1', name: 'Сбито 1 / 6', coef: 6.00, wins: [2] },
+            { key: 'pin3', name: 'Сбито 3 / 6', coef: 6.00, wins: [3] },
+            { key: 'pin4', name: 'Сбито 4 / 6', coef: 6.00, wins: [4] },
+            { key: 'pin5', name: 'Сбито 5 / 6', coef: 6.00, wins: [5] },
+            { key: 'strike', name: 'Страйк', coef: 6.00, wins: [6] }
         ]
     },
     slots: {
@@ -4825,14 +4842,15 @@ const EMOJI_GAME_CONFIGS = {
         maxAttempts: 1,
         fallback: '🎰',
         slots: true,
+        attemptLabels: ['1 РАУНД', '2 РАУНДА', '3 РАУНДА'],
         modes: [
-            { key: 'seven', name: '3 Семёрки', coef: 64.00, symbol: 'seven', winText: 'Джекпот! Три семёрки!', loseText: 'Не три семёрки' },
-            { key: 'lemon', name: '3 Лимона', coef: 64.00, symbol: 'lemon', winText: 'Три лимона!', loseText: 'Не три лимона' },
-            { key: 'grape', name: '3 Винограда', coef: 64.00, symbol: 'grape', winText: 'Три винограда!', loseText: 'Не три винограда' },
-            { key: 'bar', name: '3 Бара', coef: 64.00, symbol: 'bar', winText: 'Три бара!', loseText: 'Не три бара' },
-            { key: 'anyCombo', name: 'Любая комбинация', coef: 16.00, winText: 'Комбинация собрана!', loseText: 'Комбинации нет' },
-            { key: 'unique', name: 'Уникальные символы', coef: 2.66, winText: 'Все символы разные!', loseText: 'Символы повторились' },
-            { key: 'duel', name: 'Дуэль', coef: 1.85, winText: 'Дуэль выиграна!', loseText: 'Дуэль проиграна' }
+            { key: 'seven', name: '3 Семёрки', coef: 64.00, symbol: 'seven' },
+            { key: 'lemon', name: '3 Лимона', coef: 64.00, symbol: 'lemon' },
+            { key: 'grape', name: '3 Винограда', coef: 64.00, symbol: 'grape' },
+            { key: 'bar', name: '3 Бара', coef: 64.00, symbol: 'bar' },
+            { key: 'anyCombo', name: 'Любая комбинация', coef: 16.00 },
+            { key: 'unique', name: 'Уникальные символы', coef: 2.66 },
+            { key: 'duel', name: 'Дуэль', coef: 1.85 }
         ]
     }
 };
@@ -4877,6 +4895,7 @@ function openEmojiGame(key) {
     const countRow = document.getElementById("emojiCountRow");
     if (countRow) countRow.classList.toggle("hidden-row", cfg.maxAttempts === 1);
     document.querySelectorAll("#emojiCountRow .dice-count-btn").forEach((b, i) => {
+        if (cfg.attemptLabels && cfg.attemptLabels[i]) b.textContent = cfg.attemptLabels[i];
         b.classList.toggle("active", i === 0);
     });
 
@@ -4973,6 +4992,20 @@ function emojiAttemptWin(baseCoef) {
     return cryptoUnitRandom() < (1 / baseCoef);
 }
 
+// Честный номер броска 1..count (crypto вместо Math.random), как у Куба и Футбола.
+function rollEmojiOutcome(count) {
+    const n = Math.max(1, count | 0);
+    if (n === 1) return 1;
+    try {
+        const a = new Uint32Array(1);
+        const limit = 4294967296 - (4294967296 % n);
+        do { crypto.getRandomValues(a); } while (a[0] >= limit);
+        return (a[0] % n) + 1;
+    } catch (e) {
+        return Math.floor(Math.random() * n) + 1;
+    }
+}
+
 function emojiSlotSymbols(cfg, modeKey, win) {
     const keys = ['bar', 'grape', 'lemon', 'seven'];
     const mode = cfg.modes.find(m => m.key === modeKey) || {};
@@ -5053,11 +5086,21 @@ async function handleEmojiGamePlay() {
     const liveBetId = await broadcastLiveBet(bet, cfg.label);
 
     // --- 2. исходы ---
+    // Для дартса, баскетбола и боулинга сначала выпадает номер броска
+    // (1..rolls), и по нему уже определяется выигрыш режима — как у Куба и
+    // Футбола. Слоты работают по-прежнему по вероятности.
     const results = [];
     let allPass = true;
     for (let i = 0; i < attempts; i++) {
-        const pass = emojiAttemptWin(mode.coef);
-        results.push(pass);
+        let pass;
+        let roll = null;
+        if (cfg.slots) {
+            pass = emojiAttemptWin(mode.coef);
+        } else {
+            roll = rollEmojiOutcome(cfg.rolls || 1);
+            pass = Array.isArray(mode.wins) && mode.wins.indexOf(roll) !== -1;
+        }
+        results.push({ pass, roll });
         if (!pass) { allPass = false; break; }
     }
     const win = allPass && results.length === attempts;
@@ -5084,22 +5127,18 @@ async function handleEmojiGamePlay() {
     unlockEconomy();
 
     // --- 3. анимация ---
+    // Вместо цитат режима («Страйк!», «В центр!» и т.п.) всегда показываем
+    // типичный результат ставки: зашла или не зашла.
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.EmojiGameStage) {
             for (let i = 0; i < results.length; i++) {
                 const isFinal = i === results.length - 1;
-                const pass = results[i];
-                let title;
-                if (attempts > 1) {
-                    const roundTag = " (" + (i + 1) + "/" + attempts + ")";
-                    title = isFinal
-                        ? (pass ? (mode.winText || "Ставка сыграла") : (mode.loseText || "Ставка не сыграла")) + roundTag
-                        : (pass ? "Раунд зашёл" : "Раунд не зашёл") + roundTag;
-                } else {
-                    title = pass ? (mode.winText || "Ставка сыграла") : (mode.loseText || "Ставка не сыграла");
-                }
+                const { pass, roll } = results[i];
+                const roundTag = attempts > 1 ? " (" + (i + 1) + "/" + attempts + ")" : "";
+                const title = (pass ? "Ставка зашла" : "Ставка не зашла") + roundTag;
                 await window.EmojiGameStage.playAttempt({
+                    roll,
                     win: pass,
                     title,
                     amountText: isFinal ? amountText : "",
@@ -7970,6 +8009,45 @@ window.applyBetMax = applyBetMax;
 })();
 
 
+/* Ждёт, пока результат (галочка/крестик, искры и текст) полностью
+   проиграет свою анимацию, и держит его на экране не меньше minMs.
+   Благодаря этому следующий бросок или скрытие результата никогда
+   не обрывают анимацию галочки на середине. */
+function waitResultAnimationEnd(res, minMs) {
+    const min = Math.max(0, minMs || 1000);
+    const startedAt = performance.now();
+    return new Promise(resolve => {
+        if (!res) { setTimeout(resolve, min); return; }
+
+        const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced) { setTimeout(resolve, min); return; }
+
+        let done = false;
+        let fallbackTimer = 0;
+
+        const finish = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(fallbackTimer);
+            res.removeEventListener('animationend', onEnd, true);
+            const left = min - (performance.now() - startedAt);
+            if (left > 0) setTimeout(resolve, left);
+            else resolve();
+        };
+
+        // Последней в блоке результата доигрывает сумма — по ней и понимаем,
+        // что галочка/крестик и подписи уже полностью отрисовались.
+        const onEnd = (e) => {
+            const t = e.target;
+            if (t && t.classList && t.classList.contains('dice-result-amount')) finish();
+        };
+
+        res.addEventListener('animationend', onEnd, true);
+        fallbackTimer = setTimeout(finish, 1600);
+    });
+}
+
+
 /* =========================
    СТИКЕРЫ ВМЕСТО ЭМОДЗИ В БЫСТРЫХ ДЕЙСТВИЯХ (Пополнить, Вывод, VIP, Задания)
    Положи по ОДНОМУ файлу в animations/stickers/: deposit, withdraw, vip, tasks + <расширение>:
@@ -8123,7 +8201,13 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
     const BANNER_DPR = Math.min(window.devicePixelRatio || 1, 1.5);
     const STAGE_DPR = Math.min(window.devicePixelRatio || 1, 1.75);
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    const nextFrame = () => new Promise(r => {
+        let done = false;
+        const fin = () => { if (done) return; done = true; r(); };
+        requestAnimationFrame(fin);
+        setTimeout(fin, 120);
+    });
 
     async function readLottieJson(buf) {
         const bytes = new Uint8Array(buf);
@@ -8400,7 +8484,13 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
     const ROLL_DIR = 'animations/dice/';   // cube1 … cube6
     const ROLL_MS = 4000;                  // общее время броска: анимация + удержание последнего кадра
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    const nextFrame = () => new Promise(r => {
+        let done = false;
+        const fin = () => { if (done) return; done = true; r(); };
+        requestAnimationFrame(fin);
+        setTimeout(fin, 120);
+    });
     const $ = id => document.getElementById(id);
     const reflow = el => void el.offsetWidth;
     const loadRaw = base => (window.TgsCache && typeof lottie !== 'undefined')
@@ -8675,7 +8765,7 @@ function playRoll(anim, totalMs) {
                 '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
                 mark + sparkles() +
             '</svg>' +
-            '<div class="dice-result-title">' + (title || (win ? 'Ставка сыграла' : 'Ставка не сыграла')) + '</div>' +
+            '<div class="dice-result-title">' + (title || (win ? 'Ставка зашла' : 'Ставка не зашла')) + '</div>' +
             '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
@@ -8742,9 +8832,9 @@ function playRoll(anim, totalMs) {
         res.style.transition = '';
         res.classList.add('show');
 
-        // Даём анимации галочки/крестика, искр и текста («Ставка зашла (1/2)»)
-        // полностью доиграть и зафиксироваться на экране перед вылетом второго куба
-        await wait(1150);
+        // Галочка/крестик, искры и текст доигрывают полностью и не обрываются
+        // следующим кубом — ждём именно конца анимации, а не фиксированный таймер.
+        await waitResultAnimationEnd(res, 1050);
         if (box && box.parentNode === rollEl) rollEl.removeChild(box);
         rollEl.className = 'dice-layer dice-roll';
         prepared = null;
@@ -8781,7 +8871,13 @@ function playRoll(anim, totalMs) {
     const ROLL_DIR = 'animations/dice/';     // football1 … football5
     const ROLL_MS = 4000;
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    const nextFrame = () => new Promise(r => {
+        let done = false;
+        const fin = () => { if (done) return; done = true; r(); };
+        requestAnimationFrame(fin);
+        setTimeout(fin, 120);
+    });
     const $ = id => document.getElementById(id);
     const reflow = el => void el.offsetWidth;
     const loadRaw = base => (window.TgsCache && typeof lottie !== 'undefined')
@@ -8991,7 +9087,7 @@ function playRoll(anim, totalMs) {
                 '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
                 mark + sparkles() +
             '</svg>' +
-            '<div class="dice-result-title">' + (title || (win ? 'Ставка сыграла' : 'Ставка не сыграла')) + '</div>' +
+            '<div class="dice-result-title">' + (title || (win ? 'Ставка зашла' : 'Ставка не зашла')) + '</div>' +
             '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
@@ -9056,7 +9152,8 @@ function playRoll(anim, totalMs) {
         res.style.transition = '';
         res.classList.add('show');
 
-        await wait(600);
+        // Галочка/крестик не обрывается следующим ударом — ждём конца анимации.
+        await waitResultAnimationEnd(res, 1050);
         if (box && box.parentNode === rollEl) rollEl.removeChild(box);
         rollEl.className = 'dice-layer dice-roll';
         prepared = null;
@@ -9084,7 +9181,13 @@ function playRoll(anim, totalMs) {
 (function () {
     const DIRS = ['animations/dice/banners/', 'animations/dice/'];
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    const nextFrame = () => new Promise(r => {
+        let done = false;
+        const fin = () => { if (done) return; done = true; r(); };
+        requestAnimationFrame(fin);
+        setTimeout(fin, 120);
+    });
     const $ = id => document.getElementById(id);
     const GAME_CONFIGS = window.EMOJI_GAME_CONFIGS || {};
     const SLOT_SYMBOLS = window.EMOJI_SLOT_SYMBOLS || {};
@@ -9109,6 +9212,17 @@ function playRoll(anim, totalMs) {
         return null;
     }
 
+    // Заранее подтягиваем все броски игры (darts1…darts6, basketball1…5,
+    // bowling1…6), чтобы нужный номер проигрывался без задержки.
+    function preloadRolls(gameKey, count) {
+        if (!gameKey || !count || !window.TgsCache) return;
+        for (let n = 1; n <= count; n++) {
+            setTimeout(() => {
+                try { window.TgsCache.peekRaw(DIRS[1] + gameKey + n); } catch (e) {}
+            }, n * 100);
+        }
+    }
+
     function sparkles() {
         const stars = [[26, 60, 0.36], [176, 124, 0.44], [70, 170, 0.50]];
         const dots = [[58, 32, 0.40], [164, 70, 0.48], [30, 130, 0.54], [130, 176, 0.42]];
@@ -9130,7 +9244,7 @@ function playRoll(anim, totalMs) {
                 '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
                 mark + sparkles() +
             '</svg>' +
-            '<div class="dice-result-title">' + (title || (win ? 'Ставка сыграла' : 'Ставка не сыграла')) + '</div>' +
+            '<div class="dice-result-title">' + (title || (win ? 'Ставка зашла' : 'Ставка не зашла')) + '</div>' +
             '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
@@ -9164,6 +9278,7 @@ function playRoll(anim, totalMs) {
         key = gameKey;
         cfg = GAME_CONFIGS[gameKey] || null;
         reset();
+        if (cfg) preloadRolls(gameKey, cfg.rolls || 0);
 
         const prev = $('emojiGamePreview');
         if (!prev) return;
@@ -9244,8 +9359,15 @@ function playRoll(anim, totalMs) {
         await wait(600);
     }
 
-    async function playRollAnimation(rollEl) {
-        const data = key ? await loadData(key) : null;
+    async function playRollAnimation(rollEl, rollNumber) {
+        // Сначала берём анимацию конкретного броска (darts3, bowling6,
+        // basketball2…) из animations/dice, а если её нет — общий баннер игры.
+        const numbered = (key && rollNumber) ? key + rollNumber : null;
+        let data = null;
+        if (numbered && window.TgsCache) {
+            data = await window.TgsCache.load(DIRS[1] + numbered);
+        }
+        if (!data && key) data = await loadData(key);
         if (!data || typeof lottie === 'undefined') {
             const fb = document.createElement('div');
             fb.className = 'dice-fallback';
@@ -9292,11 +9414,11 @@ function playRoll(anim, totalMs) {
         try { anim.destroy(); } catch (e) {}
     }
 
-    async function playAttempt({ win, title, amountText, symbols }) {
+    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols }) {
         const prev = $('emojiGamePreview');
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
-        const roll = $('emojiGameRoll');
+        const rollEl = $('emojiGameRoll');
         if (!prev || !res) return;
 
         if (res.classList.contains('show')) {
@@ -9309,22 +9431,22 @@ function playRoll(anim, totalMs) {
         prev.classList.add('out');
 
         if (cfg && cfg.slots) {
-            if (roll) {
-                roll.className = 'dice-layer dice-roll';
-                roll.innerHTML = '';
+            if (rollEl) {
+                rollEl.className = 'dice-layer dice-roll';
+                rollEl.innerHTML = '';
             }
             if (slots) slots.classList.add('show');
             await playSlots(symbols, win);
         } else {
             if (slots) slots.classList.remove('show');
-            if (roll) {
+            if (rollEl) {
                 const side = Math.random() < 0.5 ? 'from-left' : 'from-right';
-                roll.className = 'dice-layer dice-roll ' + side;
-                roll.innerHTML = '';
+                rollEl.className = 'dice-layer dice-roll ' + side;
+                rollEl.innerHTML = '';
                 await nextFrame();
-                roll.classList.add('in');
-                await playRollAnimation(roll);
-                roll.classList.add('away');
+                rollEl.classList.add('in');
+                await playRollAnimation(rollEl, rollNumber);
+                rollEl.classList.add('away');
             }
         }
 
@@ -9338,10 +9460,11 @@ function playRoll(anim, totalMs) {
         res.style.transition = '';
         res.classList.add('show');
 
-        await wait(1150);
-        if (roll) {
-            roll.className = 'dice-layer dice-roll';
-            roll.innerHTML = '';
+        // Галочка/крестик всегда доигрывают до конца, даже перед следующим броском.
+        await waitResultAnimationEnd(res, 1050);
+        if (rollEl) {
+            rollEl.className = 'dice-layer dice-roll';
+            rollEl.innerHTML = '';
         }
     }
 
