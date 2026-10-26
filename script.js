@@ -4188,7 +4188,7 @@ function setUIBalance(newBalance) {
 ========================= */
 
 function hideAllPages() {
-    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "topPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage", "footballGamePage"];
+    const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "topPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage", "footballGamePage", "emojiGamePage", "vipPage", "tasksPage"];
     pages.forEach(id => {
         const page = document.getElementById(id);
         if (page) page.classList.add("hidden");
@@ -4212,9 +4212,10 @@ function showPage(id) {
     if (page) page.classList.remove("hidden");
     // На страницах с Lottie-анимациями отключаем размытие фона у нижнего меню
     // и ставим на паузу фоновые анимации неактивных экранов, чтобы держать стабильные 60 FPS.
-    const isAnimPage = id === "tgEmojiPage" || id === "diceGamePage" || id === "footballGamePage";
+    const isAnimPage = id === "tgEmojiPage" || id === "diceGamePage" || id === "footballGamePage" || id === "emojiGamePage";
     document.body.classList.toggle("anim-page", isAnimPage);
     if (typeof window.syncTgEmojiPageState === "function") window.syncTgEmojiPageState(id);
+    markGameVisitedForPage(id);
     window.scrollTo(0, 0);
     document.body.scrollTop = 0;
     if (!alreadyOpen) playPageEnter(page);
@@ -4224,7 +4225,7 @@ function showPage(id) {
 // Только opacity + translateY — размеры и раскладка не меняются, поэтому игры
 // (canvas, Lottie, замеры сцены) работают как раньше. У «Топ» своя анимация.
 function playPageEnter(page) {
-    if (!page || page.id === 'topPage' || page.id === 'tgEmojiPage' || page.id === 'diceGamePage' || page.id === 'footballGamePage') return;
+    if (!page || page.id === 'topPage' || page.id === 'tgEmojiPage' || page.id === 'diceGamePage' || page.id === 'footballGamePage' || page.id === 'emojiGamePage') return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const kids = Array.from(page.children).filter(el => el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE');
     kids.forEach(el => el.classList.remove('page-enter'));
@@ -4266,24 +4267,32 @@ function openTgEmoji() {
 function openTgEmojiMode(mode) {
     if (mode === "dice") { openDiceGame(); return; }
     if (mode === "football") { openFootballGame(); return; }
-    // Остальные режимы пока не реализованы
-    showMessage("Режим скоро появится");
+    openEmojiGame(mode);
 }
 
 /* ---------- КУБ ---------- */
 const diceGame = { cubes: 1, mode: null, busy: false };
+// Сцена кубика объявлена отдельным IIFE ниже, поэтому текущее число
+// кубиков нужно отдавать ей через window (иначе initDicePreview падает).
+window.getDiceCubes = () => diceGame.cubes || 1;
 const DICE_MODE_COEFS = {
     high: 1.95, low: 1.95,      // 4-6 / 1-3
     even: 1.95, odd: 1.95,      // чёт / нечёт
     edges: 2.93, center: 2.93,  // края (1 или 6) / центр (3 или 4)
-    // два куба (логика пока не реализована, только оформление)
-    high2: 3.89, low2: 3.89, even2: 3.89, odd2: 3.89
+
+    // Каждый следующий куб должен попасть в тот же исход.
+    // Коэффициенты считаются от базовой вероятности: 1.95² ≈ 3.89, 1.95³ ≈ 7.58.
+    high2: 3.89, low2: 3.89, even2: 3.89, odd2: 3.89,
+    high3: 7.58, low3: 7.58, even3: 7.58, odd3: 7.58,
+    edges2: 8.60, center2: 8.60,
+    edges3: 25.15, center3: 25.15
 };
 
-// Какие плитки показываем при 1 и при 2 кубах
+// Какие плитки показываем при 1, 2 и 3 кубах
 const DICE_MODE_SETS = {
     1: ["high", "low", "even", "odd", "edges", "center"],
-    2: ["high2", "low2", "even2", "odd2"]
+    2: ["high2", "low2", "even2", "odd2", "edges2", "center2"],
+    3: ["high3", "low3", "even3", "odd3", "edges3", "center3"]
 };
 
 const DICE_MODE_NAMES = {
@@ -4291,7 +4300,11 @@ const DICE_MODE_NAMES = {
     even: "Чёт", odd: "Нечёт",
     edges: "Края", center: "Центр",
     high2: "2 Больше", low2: "2 Меньше",
-    even2: "2 Чёт", odd2: "2 Нечёт"
+    even2: "2 Чёт", odd2: "2 Нечёт",
+    edges2: "2 Края", center2: "2 Центр",
+    high3: "3 Больше", low3: "3 Меньше",
+    even3: "3 Чёт", odd3: "3 Нечёт",
+    edges3: "3 Края", center3: "3 Центр"
 };
 
 // Плитки режимов строятся из таблиц DICE_MODE_SETS / DICE_MODE_NAMES / DICE_MODE_COEFS,
@@ -4324,6 +4337,9 @@ function renderDiceModes(animate) {
 
 function openDiceGame() {
     renderDiceModes(false);
+    document.querySelectorAll("#diceGamePage .dice-count-btn").forEach((b, i) => {
+        b.classList.toggle("active", i === (diceGame.cubes || 1) - 1);
+    });
     showPage("diceGamePage");
     updateNav("games");
     if (typeof window.initDicePreview === "function") window.initDicePreview();
@@ -4345,11 +4361,11 @@ function selectDiceMode(mode, btn) {
 }
 
 function selectDiceCubes(n, btn) {
-    if (n !== 1 && n !== 2) { showMessage("Скоро появится"); return; }
+    if (n !== 1 && n !== 2 && n !== 3) { showMessage("Скоро появится"); return; }
     if (diceGame.busy || n === diceGame.cubes) return;
     diceGame.cubes = n;
     diceGame.mode = null;                       // набор режимов другой — выбор сбрасываем
-    document.querySelectorAll(".dice-count-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("#diceGamePage .dice-count-btn").forEach(b => b.classList.remove("active"));
     if (btn) btn.classList.add("active");
     renderDiceModes(true);
     updateDicePlayLabel();
@@ -4418,6 +4434,7 @@ async function handleDicePlay() {
 
     setDiceBusy(true);
     const mode = diceGame.mode;
+    const cubes = diceGame.cubes;
     const coef = DICE_MODE_COEFS[mode];
 
     // --- 1. списываем ставку ---
@@ -4439,20 +4456,21 @@ async function handleDicePlay() {
     const liveBetId = await broadcastLiveBet(bet, "Куб");
 
     // --- 2. броски и расчёт ---
-    // 1 куб: один бросок должен подойти под режим.
-    // 2 куба: первый бросок должен подойти — тогда кидается второй, и он тоже должен подойти.
-    // Если первый не подошёл — второй не кидается. Выигрыш только при (2/2).
-    const twoCubes = diceGame.cubes === 2;
-    const baseMode = mode.replace(/2$/, "");       // "even2" → "even"
-    const roll1 = rollDie();
-    const pass1 = isDiceWin(baseMode, roll1);
-    let roll2 = null, pass2 = false;
-    if (twoCubes && pass1) {
-        roll2 = rollDie();
-        pass2 = isDiceWin(baseMode, roll2);
+    // Каждый следующий куб кидается только если предыдущий подошёл.
+    // Выигрыш — когда подошли ВСЕ кубы выбранного режима.
+    const baseMode = mode.replace(/[23]$/, "");   // "even2" → "even", "edges3" → "edges"
+    const rolls = [];
+    const passes = [];
+    let allPass = true;
+    for (let i = 0; i < cubes; i++) {
+        const r = rollDie();
+        const p = isDiceWin(baseMode, r);
+        rolls.push(r);
+        passes.push(p);
+        if (!p) { allPass = false; break; }
     }
-    const win = twoCubes ? (pass1 && pass2) : pass1;
-    if (window.DiceStage) window.DiceStage.prepare(roll1);   // заранее собираем анимацию выпавшей грани
+    const win = allPass && rolls.length === cubes;
+    if (window.DiceStage) window.DiceStage.prepare(rolls[0]);   // заранее собираем анимацию выпавшей грани
     const winAmount = win ? calcDiceWin(bet, coef) : 0;
     let finalBalance = currentBalance;
 
@@ -4480,26 +4498,21 @@ async function handleDicePlay() {
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.DiceStage) {
-            if (!twoCubes) {
-                await window.DiceStage.play({ roll: roll1, win, amountText });
-            } else {
-                // бросок 1/2
+            for (let i = 0; i < rolls.length; i++) {
+                const isFinal = i === rolls.length - 1;
+                const pass = passes[i];
+                const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
+                const title = cubes > 1
+                    ? (pass ? "Ставка зашла" : "Ставка не зашла") + " (" + (i + 1) + "/" + cubes + ")"
+                    : undefined;
+
                 await window.DiceStage.play({
-                    roll: roll1,
-                    win: pass1,
-                    title: pass1 ? "Ставка зашла (1/2)" : "Ставка не зашла (1/2)",
-                    amountText: pass1 ? "" : amountText,       // сумма — только в финале
-                    nextRoll: pass1 ? roll2 : null
+                    roll: rolls[i],
+                    win: pass,
+                    title,
+                    amountText: isFinal ? amountText : "",
+                    nextRoll
                 });
-                // бросок 2/2 (только если первый подошёл)
-                if (pass1) {
-                    await window.DiceStage.play({
-                        roll: roll2,
-                        win: pass2,
-                        title: pass2 ? "Ставка зашла (2/2)" : "Ставка не зашла (2/2)",
-                        amountText
-                    });
-                }
             }
         }
     } catch (e) {
@@ -4518,18 +4531,30 @@ const footballGame = { kicks: 1, mode: null, busy: false };
 const FOOTBALL_MODE_COEFS = {
     goal: 1.62,         // Гол
     miss: 2.43,         // Промах
-    bar: 2.43           // Удар об штангу
+    bar: 2.43,          // Удар об штангу
+
+    // Компаунд: все удары должны попасть в выбранный исход.
+    goal2: 2.62, miss2: 5.90, bar2: 5.90,
+    goal3: 4.25, miss3: 14.35, bar3: 14.35
 };
 
 // Какие плитки показываем при разном количестве ударов
 const FOOTBALL_MODE_SETS = {
-    1: ["goal", "miss", "bar"]
+    1: ["goal", "miss", "bar"],
+    2: ["goal2", "miss2", "bar2"],
+    3: ["goal3", "miss3", "bar3"]
 };
 
 const FOOTBALL_MODE_NAMES = {
     goal: "Гол",
     miss: "Промах",
-    bar: "Удар об штангу"
+    bar: "Штанга",
+    goal2: "2 Гола",
+    miss2: "2 Промаха",
+    bar2: "2 Штанги",
+    goal3: "3 Гола",
+    miss3: "3 Промаха",
+    bar3: "3 Штанги"
 };
 
 function renderFootballModes(animate) {
@@ -4558,6 +4583,9 @@ function renderFootballModes(animate) {
 
 function openFootballGame() {
     renderFootballModes(false);
+    document.querySelectorAll("#footballGamePage .dice-count-btn").forEach((b, i) => {
+        b.classList.toggle("active", i === (footballGame.kicks || 1) - 1);
+    });
     showPage("footballGamePage");
     updateNav("games");
     if (typeof window.initFootballPreview === "function") window.initFootballPreview();
@@ -4578,11 +4606,11 @@ function selectFootballMode(mode, btn) {
 }
 
 function selectFootballKicks(n, btn) {
-    if (n !== 1) { showMessage("Скоро появится"); return; }
+    if (n !== 1 && n !== 2 && n !== 3) { showMessage("Скоро появится"); return; }
     if (footballGame.busy || n === footballGame.kicks) return;
     footballGame.kicks = n;
     footballGame.mode = null;
-    document.querySelectorAll(".dice-count-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("#footballGamePage .dice-count-btn").forEach(b => b.classList.remove("active"));
     if (btn) btn.classList.add("active");
     renderFootballModes(true);
     updateFootballPlayLabel();
@@ -4643,6 +4671,7 @@ async function handleFootballPlay() {
 
     setFootballBusy(true);
     const mode = footballGame.mode;
+    const kicks = footballGame.kicks;
     const coef = FOOTBALL_MODE_COEFS[mode];
 
     // --- 1. списываем ставку ---
@@ -4663,10 +4692,22 @@ async function handleFootballPlay() {
     setUIBalance(currentBalance);
     const liveBetId = await broadcastLiveBet(bet, "Футбол");
 
-    // --- 2. бросок и расчёт ---
-    const roll = rollFootball();
-    const win = isFootballWin(mode, roll);
-    if (window.FootballStage) window.FootballStage.prepare(roll);
+    // --- 2. удары и расчёт ---
+    // Следующий удар бьётся только если предыдущий попал в выбранный исход.
+    // Выигрыш — когда все удары серии попали в него.
+    const baseMode = mode.replace(/[23]$/, "");
+    const rolls = [];
+    const passes = [];
+    let allPass = true;
+    for (let i = 0; i < kicks; i++) {
+        const roll = rollFootball();
+        const pass = isFootballWin(baseMode, roll);
+        rolls.push(roll);
+        passes.push(pass);
+        if (!pass) { allPass = false; break; }
+    }
+    const win = allPass && rolls.length === kicks;
+    if (window.FootballStage) window.FootballStage.prepare(rolls[0]);
     const winAmount = win ? calcFootballWin(bet, coef) : 0;
     let finalBalance = currentBalance;
 
@@ -4693,7 +4734,19 @@ async function handleFootballPlay() {
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.FootballStage) {
-            await window.FootballStage.play({ roll, win, amountText });
+            for (let i = 0; i < rolls.length; i++) {
+                const isFinal = i === rolls.length - 1;
+                const pass = passes[i];
+                const title = kicks > 1
+                    ? (pass ? "Удар забит" : "Удар не забит") + " (" + (i + 1) + "/" + kicks + ")"
+                    : undefined;
+                await window.FootballStage.play({
+                    roll: rolls[i],
+                    win: pass,
+                    title,
+                    amountText: isFinal ? amountText : ""
+                });
+            }
         }
     } catch (e) {
         console.error("Ошибка анимации футбола:", e);
@@ -4704,6 +4757,365 @@ async function handleFootballPlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setFootballBusy(false);
+}
+
+/* ---------- EMOJI-ИГРЫ: БАСКЕТБОЛ, ДАРТС, БОУЛИНГ, СЛОТЫ ---------- */
+const EMOJI_SLOT_SYMBOLS = {
+    bar: '🍒',
+    grape: '🍇',
+    lemon: '🍋',
+    seven: '7️⃣'
+};
+
+const EMOJI_GAME_CONFIGS = {
+    basketball: {
+        title: 'Баскетбол',
+        label: 'Баскетбол',
+        animation: 'basketball',
+        maxAttempts: 3,
+        fallback: '🏀',
+        modes: [
+            { key: 'clean', name: 'Чистый гол', coef: 5.00, winText: 'Чистый гол!', loseText: 'Мяч не залетел' },
+            { key: 'bounce', name: 'Отскок', coef: 5.00, winText: 'Отскок от щита!', loseText: 'Отскока не было' },
+            { key: 'close', name: 'Близко', coef: 5.00, winText: 'Мяч рядом с кольцом!', loseText: 'Далеко от кольца' },
+            { key: 'stuck', name: 'Застрял', coef: 5.00, winText: 'Мяч застрял!', loseText: 'Мяч не застрял' },
+            { key: 'edge', name: 'Попал с краем', coef: 5.00, winText: 'Попал с краем!', loseText: 'Край не попал' },
+            { key: 'spin', name: 'Прокрут', coef: 2.50, winText: 'Мяч прокрутился в кольцо!', loseText: 'Прокрута не было' },
+            { key: 'anyGoal', name: 'Любой гол', coef: 2.50, winText: 'Гол!', loseText: 'Промах' },
+            { key: 'miss', name: 'Промах', coef: 1.66, winText: 'Промах!', loseText: 'Мяч попал' }
+        ]
+    },
+    darts: {
+        title: 'Дартс',
+        label: 'Дартс',
+        animation: 'darts',
+        maxAttempts: 3,
+        fallback: '🎯',
+        modes: [
+            { key: 'center', name: 'Центр', coef: 6.00, winText: 'В центр!', loseText: 'Не в центр' },
+            { key: 'miss', name: 'Промах', coef: 6.00, winText: 'Промах!', loseText: 'Дротик попал' },
+            { key: 's1red', name: 'Сектор 1 🔴', coef: 6.00, winText: 'Красный сектор 1!', loseText: 'Другой сектор' },
+            { key: 's1white', name: 'Сектор 1 ⚪️', coef: 6.00, winText: 'Белый сектор 1!', loseText: 'Другой сектор' },
+            { key: 's2red', name: 'Сектор 2 🔴', coef: 6.00, winText: 'Красный сектор 2!', loseText: 'Другой сектор' },
+            { key: 's2white', name: 'Сектор 2 ⚪️', coef: 6.00, winText: 'Белый сектор 2!', loseText: 'Другой сектор' },
+            { key: 'anySector', name: 'Любой сектор', coef: 1.50, winText: 'Попадание в сектор!', loseText: 'Мимо сектора' },
+            { key: 'redCenter', name: '🔴 Сектор или центр', coef: 2.00, winText: 'Красный сектор или центр!', loseText: 'Не красный и не центр' },
+            { key: 'whiteBounce', name: '⚪️ Сектор или отскок', coef: 2.00, winText: 'Белый сектор или отскок!', loseText: 'Не белый и не отскок' }
+        ]
+    },
+    bowling: {
+        title: 'Боулинг',
+        label: 'Боулинг',
+        animation: 'bowling',
+        maxAttempts: 3,
+        fallback: '🎳',
+        modes: [
+            { key: 'miss', name: 'Промах', coef: 6.00, winText: 'Промах!', loseText: 'Кегли сбиты' },
+            { key: 'pin1', name: 'Сбито 1 / 6', coef: 6.00, winText: 'Сбита 1 кегля!', loseText: 'Другой результат' },
+            { key: 'pin3', name: 'Сбито 3 / 6', coef: 6.00, winText: 'Сбито 3 кегли!', loseText: 'Другой результат' },
+            { key: 'pin4', name: 'Сбито 4 / 6', coef: 6.00, winText: 'Сбито 4 кегли!', loseText: 'Другой результат' },
+            { key: 'pin5', name: 'Сбито 5 / 6', coef: 6.00, winText: 'Сбито 5 кеглей!', loseText: 'Другой результат' },
+            { key: 'strike', name: 'Страйк', coef: 6.00, winText: 'Страйк!', loseText: 'Не страйк' }
+        ]
+    },
+    slots: {
+        title: 'Слоты',
+        label: 'Слоты',
+        animation: 'slots',
+        maxAttempts: 1,
+        fallback: '🎰',
+        slots: true,
+        modes: [
+            { key: 'seven', name: '3 Семёрки', coef: 64.00, symbol: 'seven', winText: 'Джекпот! Три семёрки!', loseText: 'Не три семёрки' },
+            { key: 'lemon', name: '3 Лимона', coef: 64.00, symbol: 'lemon', winText: 'Три лимона!', loseText: 'Не три лимона' },
+            { key: 'grape', name: '3 Винограда', coef: 64.00, symbol: 'grape', winText: 'Три винограда!', loseText: 'Не три винограда' },
+            { key: 'bar', name: '3 Бара', coef: 64.00, symbol: 'bar', winText: 'Три бара!', loseText: 'Не три бара' },
+            { key: 'anyCombo', name: 'Любая комбинация', coef: 16.00, winText: 'Комбинация собрана!', loseText: 'Комбинации нет' },
+            { key: 'unique', name: 'Уникальные символы', coef: 2.66, winText: 'Все символы разные!', loseText: 'Символы повторились' },
+            { key: 'duel', name: 'Дуэль', coef: 1.85, winText: 'Дуэль выиграна!', loseText: 'Дуэль проиграна' }
+        ]
+    }
+};
+
+// Сцена Emoji-игр объявлена в отдельном IIFE ниже, поэтому конфигурации
+// и символы слотов должны быть доступны ей через window.
+window.EMOJI_GAME_CONFIGS = EMOJI_GAME_CONFIGS;
+window.EMOJI_SLOT_SYMBOLS = EMOJI_SLOT_SYMBOLS;
+
+const emojiGame = {
+    key: null,
+    attempts: 1,
+    mode: null,
+    busy: false
+};
+
+function emojiGameCfg() {
+    return emojiGame.key ? EMOJI_GAME_CONFIGS[emojiGame.key] : null;
+}
+
+function emojiModeCfg(key) {
+    const cfg = emojiGameCfg();
+    return cfg ? cfg.modes.find(m => m.key === key) || null : null;
+}
+
+function emojiCompoundCoef(baseCoef, attempts) {
+    const n = Math.max(1, attempts || 1);
+    return Math.round(Math.min(9999.99, Math.pow(baseCoef, n)) * 100) / 100;
+}
+
+function openEmojiGame(key) {
+    const cfg = EMOJI_GAME_CONFIGS[key];
+    if (!cfg) { showMessage("Режим скоро появится"); return; }
+
+    emojiGame.key = key;
+    emojiGame.attempts = 1;
+    emojiGame.mode = null;
+
+    const title = document.getElementById("emojiGameTitle");
+    if (title) title.textContent = cfg.title;
+
+    const countRow = document.getElementById("emojiCountRow");
+    if (countRow) countRow.classList.toggle("hidden-row", cfg.maxAttempts === 1);
+    document.querySelectorAll("#emojiCountRow .dice-count-btn").forEach((b, i) => {
+        b.classList.toggle("active", i === 0);
+    });
+
+    renderEmojiGameModes(false);
+    showPage("emojiGamePage");
+    updateNav("games");
+    if (window.EmojiGameStage) window.EmojiGameStage.init(key);
+}
+
+function renderEmojiGameModes(animate) {
+    const box = document.getElementById("emojiGameModes");
+    const cfg = emojiGameCfg();
+    if (!box || !cfg) return;
+
+    const oldH = box.offsetHeight;
+    const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
+    box.innerHTML = cfg.modes.map((m, i) => {
+        const coef = emojiCompoundCoef(m.coef, attempts);
+        return '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
+            '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
+            '<span class="dice-mode-name">' + m.name + '</span> ' +
+            '<span class="dice-mode-coef">(' + coef.toFixed(2) + '×)</span></button>';
+    }).join("");
+
+    if (animate && oldH) {
+        box.style.height = "auto";
+        const newH = box.offsetHeight;
+        box.style.height = oldH + "px";
+        box.classList.add("resizing");
+        void box.offsetHeight;
+        box.style.height = newH + "px";
+        setTimeout(() => { box.style.height = ""; box.classList.remove("resizing"); }, 520);
+    }
+}
+
+function updateEmojiGamePlayLabel() {
+    const btn = document.getElementById("emojiGamePlayBtn");
+    const cfg = emojiGameCfg();
+    if (!btn || !cfg) return;
+    const mode = emojiModeCfg(emojiGame.mode);
+    if (!mode) { btn.textContent = "Играть"; return; }
+    const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
+    btn.textContent = "Играть (" + emojiCompoundCoef(mode.coef, attempts).toFixed(2) + "×)";
+}
+
+function selectEmojiMode(modeKey, btn) {
+    if (emojiGame.busy) return;
+    emojiGame.mode = modeKey;
+    document.querySelectorAll("#emojiGameModes .dice-mode").forEach(b => b.classList.remove("selected"));
+    if (btn) btn.classList.add("selected");
+    updateEmojiGamePlayLabel();
+    if (window.EmojiGameStage) window.EmojiGameStage.reset();
+}
+
+function selectEmojiAttempts(n, btn) {
+    const cfg = emojiGameCfg();
+    if (!cfg || cfg.maxAttempts === 1) return;
+    if (emojiGame.busy || n === emojiGame.attempts) return;
+    emojiGame.attempts = Math.max(1, Math.min(cfg.maxAttempts, n));
+    emojiGame.mode = null;
+    document.querySelectorAll("#emojiCountRow .dice-count-btn").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+    renderEmojiGameModes(true);
+    updateEmojiGamePlayLabel();
+    if (window.EmojiGameStage) window.EmojiGameStage.reset();
+}
+
+function adjustEmojiBet(factor) {
+    applyBetFactor(document.getElementById("emojiGameBetInput"), factor);
+}
+
+function setEmojiMaxBet() {
+    applyBetMax(document.getElementById("emojiGameBetInput"));
+}
+
+function setEmojiGameBusy(on) {
+    emojiGame.busy = on;
+    const page = document.getElementById("emojiGamePage");
+    if (page) page.classList.toggle("is-busy", on);
+}
+
+function cryptoUnitRandom() {
+    try {
+        const a = new Uint32Array(1);
+        crypto.getRandomValues(a);
+        return a[0] / 4294967296;
+    } catch (e) {
+        return Math.random();
+    }
+}
+
+// Вероятность выигрыша честно следует за коэффициентом: 5× → 20%, 2× → 50%.
+function emojiAttemptWin(baseCoef) {
+    return cryptoUnitRandom() < (1 / baseCoef);
+}
+
+function emojiSlotSymbols(cfg, modeKey, win) {
+    const keys = ['bar', 'grape', 'lemon', 'seven'];
+    const mode = cfg.modes.find(m => m.key === modeKey) || {};
+    const randomSymbol = () => keys[Math.floor(Math.random() * keys.length)];
+    let result;
+
+    if (win && mode.symbol) {
+        result = [mode.symbol, mode.symbol, mode.symbol];
+    } else if (win && modeKey === 'anyCombo') {
+        const s = randomSymbol();
+        result = [s, s, s];
+    } else if (win && modeKey === 'unique') {
+        result = keys.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+    } else if (win && modeKey === 'duel') {
+        const s = randomSymbol();
+        result = [s, s, randomSymbol()];
+    } else {
+        result = [randomSymbol(), randomSymbol(), randomSymbol()];
+        if (mode.symbol) {
+            const isJackpot = result.every(s => s === mode.symbol);
+            if (isJackpot) result[2] = keys.find(s => s !== mode.symbol) || 'bar';
+        } else if (modeKey === 'anyCombo') {
+            if (result.every(s => s === result[0])) result[2] = keys.find(s => s !== result[0]) || 'bar';
+        } else if (modeKey === 'unique') {
+            if (new Set(result).size === 3) result[2] = result[0];
+        }
+    }
+    return result.map(s => EMOJI_SLOT_SYMBOLS[s] || s);
+}
+
+async function handleEmojiGamePlay() {
+    if (emojiGame.busy) return;
+    const cfg = emojiGameCfg();
+    if (!cfg) { showMessage("Выберите игру"); return; }
+    if (!emojiGame.mode) { showMessage("Выберите режим ставки!"); return; }
+    if (!lockEconomy()) return;
+
+    const input = document.getElementById("emojiGameBetInput");
+    const bet = roundMoney(parseFloat(input && input.value));
+    if (!bet || isNaN(bet) || bet < 0.10) {
+        showMessage("Минимальная ставка — 0.10 $!");
+        unlockEconomy();
+        return;
+    }
+    if (bet > currentBalance) {
+        showMessage("Недостаточно средств!");
+        unlockEconomy();
+        return;
+    }
+
+    const mode = emojiModeCfg(emojiGame.mode);
+    if (!mode) {
+        showMessage("Выберите режим ставки!");
+        unlockEconomy();
+        return;
+    }
+
+    setEmojiGameBusy(true);
+    const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
+    const coef = emojiCompoundCoef(mode.coef, attempts);
+
+    // --- 1. списываем ставку ---
+    const snapshot = snapshotBalanceState();
+    currentTurnover = roundMoney(currentTurnover + bet);
+    currentBetsCount++;
+    setUIBalance(roundMoney(currentBalance - bet));
+
+    const debit = await placeBetServer(bet, cfg.label);
+    if (!debit.ok) {
+        restoreBalanceState(snapshot);
+        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        setEmojiGameBusy(false);
+        unlockEconomy();
+        return;
+    }
+    currentBalance = debit.balance;
+    setUIBalance(currentBalance);
+    const liveBetId = await broadcastLiveBet(bet, cfg.label);
+
+    // --- 2. исходы ---
+    const results = [];
+    let allPass = true;
+    for (let i = 0; i < attempts; i++) {
+        const pass = emojiAttemptWin(mode.coef);
+        results.push(pass);
+        if (!pass) { allPass = false; break; }
+    }
+    const win = allPass && results.length === attempts;
+    const winAmount = win ? calcDiceWin(bet, coef) : 0;
+    let finalBalance = currentBalance;
+
+    if (win) {
+        const afterBet = snapshotBalanceState();
+        currentTotalWin = roundMoney(currentTotalWin + winAmount);
+        currentWinsCount++;
+        if (coef > currentMaxWin) currentMaxWin = coef;
+
+        const credit = await resolveWinServerWithRetry(winAmount, coef, 3);
+        if (!credit.ok) {
+            restoreBalanceState(afterBet);
+            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку.");
+            setEmojiGameBusy(false);
+            unlockEconomy();
+            if (window.EmojiGameStage) window.EmojiGameStage.reset();
+            return;
+        }
+        finalBalance = credit.balance;
+    }
+    unlockEconomy();
+
+    // --- 3. анимация ---
+    const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
+    try {
+        if (window.EmojiGameStage) {
+            for (let i = 0; i < results.length; i++) {
+                const isFinal = i === results.length - 1;
+                const pass = results[i];
+                let title;
+                if (attempts > 1) {
+                    const roundTag = " (" + (i + 1) + "/" + attempts + ")";
+                    title = isFinal
+                        ? (pass ? (mode.winText || "Ставка сыграла") : (mode.loseText || "Ставка не сыграла")) + roundTag
+                        : (pass ? "Раунд зашёл" : "Раунд не зашёл") + roundTag;
+                } else {
+                    title = pass ? (mode.winText || "Ставка сыграла") : (mode.loseText || "Ставка не сыграла");
+                }
+                await window.EmojiGameStage.playAttempt({
+                    win: pass,
+                    title,
+                    amountText: isFinal ? amountText : "",
+                    symbols: cfg.slots ? emojiSlotSymbols(cfg, mode.key, pass) : null
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Emoji game animation error:", e);
+    }
+
+    // --- 4. итог ---
+    setUIBalance(finalBalance);
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
+    resolveLiveBetWin(liveBetId, bet, winAmount);
+    setEmojiGameBusy(false);
 }
 
 function openMines() {
@@ -4717,6 +5129,7 @@ function openBalance(mode = "deposit") {
     showPage("balancePage");
     setBalanceMode(mode);
     updateNav("balance");
+    updateWalletMethodNote(selectedMethod);
     renderTransactions();
     loadWalletHistory(true);      // актуальные пополнения/выводы и баланс с сервера
 }
@@ -4732,6 +5145,7 @@ function openProfile() {
 function openBonus() {
     showPage("bonusPage");
     updateNav("bonus");
+    updateDailyBonusStatus();
 }
 
 function updateNav(active) {
@@ -4839,6 +5253,20 @@ function toggleMethods() {
     }
 }
 
+function updateWalletMethodNote(method) {
+    const note = document.getElementById('walletMethodNote');
+    if (!note) return;
+
+    if (method === 'xRocket') {
+        note.classList.remove('hidden');
+        note.innerHTML = '<b>xRocket пока не подключён.</b> Пополнение и вывод пройдут через CryptoBot — ' +
+            'это единственный платёжный провайдер, который сейчас подтверждён на сервере.';
+    } else {
+        note.classList.add('hidden');
+        note.textContent = '';
+    }
+}
+
 function selectMethod(method, icon, sub) {
     selectedMethod = method;
     selectedMethodIcon = icon;
@@ -4859,6 +5287,7 @@ function selectMethod(method, icon, sub) {
         }
     }
 
+    updateWalletMethodNote(method);
     closeMethodsDropdown();
 }
 
@@ -4990,6 +5419,15 @@ function readBalanceAmount() {
     return { input, amount };
 }
 
+// xRocket в клиенте пока не имеет защищённого серверного API.
+// Вместо тупика «скоро появится» честно переключаем на рабочий CryptoBot.
+function ensureCryptoBotMethod() {
+    if (selectedMethod === 'CryptoBot') return true;
+    selectMethod('CryptoBot', 'images/crypto/cryptobot.png', 'Криптовалюта');
+    showMessage('xRocket пока не подключён. Автоматически выбран CryptoBot — нажмите кнопку ещё раз, чтобы продолжить.');
+    return false;
+}
+
 async function handleDeposit() {
     if (walletBusy) return;
     const { input, amount } = readBalanceAmount();
@@ -4997,7 +5435,8 @@ async function handleDeposit() {
     if (!amount || amount <= 0) { showMessage('Введите корректную сумму'); return; }
     if (amount < MIN_DEPOSIT_UI) { showMessage(`Минимальное пополнение — ${MIN_DEPOSIT_UI} $`); return; }
     if (!tg?.initData) { showMessage('Откройте приложение через Telegram, чтобы пополнить баланс.'); return; }
-    if (selectedMethod !== 'CryptoBot') { showMessage(selectedMethod + ' скоро появится'); return; }
+    if (!ensureCryptoBotMethod()) return;
+    if (selectedMethod !== 'CryptoBot') { showMessage(selectedMethod + ' пока не подключён'); return; }
 
     walletBusy = true;
     setBalanceActionLoading(true);
@@ -5026,7 +5465,8 @@ async function handleWithdrawal() {
     if (amount < MIN_WITHDRAW_UI) { showMessage(`Минимальный вывод — ${MIN_WITHDRAW_UI} $`); return; }
     if (amount > currentBalance) { showMessage('Недостаточно средств'); return; }
     if (!tg?.initData) { showMessage('Откройте приложение через Telegram, чтобы вывести средства.'); return; }
-    if (selectedMethod !== 'CryptoBot') { showMessage(selectedMethod + ' скоро появится'); return; }
+    if (!ensureCryptoBotMethod()) return;
+    if (selectedMethod !== 'CryptoBot') { showMessage(selectedMethod + ' пока не подключён'); return; }
 
     walletBusy = true;
     setBalanceActionLoading(true);
@@ -5049,8 +5489,409 @@ async function handleWithdrawal() {
     loadWalletHistory(true);
 }
 
-function claimBonus() {
-    showMessage("Ежедневный бонус временно недоступен");
+/* =========================
+   ЕЖЕДНЕВНЫЕ БОНУСЫ, VIP, ЗАДАНИЯ И ПРОМОКОДЫ
+   Прогресс хранится локально (по Telegram ID и локальной дате),
+   а награды зачисляются на сервер через resolve_win — отдельного
+   RPC для бонусов в проекте нет.
+========================= */
+
+const DAILY_STORAGE_PREFIX = 'wxs_daily_v1_';
+const PROMO_STORAGE_PREFIX = 'wxs_promos_v1_';
+const DAILY_GAME_KEYS = ['mines', 'crash', 'upgrader', 'ice', 'dice', 'football', 'basketball', 'darts', 'bowling', 'slots'];
+
+const VIP_TIERS = [
+    { name: 'Бронза',     min: 0,     cashback: 1, daily: 0.10, boost: 1.00, support: 'Стандарт' },
+    { name: 'Серебро',    min: 100,   cashback: 2, daily: 0.25, boost: 1.10, support: 'Быстрый' },
+    { name: 'Золото',     min: 500,   cashback: 3, daily: 0.50, boost: 1.25, support: 'Приоритет' },
+    { name: 'Платина',    min: 2000,  cashback: 5, daily: 1.00, boost: 1.50, support: 'VIP' },
+    { name: 'Бриллиант',  min: 10000, cashback: 7, daily: 2.00, boost: 2.00, support: 'Персональный' }
+];
+
+const DAILY_TASKS = [
+    { id: 'bets3',      icon: '🎲', title: 'Первые ставки',     desc: 'Сделайте 3 ставки за сегодня',              goal: 3,  metric: 'bets',     reward: 0.30 },
+    { id: 'turnover10', icon: '💸', title: 'Разогрев',          desc: 'Сделайте оборот 10 $ за сегодня',           goal: 10, metric: 'turnover', reward: 0.50 },
+    { id: 'games3',     icon: '🕹️', title: 'Разнообразие',      desc: 'Зайдите в 3 разные игры',                   goal: 3,  metric: 'games',    reward: 0.25 },
+    { id: 'bets10',     icon: '🔥', title: 'Активный день',     desc: 'Сделайте 10 ставок за сегодня',             goal: 10, metric: 'bets',     reward: 0.75 },
+    { id: 'turnover50', icon: '💎', title: 'Крупный оборот',    desc: 'Сделайте оборот 50 $ за сегодня',           goal: 50, metric: 'turnover', reward: 1.50 },
+    { id: 'dailyBonus', icon: '🎁', title: 'Ежедневный бонус',  desc: 'Заберите ежедневный бонус на странице «Бонусы»', goal: 1, metric: 'daily', reward: 0.20 }
+];
+
+const PROMO_CODES = {
+    WXSSTART: { amount: 0.50, title: 'стартовый бонус' },
+    WXS2026:  { amount: 1.00, title: 'бонус 2026' },
+    TELEGRAM: { amount: 0.25, title: 'бонус за Telegram' },
+    VIPGIFT:  { amount: 0.75, title: 'VIP-подарок' }
+};
+
+let dailyState = null;
+let userStatsReady = false;
+let dailyClaimBusy = false;
+
+function localDateKey(date) {
+    const d = date || new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+function dailyStorageKey() {
+    return DAILY_STORAGE_PREFIX + (getTelegramUserId() || 'guest');
+}
+
+function createDailyState() {
+    return {
+        date: localDateKey(),
+        visited: {},
+        claims: {},
+        rewarded: {},
+        baseBets: Number(currentBetsCount) || 0,
+        baseTurnover: Number(currentTurnover) || 0,
+        baselineReady: userStatsReady,
+        createdAt: Date.now()
+    };
+}
+
+function saveDailyState() {
+    if (!dailyState) return;
+    try {
+        localStorage.setItem(dailyStorageKey(), JSON.stringify(dailyState));
+    } catch (e) { /* приватный режим / переполнение — просто не сохраняем */ }
+}
+
+function ensureDailyState() {
+    const today = localDateKey();
+    if (dailyState && dailyState.date === today) return dailyState;
+
+    let stored = null;
+    try {
+        stored = JSON.parse(localStorage.getItem(dailyStorageKey()) || 'null');
+    } catch (e) { stored = null; }
+
+    if (stored && stored.date === today) {
+        dailyState = Object.assign(createDailyState(), stored);
+        dailyState.visited = stored.visited && typeof stored.visited === 'object' ? stored.visited : {};
+        dailyState.claims = stored.claims && typeof stored.claims === 'object' ? stored.claims : {};
+        dailyState.rewarded = stored.rewarded && typeof stored.rewarded === 'object' ? stored.rewarded : {};
+    } else {
+        dailyState = createDailyState();
+    }
+
+    // Если серверные счётчики сбросились, не показываем отрицательный прогресс
+    const bets = Number(currentBetsCount) || 0;
+    const turnover = Number(currentTurnover) || 0;
+    if (bets < (Number(dailyState.baseBets) || 0)) dailyState.baseBets = bets;
+    if (turnover < (Number(dailyState.baseTurnover) || 0)) dailyState.baseTurnover = turnover;
+
+    saveDailyState();
+    return dailyState;
+}
+
+function initDailyState() {
+    userStatsReady = true;
+    const state = ensureDailyState();
+    if (!state.baselineReady) {
+        state.baseBets = Number(currentBetsCount) || 0;
+        state.baseTurnover = Number(currentTurnover) || 0;
+        state.baselineReady = true;
+        saveDailyState();
+    }
+}
+
+function dailyBets() {
+    const state = ensureDailyState();
+    return Math.max(0, (Number(currentBetsCount) || 0) - (Number(state.baseBets) || 0));
+}
+
+function dailyTurnover() {
+    const state = ensureDailyState();
+    return Math.max(0, roundMoney((Number(currentTurnover) || 0) - (Number(state.baseTurnover) || 0)));
+}
+
+function dailyVisitedGames() {
+    const state = ensureDailyState();
+    return DAILY_GAME_KEYS.reduce((count, key) => count + (state.visited[key] ? 1 : 0), 0);
+}
+
+// Вызывается из showPage(): отмечает, в какие игры игрок заходил сегодня
+function markGameVisitedForPage(pageId) {
+    const pageMap = {
+        homePage: 'home',
+        balancePage: 'balance',
+        profilePage: 'profile',
+        bonusPage: 'bonus',
+        minesPage: 'mines',
+        crashPage: 'crash',
+        upgraderPage: 'upgrader',
+        iceArenaPage: 'ice',
+        tgEmojiPage: 'emoji',
+        diceGamePage: 'dice',
+        footballGamePage: 'football',
+        vipPage: 'vip',
+        tasksPage: 'tasks'
+    };
+    let key = pageMap[pageId];
+    if (pageId === 'emojiGamePage') {
+        key = (typeof emojiGame !== 'undefined' && emojiGame.key) ? emojiGame.key : 'emoji';
+    }
+    if (!key) return;
+
+    const state = ensureDailyState();
+    if (!state.visited[key]) {
+        state.visited[key] = true;
+        saveDailyState();
+    }
+}
+
+function dailyTaskProgress(task) {
+    const state = ensureDailyState();
+    if (task.metric === 'bets') return dailyBets();
+    if (task.metric === 'turnover') return dailyTurnover();
+    if (task.metric === 'games') return dailyVisitedGames();
+    if (task.metric === 'daily') return state.claims.daily ? 1 : 0;
+    return 0;
+}
+
+function renderTasksPage() {
+    const list = document.getElementById('tasksList');
+    if (!list) return;
+
+    const state = ensureDailyState();
+    const done = DAILY_TASKS.filter(t => state.rewarded[t.id]).length;
+    const doneEl = document.getElementById('tasksDoneCount');
+    if (doneEl) doneEl.textContent = done + ' / ' + DAILY_TASKS.length;
+
+    list.innerHTML = DAILY_TASKS.map(task => {
+        const raw = dailyTaskProgress(task);
+        const progress = Math.min(task.goal, Math.max(0, raw));
+        const percent = Math.min(100, Math.max(0, (progress / task.goal) * 100));
+        const claimed = !!state.rewarded[task.id];
+        const ready = !claimed && progress >= task.goal;
+        const progressText = task.metric === 'turnover'
+            ? progress.toFixed(2) + ' $ / ' + task.goal.toFixed(0) + ' $'
+            : Math.floor(progress) + ' / ' + task.goal;
+
+        let button;
+        if (claimed) {
+            button = '<button class="task-claim done" disabled>Получено</button>';
+        } else if (ready) {
+            button = '<button class="task-claim" onclick="claimDailyTask(\'' + task.id + '\', this)">Забрать</button>';
+        } else {
+            button = '<button class="task-claim" disabled>В процессе</button>';
+        }
+
+        return '<div class="task-card' + (claimed ? ' completed' : '') + '">' +
+            '<div class="task-icon">' + task.icon + '</div>' +
+            '<div class="task-body">' +
+                '<div class="task-title">' + task.title + '</div>' +
+                '<div class="task-desc">' + task.desc + '</div>' +
+                '<div class="task-progress"><i style="width:' + percent.toFixed(1) + '%"></i></div>' +
+                '<div class="task-reward">+' + task.reward.toFixed(2) + ' $ · ' + progressText + '</div>' +
+            '</div>' +
+            button +
+        '</div>';
+    }).join('');
+}
+
+function openTasks() {
+    ensureDailyState();
+    showPage('tasksPage');
+    updateNav('home');
+    renderTasksPage();
+}
+
+async function claimDailyTask(taskId, btn) {
+    if (dailyClaimBusy) return;
+    const state = ensureDailyState();
+    const task = DAILY_TASKS.find(t => t.id === taskId);
+    if (!task) return;
+    if (state.rewarded[taskId]) {
+        showMessage('Награда за это задание уже получена');
+        return;
+    }
+    if (dailyTaskProgress(task) < task.goal) {
+        showMessage('Задание ещё не выполнено');
+        return;
+    }
+
+    dailyClaimBusy = true;
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+    const credit = await resolveWinServerWithRetry(task.reward, null, 3);
+    dailyClaimBusy = false;
+
+    if (!credit.ok) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Забрать'; }
+        showMessage('Не удалось получить награду. Попробуйте позже.');
+        return;
+    }
+
+    state.rewarded[taskId] = true;
+    saveDailyState();
+    currentBalance = credit.balance;
+    setUIBalance(currentBalance);
+
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    showMessage('Задание выполнено: +' + task.reward.toFixed(2) + ' $');
+    renderTasksPage();
+}
+
+function getVipTier() {
+    const turnover = Math.max(0, Number(currentTurnover) || 0);
+    let index = 0;
+    for (let i = 0; i < VIP_TIERS.length; i++) {
+        if (turnover >= VIP_TIERS[i].min) index = i;
+    }
+    return {
+        tier: VIP_TIERS[index],
+        index,
+        next: VIP_TIERS[index + 1] || null,
+        turnover
+    };
+}
+
+function renderVipPage() {
+    const info = getVipTier();
+    const tier = info.tier;
+    const state = ensureDailyState();
+
+    const nameEl = document.getElementById('vipTierName');
+    const subEl = document.getElementById('vipTierSub');
+    const fillEl = document.getElementById('vipProgressFill');
+    const textEl = document.getElementById('vipProgressText');
+    const cashbackEl = document.getElementById('vipCashback');
+    const dailyEl = document.getElementById('vipDailyBonus');
+    const boostEl = document.getElementById('vipBoost');
+    const supportEl = document.getElementById('vipSupport');
+    const ranksEl = document.getElementById('vipRanksList');
+    const claimBtn = document.getElementById('vipClaimBtn');
+    const claimSub = document.getElementById('vipClaimSub');
+
+    if (nameEl) nameEl.textContent = tier.name;
+    if (subEl) subEl.textContent = 'Оборот: ' + info.turnover.toFixed(2) + ' $';
+    if (cashbackEl) cashbackEl.textContent = tier.cashback + '%';
+    if (dailyEl) dailyEl.textContent = tier.daily.toFixed(2) + ' $';
+    if (boostEl) boostEl.textContent = 'x' + tier.boost.toFixed(2);
+    if (supportEl) supportEl.textContent = tier.support;
+
+    let percent = 100;
+    if (info.next) {
+        const span = info.next.min - tier.min;
+        percent = span > 0 ? ((info.turnover - tier.min) / span) * 100 : 100;
+    }
+    percent = Math.min(100, Math.max(0, percent));
+    if (fillEl) fillEl.style.width = percent.toFixed(1) + '%';
+    if (textEl) {
+        textEl.textContent = info.next
+            ? info.turnover.toFixed(2) + ' $ / ' + info.next.min.toFixed(2) + ' $'
+            : 'Максимальный статус достигнут';
+    }
+
+    if (ranksEl) {
+        ranksEl.innerHTML = VIP_TIERS.map((t, i) => {
+            const current = i === info.index;
+            const passed = i <= info.index;
+            return '<div class="vip-rank-row' + (current ? ' current' : '') + '">' +
+                '<span class="vip-rank-dot"></span>' +
+                '<div class="vip-rank-info"><b>' + t.name + '</b><small>от ' + t.min.toFixed(2) + ' $ · кэшбек ' + t.cashback + '%</small></div>' +
+                (passed ? '<span class="vip-rank-check">✓</span>' : '') +
+            '</div>';
+        }).join('');
+    }
+
+    const claimed = !!state.claims.vip;
+    if (claimBtn) {
+        claimBtn.disabled = claimed;
+        claimBtn.textContent = claimed ? 'Получено сегодня' : 'Забрать ' + tier.daily.toFixed(2) + ' $';
+    }
+    if (claimSub) {
+        claimSub.textContent = claimed
+            ? 'VIP-бонус уже получен. Возвращайтесь завтра!'
+            : 'Доступно сейчас: ' + tier.daily.toFixed(2) + ' $';
+    }
+}
+
+function openVip() {
+    ensureDailyState();
+    showPage('vipPage');
+    updateNav('home');
+    renderVipPage();
+}
+
+async function claimVipBonus() {
+    if (dailyClaimBusy) return;
+    const state = ensureDailyState();
+    if (state.claims.vip) {
+        showMessage('VIP-бонус уже получен сегодня');
+        renderVipPage();
+        return;
+    }
+
+    const amount = roundMoney(getVipTier().tier.daily);
+    const btn = document.getElementById('vipClaimBtn');
+    dailyClaimBusy = true;
+    if (btn) btn.disabled = true;
+
+    const credit = await resolveWinServerWithRetry(amount, null, 3);
+    dailyClaimBusy = false;
+
+    if (!credit.ok) {
+        if (btn) btn.disabled = false;
+        showMessage('Не удалось получить VIP-бонус. Попробуйте позже.');
+        return;
+    }
+
+    state.claims.vip = true;
+    saveDailyState();
+    currentBalance = credit.balance;
+    setUIBalance(currentBalance);
+
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    showMessage('VIP-бонус: +' + amount.toFixed(2) + ' $');
+    renderVipPage();
+}
+
+function dailyBonusAmount() {
+    return roundMoney(0.10 * getVipTier().tier.boost);
+}
+
+function updateDailyBonusStatus() {
+    const el = document.getElementById('dailyBonusStatus');
+    if (!el) return;
+    const state = ensureDailyState();
+    if (state.claims.daily) {
+        el.textContent = 'Бонус получен сегодня. Возвращайтесь завтра!';
+    } else {
+        el.innerHTML = 'Доступно сейчас: <b>' + dailyBonusAmount().toFixed(2) + ' $</b>';
+    }
+}
+
+async function claimBonus() {
+    if (dailyClaimBusy) return;
+    const state = ensureDailyState();
+    if (state.claims.daily) {
+        showMessage('Ежедневный бонус уже получен. Возвращайтесь завтра!');
+        updateDailyBonusStatus();
+        return;
+    }
+
+    const amount = dailyBonusAmount();
+    dailyClaimBusy = true;
+    const credit = await resolveWinServerWithRetry(amount, null, 3);
+    dailyClaimBusy = false;
+
+    if (!credit.ok) {
+        showMessage('Не удалось получить бонус. Попробуйте позже.');
+        return;
+    }
+
+    state.claims.daily = true;
+    saveDailyState();
+    currentBalance = credit.balance;
+    setUIBalance(currentBalance);
+
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    showMessage('Ежедневный бонус: +' + amount.toFixed(2) + ' $');
+    updateDailyBonusStatus();
 }
     
 /* =========================
@@ -5158,17 +5999,66 @@ function updatePromoButtonState() {
     btn.disabled = input.value.trim().length < 5;
 }
 
-function applyPromoCode() {
-    const input = document.getElementById('promoCodeInput');
-    if (!input) return;
-    const value = input.value.trim();
+function getPromoClaims() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(PROMO_STORAGE_PREFIX + (getTelegramUserId() || 'guest')) || '{}');
+        return raw && typeof raw === 'object' ? raw : {};
+    } catch (e) {
+        return {};
+    }
+}
 
-    if (!value) {
+function savePromoClaims(claims) {
+    try {
+        localStorage.setItem(PROMO_STORAGE_PREFIX + (getTelegramUserId() || 'guest'), JSON.stringify(claims));
+    } catch (e) { /* не критично */ }
+}
+
+async function applyPromoCode() {
+    const input = document.getElementById('promoCodeInput');
+    const btn = document.getElementById('promoApplyBtn');
+    if (!input) return;
+
+    const code = input.value.trim().toUpperCase();
+    if (!code) {
         showMessage('Введите промокод');
         return;
     }
 
-    showMessage('Промокод недействителен');
+    const promo = PROMO_CODES[code];
+    if (!promo) {
+        showMessage('Промокод недействителен');
+        return;
+    }
+
+    const claims = getPromoClaims();
+    if (claims[code]) {
+        showMessage('Этот промокод уже активирован');
+        return;
+    }
+
+    if (dailyClaimBusy) return;
+    dailyClaimBusy = true;
+    if (btn) btn.disabled = true;
+
+    const credit = await resolveWinServerWithRetry(promo.amount, null, 3);
+    dailyClaimBusy = false;
+
+    if (!credit.ok) {
+        if (btn) btn.disabled = false;
+        showMessage('Не удалось активировать промокод. Попробуйте позже.');
+        return;
+    }
+
+    claims[code] = { date: new Date().toISOString(), amount: promo.amount };
+    savePromoClaims(claims);
+    currentBalance = credit.balance;
+    setUIBalance(currentBalance);
+
+    input.value = '';
+    if (typeof window.updatePromoButtonState === 'function') window.updatePromoButtonState();
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    showMessage('Промокод ' + code + ' активирован: +' + promo.amount.toFixed(2) + ' $ (' + promo.title + ')');
 }
 
 // Экранирование текста перед вставкой в innerHTML (имя/username берутся из
@@ -5256,6 +6146,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ]);
     console.log('[init] профиль готов, открываем главную');
     updateLevelUI();
+    initDailyState();   // фиксируем базовый счётчик ставок/оборота на сегодня
     goHome();
     initLiveBetsFeed();
     iceArena.watching = true;
@@ -5316,6 +6207,12 @@ const START_ROUTES = {
     emoji:      () => openTgEmoji(),
     dice:       () => { openTgEmoji(); openDiceGame(); },
     football:   () => { openTgEmoji(); openFootballGame(); },
+    basketball: () => openEmojiGame('basketball'),
+    darts:      () => openEmojiGame('darts'),
+    bowling:    () => openEmojiGame('bowling'),
+    slots:      () => openEmojiGame('slots'),
+    vip:        () => openVip(),
+    tasks:      () => openTasks(),
     bonus:      () => openBonus(),
     profile:    () => openProfile(),
     deposit:    () => openBalance('deposit'),
@@ -5494,6 +6391,17 @@ window.selectFootballKicks = selectFootballKicks;
 window.adjustFootballBet = adjustFootballBet;
 window.setFootballMaxBet = setFootballMaxBet;
 window.handleFootballPlay = handleFootballPlay;
+window.openEmojiGame = openEmojiGame;
+window.selectEmojiMode = selectEmojiMode;
+window.selectEmojiAttempts = selectEmojiAttempts;
+window.adjustEmojiBet = adjustEmojiBet;
+window.setEmojiMaxBet = setEmojiMaxBet;
+window.handleEmojiGamePlay = handleEmojiGamePlay;
+window.openVip = openVip;
+window.openTasks = openTasks;
+window.claimVipBonus = claimVipBonus;
+window.claimDailyTask = claimDailyTask;
+window.initDailyState = initDailyState;
 window.openUpgrader = openUpgrader;
 window.playUpgrader = playUpgrader;
 window.upgSetChance = upgSetChance;
@@ -7553,7 +8461,8 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         if (fi !== preview.last) {
             preview.last = fi;
             preview.anim.goToAndStop(fi, true);
-            if (pairActive && previewB) previewB.goToAndStop(fi, true);
+            if (cubesCount >= 2 && previewB) previewB.goToAndStop(fi, true);
+            if (cubesCount >= 3 && previewC) previewC.goToAndStop(fi, true);
         }
     }
     function ensureLoop() {
@@ -7570,12 +8479,12 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         }
     }
 
-    /* ---------- два куба: раздвоение превью ---------- */
-    let cells = null;          // { a, b } — ячейки внутри превью
+    /* ---------- 2 / 3 куба: превью раздваивается и растраивается ---------- */
+    let cells = null;          // { a, b, c } — ячейки внутри превью
     let previewData = null;
     let previewB = null;       // второй экземпляр анимации
-    let pairActive = false;    // обновлять ли второй кубик
-    let mergeTimer = 0;
+    let previewC = null;       // третий экземпляр анимации
+    let cubesCount = 1;
 
     function buildPair(el, emoji) {
         el.textContent = '';
@@ -7583,34 +8492,47 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         pair.className = 'dice-pair' + (emoji ? ' is-fallback' : '');
         const a = document.createElement('div'); a.className = 'dice-cell a';
         const b = document.createElement('div'); b.className = 'dice-cell b';
-        if (emoji) { a.textContent = '🎲'; b.textContent = '🎲'; }
-        pair.appendChild(a); pair.appendChild(b);
+        const c = document.createElement('div'); c.className = 'dice-cell c';
+        if (emoji) { a.textContent = '🎲'; b.textContent = '🎲'; c.textContent = '🎲'; }
+        pair.appendChild(a); pair.appendChild(b); pair.appendChild(c);
         el.appendChild(pair);
-        return { a, b };
+        return { a, b, c };
+    }
+
+    function ensurePreviewCell(cell, current) {
+        if (current || !previewData || !cell) return current;
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        cell.appendChild(box);
+        const anim = createAnim(box, window.TgsCache ? JSON.parse(JSON.stringify(previewData)) : previewData);
+        anim.goToAndStop(preview ? Math.max(preview.last, 0) : 0, true);
+        return anim;
     }
 
     function ensurePreviewB() {
-        if (previewB || !previewData || !cells) return;
-        const box = document.createElement('div');
-        box.className = 'sticker-lottie';
-        cells.b.appendChild(box);
-        previewB = createAnim(box, window.TgsCache ? JSON.parse(JSON.stringify(previewData)) : previewData);
-        previewB.goToAndStop(preview ? Math.max(preview.last, 0) : 0, true);
+        previewB = ensurePreviewCell(cells && cells.b, previewB);
+        return previewB;
+    }
+
+    function ensurePreviewC() {
+        previewC = ensurePreviewCell(cells && cells.c, previewC);
+        return previewC;
     }
 
     function setCubes(n) {
         const el = $('dicePreview');
         if (!el) return;
-        clearTimeout(mergeTimer);
-        if (n === 2) {
-            pairActive = true;
+        cubesCount = n === 3 ? 3 : (n === 2 ? 2 : 1);
+        if (cubesCount >= 2) {
             ensurePreviewB();
             if (previewB && preview) previewB.goToAndStop(Math.max(preview.last, 0), true);
-            el.classList.add('pair');
-        } else {
-            el.classList.remove('pair');
-            mergeTimer = setTimeout(() => { pairActive = false; }, 900);
         }
+        if (cubesCount >= 3) {
+            ensurePreviewC();
+            if (previewC && preview) previewC.goToAndStop(Math.max(preview.last, 0), true);
+        }
+        el.classList.toggle('pair', cubesCount === 2);
+        el.classList.toggle('triple', cubesCount === 3);
     }
 
     /* ---------- пул готовых анимаций граней 1..6 (мгновенный старт без пересборки DOM) ---------- */
@@ -7660,9 +8582,12 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         const anim = createAnim(box, data);
         anim.goToAndStop(0, true);
         preview = { anim, frame: 0, last: 0, total: Math.max(1, anim.totalFrames || 1), fr: anim.frameRate || 60, visible: true, paused: false };
+        setCubes(window.getDiceCubes ? window.getDiceCubes() : 1);
         ensureLoop();
         setTimeout(() => {
             ensurePreviewB();
+            ensurePreviewC();
+            setCubes(window.getDiceCubes ? window.getDiceCubes() : 1);
             warmUpDicePool();
         }, 120);
     };
@@ -8152,6 +9077,290 @@ function playRoll(anim, totalMs) {
     window.FootballStage = { play, reset, prepare, setPageActive };
 })();
 
+/* ==========================================
+   EMOJI-ИГРЫ — общая сцена для баскетбола, дартса, боулинга и слотов.
+   Использует готовые .tgs-анимации из animations/dice/banners/.
+========================================== */
+(function () {
+    const DIRS = ['animations/dice/banners/', 'animations/dice/'];
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+    const $ = id => document.getElementById(id);
+    const GAME_CONFIGS = window.EMOJI_GAME_CONFIGS || {};
+    const SLOT_SYMBOLS = window.EMOJI_SLOT_SYMBOLS || {};
+
+    let key = null;
+    let cfg = null;
+    let previewAnim = null;
+    let previewKey = null;
+    let pageActive = false;
+    let initToken = 0;
+
+    function isPageVisible() {
+        const pg = $('emojiGamePage');
+        return !!(pg && !pg.classList.contains('hidden')) && !document.hidden;
+    }
+
+    async function loadData(name) {
+        for (const dir of DIRS) {
+            const data = await window.TgsCache.load(dir + name);
+            if (data) return data;
+        }
+        return null;
+    }
+
+    function sparkles() {
+        const stars = [[26, 60, 0.36], [176, 124, 0.44], [70, 170, 0.50]];
+        const dots = [[58, 32, 0.40], [164, 70, 0.48], [30, 130, 0.54], [130, 176, 0.42]];
+        const star = 'M0-10 L2.6-2.6 L10 0 L2.6 2.6 L0 10 L-2.6 2.6 L-10 0 L-2.6-2.6Z';
+        return stars.map(([x, y, d]) =>
+                '<g transform="translate(' + x + ' ' + y + ')"><path class="dr-spark" style="--d:' + d + 's" d="' + star + '"/></g>').join('') +
+            dots.map(([x, y, d]) =>
+                '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
+    }
+
+    function resultHtml(win, amountText, title) {
+        const mark = win
+            ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
+            : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
+              '<path class="dr-mark dr-second" pathLength="1" d="M119 81 L81 119"/>';
+        return '' +
+            '<svg class="dr-icon" viewBox="0 0 200 200" aria-hidden="true">' +
+                '<circle class="dr-ring" cx="100" cy="100" r="54"/>' +
+                '<circle class="dr-disc" cx="100" cy="100" r="44"/>' +
+                mark + sparkles() +
+            '</svg>' +
+            '<div class="dice-result-title">' + (title || (win ? 'Ставка сыграла' : 'Ставка не сыграла')) + '</div>' +
+            '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
+    }
+
+    function reset() {
+        const prev = $('emojiGamePreview');
+        const res = $('emojiGameResult');
+        const slots = $('emojiSlotsLayer');
+        const roll = $('emojiGameRoll');
+
+        if (res) {
+            res.classList.remove('show', 'hide-up', 'win', 'lose');
+            res.innerHTML = '';
+        }
+        if (slots) slots.classList.remove('show');
+        if (roll) {
+            roll.className = 'dice-layer dice-roll';
+            roll.innerHTML = '';
+        }
+        if (prev) {
+            prev.classList.remove('out');
+            prev.style.opacity = '';
+            prev.style.transform = '';
+        }
+        if (previewAnim) {
+            if (pageActive && isPageVisible()) previewAnim.play();
+            else previewAnim.pause();
+        }
+    }
+
+    async function init(gameKey) {
+        key = gameKey;
+        cfg = GAME_CONFIGS[gameKey] || null;
+        reset();
+
+        const prev = $('emojiGamePreview');
+        if (!prev) return;
+
+        if (previewKey === gameKey && previewAnim) {
+            if (pageActive && isPageVisible()) previewAnim.play();
+            return;
+        }
+
+        const token = ++initToken;
+        previewKey = gameKey;
+
+        if (previewAnim) {
+            try { previewAnim.destroy(); } catch (e) {}
+            previewAnim = null;
+        }
+
+        prev.classList.remove('has-anim', 'is-fallback');
+        prev.innerHTML = '<span class="tge-spinner big"></span>';
+
+        const data = await loadData(gameKey);
+        if (token !== initToken) return;
+
+        prev.innerHTML = '';
+        if (data && typeof lottie !== 'undefined') {
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            prev.appendChild(box);
+            previewAnim = lottie.loadAnimation({
+                container: box,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                animationData: data,
+                rendererSettings: {
+                    preserveAspectRatio: 'xMidYMid meet',
+                    progressiveLoad: false,
+                    hideOnTransparent: true
+                }
+            });
+            if (previewAnim.setSubframe) previewAnim.setSubframe(false);
+            prev.classList.add('has-anim');
+            if (!pageActive || !isPageVisible()) previewAnim.pause();
+        } else {
+            prev.classList.add('is-fallback');
+            prev.textContent = (cfg && cfg.fallback) || '🎲';
+        }
+    }
+
+    async function playSlots(symbols, win) {
+        const layer = $('emojiSlotsLayer');
+        if (!layer) return;
+        const reels = Array.from(layer.querySelectorAll('[data-slot-reel]'));
+        const keys = Object.keys(SLOT_SYMBOLS);
+        if (!reels.length || !keys.length) return;
+
+        reels.forEach(reel => {
+            reel.classList.remove('win');
+            reel.classList.add('spinning');
+        });
+
+        const spinTimer = setInterval(() => {
+            reels.forEach(reel => {
+                const sym = keys[Math.floor(Math.random() * keys.length)];
+                reel.textContent = SLOT_SYMBOLS[sym];
+            });
+        }, 80);
+
+        await wait(1300);
+        clearInterval(spinTimer);
+
+        reels.forEach((reel, i) => {
+            reel.classList.remove('spinning');
+            reel.textContent = (symbols && symbols[i]) || SLOT_SYMBOLS[keys[i % keys.length]];
+            reel.classList.toggle('win', !!win);
+        });
+
+        await wait(600);
+    }
+
+    async function playRollAnimation(rollEl) {
+        const data = key ? await loadData(key) : null;
+        if (!data || typeof lottie === 'undefined') {
+            const fb = document.createElement('div');
+            fb.className = 'dice-fallback';
+            fb.innerHTML = '<span class="tge-spinner big"></span>';
+            rollEl.appendChild(fb);
+            await wait(900);
+            fb.textContent = (cfg && cfg.fallback) || '🎲';
+            await wait(450);
+            return;
+        }
+
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        rollEl.appendChild(box);
+
+        const anim = lottie.loadAnimation({
+            container: box,
+            renderer: 'svg',
+            loop: false,
+            autoplay: true,
+            animationData: data,
+            rendererSettings: {
+                preserveAspectRatio: 'xMidYMid meet',
+                progressiveLoad: false,
+                hideOnTransparent: true
+            }
+        });
+        if (anim.setSubframe) anim.setSubframe(false);
+
+        const startedAt = performance.now();
+        await new Promise(resolve => {
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                resolve();
+            };
+            anim.addEventListener('complete', finish);
+            setTimeout(finish, 3800);
+        });
+
+        const elapsed = performance.now() - startedAt;
+        if (elapsed < 950) await wait(950 - elapsed);
+        try { anim.destroy(); } catch (e) {}
+    }
+
+    async function playAttempt({ win, title, amountText, symbols }) {
+        const prev = $('emojiGamePreview');
+        const res = $('emojiGameResult');
+        const slots = $('emojiSlotsLayer');
+        const roll = $('emojiGameRoll');
+        if (!prev || !res) return;
+
+        if (res.classList.contains('show')) {
+            res.classList.remove('show');
+            res.classList.add('hide-up');
+            await wait(150);
+        }
+
+        if (previewAnim) previewAnim.pause();
+        prev.classList.add('out');
+
+        if (cfg && cfg.slots) {
+            if (roll) {
+                roll.className = 'dice-layer dice-roll';
+                roll.innerHTML = '';
+            }
+            if (slots) slots.classList.add('show');
+            await playSlots(symbols, win);
+        } else {
+            if (slots) slots.classList.remove('show');
+            if (roll) {
+                const side = Math.random() < 0.5 ? 'from-left' : 'from-right';
+                roll.className = 'dice-layer dice-roll ' + side;
+                roll.innerHTML = '';
+                await nextFrame();
+                roll.classList.add('in');
+                await playRollAnimation(roll);
+                roll.classList.add('away');
+            }
+        }
+
+        await wait(220);
+        res.style.transition = 'none';
+        res.classList.remove('show', 'hide-up');
+        res.innerHTML = resultHtml(win, amountText, title);
+        res.classList.toggle('win', !!win);
+        res.classList.toggle('lose', !win);
+        void res.offsetWidth;
+        res.style.transition = '';
+        res.classList.add('show');
+
+        await wait(1150);
+        if (roll) {
+            roll.className = 'dice-layer dice-roll';
+            roll.innerHTML = '';
+        }
+    }
+
+    function setPageActive(active) {
+        pageActive = !!active;
+        if (!previewAnim) return;
+        if (pageActive && isPageVisible()) previewAnim.play();
+        else previewAnim.pause();
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (!previewAnim) return;
+        if (document.hidden || !pageActive || !isPageVisible()) previewAnim.pause();
+        else previewAnim.play();
+    });
+
+    window.EmojiGameStage = { init, reset, playAttempt, setPageActive };
+})();
+
 /* Переключение активности анимаций при смене страниц — чтобы в играх 100% CPU/GPU шло на 60 FPS */
 window.syncTgEmojiPageState = function (pageId) {
     if (typeof window.setTgEmojiBannersActive === 'function') {
@@ -8162,6 +9371,9 @@ window.syncTgEmojiPageState = function (pageId) {
     }
     if (window.FootballStage && typeof window.FootballStage.setPageActive === 'function') {
         window.FootballStage.setPageActive(pageId === 'footballGamePage');
+    }
+    if (window.EmojiGameStage && typeof window.EmojiGameStage.setPageActive === 'function') {
+        window.EmojiGameStage.setPageActive(pageId === 'emojiGamePage');
     }
 };
 

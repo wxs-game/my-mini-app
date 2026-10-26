@@ -252,10 +252,10 @@
             <button class="action" onclick="openBalance('withdraw')">
                 <div class="action-icon" id="withdrawSticker"><span class="tge-spinner"></span></div><b>Вывод</b><small>Средств</small>
             </button>
-            <button class="action" onclick="showMessage('VIP пока в разработке')">
+            <button class="action" onclick="openVip()">
                 <div class="action-icon" id="vipSticker"><span class="tge-spinner"></span></div><b>VIP</b><small>Статус</small>
             </button>
-            <button class="action" onclick="showMessage('Задания пока в разработке')">
+            <button class="action" onclick="openTasks()">
                 <div class="action-icon" id="tasksSticker"><span class="tge-spinner"></span></div><b>Задания</b><small>ежедневки</small>
             </button>
         </section>
@@ -408,7 +408,7 @@
         <section class="dice-count-row">
             <button class="dice-tile dice-count-btn active" onclick="selectDiceCubes(1, this)">1 КУБ</button>
             <button class="dice-tile dice-count-btn" onclick="selectDiceCubes(2, this)">2 КУБА</button>
-            <button class="dice-tile dice-count-btn is-soon" onclick="selectDiceCubes(3, this)">3 КУБА</button>
+            <button class="dice-tile dice-count-btn" onclick="selectDiceCubes(3, this)">3 КУБА</button>
         </section>
 
         <!-- Режимы ставки -->
@@ -453,8 +453,8 @@
         <!-- Сколько ударов -->
         <section class="dice-count-row">
             <button class="dice-tile dice-count-btn active" onclick="selectFootballKicks(1, this)">1 УДАР</button>
-            <button class="dice-tile dice-count-btn is-soon" onclick="selectFootballKicks(2, this)">2 УДАРА</button>
-            <button class="dice-tile dice-count-btn is-soon" onclick="selectFootballKicks(3, this)">3 УДАРА</button>
+            <button class="dice-tile dice-count-btn" onclick="selectFootballKicks(2, this)">2 УДАРА</button>
+            <button class="dice-tile dice-count-btn" onclick="selectFootballKicks(3, this)">3 УДАРА</button>
         </section>
 
         <!-- Режимы ставки -->
@@ -483,6 +483,59 @@
                     <button class="pct-btn" onclick="adjustFootballBet(0.5)">½</button>
                     <button class="pct-btn" onclick="adjustFootballBet(2)">x2</button>
                     <button class="pct-btn" onclick="setFootballMaxBet()">MAX</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== EMOJI-ИГРЫ (БАСКЕТБОЛ, ДАРТС, БОУЛИНГ, СЛОТЫ) ==================== -->
+    <main id="emojiGamePage" class="dice-page emoji-game-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="openTgEmoji()"></button>
+            <h1 id="emojiGameTitle">Игра</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="dice-count-row" id="emojiCountRow">
+            <button class="dice-tile dice-count-btn active" onclick="selectEmojiAttempts(1, this)">1 РАУНД</button>
+            <button class="dice-tile dice-count-btn" onclick="selectEmojiAttempts(2, this)">2 РАУНДА</button>
+            <button class="dice-tile dice-count-btn" onclick="selectEmojiAttempts(3, this)">3 РАУНДА</button>
+        </section>
+
+        <section class="dice-modes" id="emojiGameModes"></section>
+
+        <div class="dice-stage" id="emojiGameStage">
+            <div class="dice-layer dice-preview" id="emojiGamePreview" aria-hidden="true"><span class="tge-spinner big"></span></div>
+            <div class="dice-layer dice-roll" id="emojiGameRoll" aria-hidden="true"></div>
+            <div class="dice-layer slots-layer" id="emojiSlotsLayer" aria-hidden="true">
+                <div>
+                    <div class="slot-machine">
+                        <div class="slot-reel" data-slot-reel="0">🍒</div>
+                        <div class="slot-reel" data-slot-reel="1">🍋</div>
+                        <div class="slot-reel" data-slot-reel="2">🍇</div>
+                    </div>
+                    <div class="slot-payline"></div>
+                    <div class="slots-hint">Соберите три одинаковых символа</div>
+                </div>
+            </div>
+            <div class="dice-layer dice-result" id="emojiGameResult" aria-live="polite"></div>
+        </div>
+
+        <button class="dice-tile dice-play-btn" id="emojiGamePlayBtn" onclick="handleEmojiGamePlay()">Играть</button>
+
+        <section class="mines-controls dice-bet-box">
+            <div class="ctrl-box" style="margin-bottom: 0;">
+                <div class="mines-bet-header">
+                    <label>СУММА СТАВКИ</label>
+                    <div class="card-input-wrap">
+                        <input type="number" id="emojiGameBetInput" placeholder="0.10" min="0.1" step="any" inputmode="decimal" onblur="clampBetInputOnBlur(event)" onkeydown="blockInvalidBetKeys(event)">
+                        <span class="currency-symbol">$</span>
+                    </div>
+                </div>
+                <div class="ctrl-btns-row" style="margin-top: 10px;">
+                    <button class="pct-btn" onclick="adjustEmojiBet(0.5)">½</button>
+                    <button class="pct-btn" onclick="adjustEmojiBet(2)">x2</button>
+                    <button class="pct-btn" onclick="setEmojiMaxBet()">MAX</button>
                 </div>
             </div>
         </section>
@@ -687,6 +740,8 @@
                     </div>
                 </div>
             </div>
+
+            <div class="wallet-note hidden" id="walletMethodNote"></div>
 
             <div class="input-group">
                 <label>СУММА</label>
@@ -940,6 +995,7 @@
                 <input type="text" id="promoCodeInput" class="promo-input" placeholder="Введите промокод" autocomplete="off">
                 <button class="promo-apply-btn" id="promoApplyBtn" onclick="applyPromoCode()" disabled>Применить</button>
             </div>
+            <p class="promo-hint">Попробуйте код <code>WXSSTART</code>. Каждый промокод можно активировать один раз.</p>
         </section>
         <script>
         // Логика включения/выключения кнопки "Применить" вынесена прямо
@@ -969,11 +1025,83 @@
             <p class="wheel-subtitle">Заходите каждый день и получайте бесплатные средства!</p>
             <div style="font-size: 60px; margin: 20px 0;">🎁</div>
             <button class="main-action-btn" onclick="claimBonus()">Забрать бонус</button>
+            <div class="daily-bonus-status" id="dailyBonusStatus">Загрузка...</div>
         </section>
         
             <button class="main-action-btn share-invite-btn" id="shareInviteBtn" onclick="sharePreparedInvite()">
                 Отправить…
             </button>
+    </main>
+
+    <!-- ==================== VIP ==================== -->
+    <main id="vipPage" class="vip-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>VIP</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="vip-hero">
+            <div class="vip-crown">👑</div>
+            <div class="vip-tier-name" id="vipTierName">Бронза</div>
+            <div class="vip-tier-sub" id="vipTierSub">VIP-статус</div>
+            <div class="vip-progress"><i id="vipProgressFill"></i></div>
+            <div class="vip-progress-text" id="vipProgressText">0%</div>
+        </section>
+
+        <section class="vip-perks">
+            <div class="vip-perk">
+                <small>Кэшбек</small>
+                <b id="vipCashback">1%</b>
+                <span>От оборота за неделю</span>
+            </div>
+            <div class="vip-perk">
+                <small>Бонус</small>
+                <b id="vipDailyBonus">0.10 $</b>
+                <span>Ежедневно</span>
+            </div>
+            <div class="vip-perk">
+                <small>Буст</small>
+                <b id="vipBoost">x1.00</b>
+                <span>К ежедневному бонусу</span>
+            </div>
+            <div class="vip-perk">
+                <small>Поддержка</small>
+                <b id="vipSupport">Стандарт</b>
+                <span>Приоритет обращений</span>
+            </div>
+        </section>
+
+        <section class="wheel-card vip-claim-card">
+            <h2>Ежедневный VIP-бонус</h2>
+            <p class="wheel-subtitle" id="vipClaimSub">Заходите каждый день и повышайте статус.</p>
+            <button class="main-action-btn" id="vipClaimBtn" onclick="claimVipBonus()">Забрать бонус</button>
+        </section>
+
+        <section class="wheel-card">
+            <h2>Уровни VIP</h2>
+            <p class="wheel-subtitle">Статус растёт от общего оборота в играх.</p>
+            <div class="vip-ranks" id="vipRanksList"></div>
+        </section>
+    </main>
+
+    <!-- ==================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ==================== -->
+    <main id="tasksPage" class="tasks-page hidden">
+        <div class="page-header" style="margin-top: 10px;">
+            <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
+            <h1>Задания</h1>
+            <div class="header-space"></div>
+        </div>
+
+        <section class="tasks-summary">
+            <div>
+                <b id="tasksDoneCount">0 / 0</b>
+                <small>Выполнено сегодня</small>
+            </div>
+            <div class="tasks-summary-icon">🎯</div>
+        </section>
+
+        <section class="tasks-list" id="tasksList"></section>
     </main>
 
     <!-- НИЖНЕЕ МЕНЮ -->

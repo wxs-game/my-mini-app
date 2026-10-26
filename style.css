@@ -4333,3 +4333,303 @@ body.anim-page .top {
     .dice-preview, .dice-roll, .dice-result, .dice-mode.enter { animation: none !important; transition: opacity 0.15s ease !important; }
     .tge-banner { animation: none !important; }
 }
+
+/* ==========================================================
+   ТРИ КУБА: третья ячейка превью
+========================================================== */
+.dice-cell.c { opacity: 0.01; }
+.dice-preview.triple .dice-cell.a { transform: translateX(calc(var(--dice-size) * -0.38)) scale(0.55); }
+.dice-preview.triple .dice-cell.b { transform: translateX(0) scale(0.55); opacity: 1; }
+.dice-preview.triple .dice-cell.c { transform: translateX(calc(var(--dice-size) * 0.38)) scale(0.55); opacity: 1; }
+
+/* ==========================================================
+   ОБЩАЯ СТРАНИЦА EMOJI-ИГР (баскетбол, дартс, боулинг, слоты)
+========================================================== */
+.emoji-game-page .dice-stage {
+    height: min(72vw, 300px);
+    margin-top: 4px;
+}
+.emoji-game-page .dice-preview > .sticker-lottie,
+.emoji-game-page .dice-roll > .sticker-lottie {
+    width: min(72vw, 290px);
+    height: min(72vw, 290px);
+}
+.emoji-game-page .dice-preview > .sticker-lottie svg,
+.emoji-game-page .dice-preview > .sticker-lottie canvas,
+.emoji-game-page .dice-roll > .sticker-lottie svg,
+.emoji-game-page .dice-roll > .sticker-lottie canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+.emoji-game-page .dice-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.emoji-game-page .dice-mode-name { white-space: normal; }
+.emoji-game-page .dice-tile { white-space: normal; }
+.emoji-game-page .dice-count-row.hidden-row { display: none; }
+.emoji-game-page .dice-play-btn { margin-top: 4px; }
+
+/* Слоты: три барабана */
+.slots-layer {
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    z-index: 1;
+}
+.emoji-game-page .dice-roll { z-index: 2; }
+.emoji-game-page .dice-result { z-index: 3; }
+.slots-layer.show { opacity: 1; }
+.slot-machine {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px 14px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, #1b1b1f 0%, #0c0c0f 100%);
+    border: 1px solid rgba(255, 200, 0, 0.28);
+    box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.7), 0 18px 36px rgba(0, 0, 0, 0.35);
+}
+.slot-reel {
+    width: clamp(64px, 21vw, 84px);
+    height: clamp(84px, 28vw, 108px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(36px, 12vw, 50px);
+    line-height: 1;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #f7f4ea 0%, #d8d1bf 100%);
+    box-shadow: inset 0 8px 16px rgba(255, 255, 255, 0.55), inset 0 -10px 16px rgba(0, 0, 0, 0.28);
+    transition: transform 0.18s ease, filter 0.18s ease;
+}
+.slot-reel.spinning {
+    filter: blur(1.2px);
+    animation: slotReelShake 0.16s linear infinite;
+}
+.slot-reel.win {
+    box-shadow: inset 0 8px 16px rgba(255, 255, 255, 0.55), 0 0 18px rgba(255, 200, 0, 0.65);
+}
+@keyframes slotReelShake {
+    0% { transform: translateY(-1px); }
+    50% { transform: translateY(2px); }
+    100% { transform: translateY(-1px); }
+}
+.slot-payline {
+    height: 4px;
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, transparent, rgba(255, 200, 0, 0.8), transparent);
+}
+.slots-hint {
+    margin-top: 10px;
+    color: #8b8b93;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+/* ==========================================================
+   VIP И ЕЖЕДНЕВНЫЕ ЗАДАНИЯ
+========================================================== */
+.vip-page, .tasks-page { animation: fadeIn 0.25s ease; margin-top: -6px; }
+.vip-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 22px 18px;
+    border-radius: 26px;
+    border: 1px solid rgba(255, 200, 0, 0.28);
+    background:
+        radial-gradient(circle at 12% 14%, rgba(255, 215, 0, 0.25), transparent 42%),
+        radial-gradient(circle at 88% 88%, rgba(123, 94, 255, 0.22), transparent 48%),
+        linear-gradient(150deg, #211a08 0%, #15130d 48%, #0b0b0d 100%);
+    text-align: center;
+}
+.vip-crown { font-size: 48px; line-height: 1; filter: drop-shadow(0 8px 16px rgba(255, 200, 0, 0.3)); }
+.vip-tier-name {
+    margin-top: 6px;
+    color: #ffc800;
+    font-size: 24px;
+    font-weight: 950;
+    letter-spacing: 0.6px;
+}
+.vip-tier-sub { color: #9a9aa2; font-size: 12px; font-weight: 700; margin-top: 3px; }
+.vip-progress {
+    height: 12px;
+    margin-top: 18px;
+    border-radius: 99px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.vip-progress i {
+    display: block;
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff9f00, #ffc800, #ffe66d);
+    box-shadow: 0 0 16px rgba(255, 200, 0, 0.5);
+    transition: width 0.6s cubic-bezier(.22, 1, .36, 1);
+}
+.vip-progress-text { margin-top: 8px; color: #8d8d95; font-size: 11px; font-weight: 700; }
+.vip-perks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 14px;
+}
+.vip-perk {
+    background: #121212;
+    border: 1px solid #242424;
+    border-radius: 18px;
+    padding: 14px 12px;
+    text-align: left;
+}
+.vip-perk small { display: block; color: #77777f; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+.vip-perk b { display: block; margin-top: 4px; font-size: 16px; color: #fff; }
+.vip-perk span { display: block; margin-top: 2px; color: #9a9aa2; font-size: 11px; font-weight: 600; line-height: 1.35; }
+.vip-ranks { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.vip-rank-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: #101010;
+    border: 1px solid #202020;
+}
+.vip-rank-row.current { border-color: rgba(255, 200, 0, 0.5); background: #161308; }
+.vip-rank-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto;
+    background: #3a3a3a; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.03);
+}
+.vip-rank-row.current .vip-rank-dot { background: #ffc800; box-shadow: 0 0 12px rgba(255, 200, 0, 0.65); }
+.vip-rank-info { flex: 1; min-width: 0; }
+.vip-rank-info b { font-size: 14px; color: #f4f4f4; }
+.vip-rank-info small { display: block; margin-top: 2px; color: #7f7f87; font-size: 11px; font-weight: 600; }
+.vip-rank-check { color: #ffc800; font-size: 16px; font-weight: 900; }
+.vip-claim-card { margin-top: 14px; }
+.vip-claim-card .main-action-btn { margin-top: 14px; }
+.vip-claim-card .main-action-btn:disabled { opacity: 0.45; box-shadow: none; }
+
+.tasks-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(255, 200, 0, 0.13), rgba(255, 144, 0, 0.05));
+    border: 1px solid rgba(255, 200, 0, 0.22);
+    margin-bottom: 12px;
+}
+.tasks-summary b { display: block; color: #ffc800; font-size: 24px; font-weight: 950; }
+.tasks-summary small { display: block; margin-top: 2px; color: #8d8d95; font-size: 11px; font-weight: 700; }
+.tasks-summary-icon { font-size: 34px; line-height: 1; }
+.tasks-list { display: flex; flex-direction: column; gap: 10px; }
+.task-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 20px;
+    background: #121212;
+    border: 1px solid #232323;
+}
+.task-icon {
+    width: 44px; height: 44px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 14px;
+    background: #1b1b1b;
+    font-size: 22px;
+}
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 14px; font-weight: 800; color: #fff; }
+.task-desc { margin-top: 2px; color: #818189; font-size: 11px; font-weight: 600; line-height: 1.35; }
+.task-progress {
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.task-progress i {
+    display: block; height: 100%; width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff9f00, #ffc800);
+    transition: width 0.45s ease;
+}
+.task-reward {
+    margin-top: 5px;
+    color: #ffc800;
+    font-size: 11px;
+    font-weight: 800;
+}
+.task-claim {
+    flex: 0 0 auto;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #000;
+    background: linear-gradient(135deg, #ffc800, #ff9000);
+    box-shadow: 0 5px 14px rgba(255, 160, 0, 0.22);
+    transition: transform 0.15s ease, opacity 0.2s ease;
+}
+.task-claim:active { transform: scale(0.95); }
+.task-claim:disabled { opacity: 0.42; box-shadow: none; color: #d7d7d7; background: #252525; }
+.task-claim.done { opacity: 0.55; color: #ffc800; background: #221d0c; }
+.task-card.completed { border-color: rgba(255, 200, 0, 0.24); }
+
+.daily-bonus-status {
+    margin-top: 10px;
+    color: #8d8d95;
+    font-size: 12px;
+    font-weight: 700;
+}
+.daily-bonus-status b { color: #ffc800; }
+.promo-hint {
+    margin-top: 10px;
+    color: #74747c;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.promo-hint code { color: #ffc800; background: rgba(255, 200, 0, 0.08); padding: 1px 5px; border-radius: 5px; }
+
+/* ==========================================================
+   xROCKET: понятная плашка вместо «скоро появится»
+========================================================== */
+.wallet-note {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 200, 0, 0.07);
+    border: 1px solid rgba(255, 200, 0, 0.2);
+    color: #c9c9cf;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+}
+.wallet-note b { color: #ffc800; }
+
+/* Узкие экраны (320–360 px): длинные названия режимов не должны
+   вылезать за границы плитки и создавать горизонтальную прокрутку. */
+@media (max-width: 360px) {
+    .dice-mode {
+        min-width: 0;
+        white-space: normal;
+        font-size: 13px;
+        line-height: 1.25;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+    .dice-mode .dice-mode-name,
+    .dice-mode .dice-mode-coef {
+        white-space: normal;
+    }
+    .dice-mode .dice-mode-coef {
+        margin-left: 2px;
+    }
+}
