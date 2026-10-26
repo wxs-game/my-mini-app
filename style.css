@@ -4345,17 +4345,15 @@ body.anim-page .top {
 /* ==========================================================
    ОБЩАЯ СТРАНИЦА EMOJI-ИГР (баскетбол, дартс, боулинг, слоты)
 ========================================================== */
+.emoji-game-page { --dice-size: min(54vw, 214px); }   /* спрайты чуть меньше, чем раньше (было 72vw / 290px) */
 .emoji-game-page .dice-stage {
-    height: min(72vw, 300px);
+    height: min(66vw, 264px);
     margin-top: 4px;
 }
-.emoji-game-page .dice-preview > .sticker-lottie,
 .emoji-game-page .dice-roll > .sticker-lottie {
-    width: min(72vw, 290px);
-    height: min(72vw, 290px);
+    width: var(--dice-size);
+    height: var(--dice-size);
 }
-.emoji-game-page .dice-preview > .sticker-lottie svg,
-.emoji-game-page .dice-preview > .sticker-lottie canvas,
 .emoji-game-page .dice-roll > .sticker-lottie svg,
 .emoji-game-page .dice-roll > .sticker-lottie canvas {
     width: 100% !important;

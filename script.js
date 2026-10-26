@@ -4960,7 +4960,10 @@ function selectEmojiAttempts(n, btn) {
     if (btn) btn.classList.add("active");
     renderEmojiGameModes(true);
     updateEmojiGamePlayLabel();
-    if (window.EmojiGameStage) window.EmojiGameStage.reset();
+    if (window.EmojiGameStage) {
+        window.EmojiGameStage.reset();
+        window.EmojiGameStage.setAttempts(emojiGame.attempts);   // раздвоение / растроение / склейка
+    }
 }
 
 function adjustEmojiBet(factor) {
@@ -5107,6 +5110,9 @@ async function handleEmojiGamePlay() {
     const winAmount = win ? calcDiceWin(bet, coef) : 0;
     let finalBalance = currentBalance;
 
+    // заранее собираем первый бросок — выезд сбоку стартует мгновенно
+    if (!cfg.slots && window.EmojiGameStage && results[0]) window.EmojiGameStage.prepare(results[0].roll);
+
     if (win) {
         const afterBet = snapshotBalanceState();
         currentTotalWin = roundMoney(currentTotalWin + winAmount);
@@ -5139,6 +5145,7 @@ async function handleEmojiGamePlay() {
                 const title = (pass ? "Ставка зашла" : "Ставка не зашла") + roundTag;
                 await window.EmojiGameStage.playAttempt({
                     roll,
+                    nextRoll: (!cfg.slots && results[i + 1]) ? results[i + 1].roll : null,
                     win: pass,
                     title,
                     amountText: isFinal ? amountText : "",
@@ -9176,6 +9183,11 @@ function playRoll(anim, totalMs) {
 
 /* ==========================================
    EMOJI-ИГРЫ — общая сцена для баскетбола, дартса, боулинга и слотов.
+   Сделана по образцу Куба:
+   • превью раздваивается / растраивается при выборе 2 или 3 бросков (все режимы);
+   • анимации бросков заранее собираются в пул, поэтому плавный выезд сбоку
+     не «съедается» и бросок стартует в 60 FPS;
+   • бросок уходит вверх одновременно с появлением галочки / крестика.
    Использует готовые .tgs-анимации из animations/dice/banners/.
 ========================================== */
 (function () {
@@ -9189,19 +9201,45 @@ function playRoll(anim, totalMs) {
         setTimeout(fin, 120);
     });
     const $ = id => document.getElementById(id);
+    const reflow = el => void el.offsetWidth;
     const GAME_CONFIGS = window.EMOJI_GAME_CONFIGS || {};
     const SLOT_SYMBOLS = window.EMOJI_SLOT_SYMBOLS || {};
 
     let key = null;
     let cfg = null;
-    let previewAnim = null;
-    let previewKey = null;
     let pageActive = false;
     let initToken = 0;
+    let previewKey = null;
+
+    // превью: три ячейки (a — основная, b и c появляются при 2 / 3 бросках)
+    let cells = null;
+    let preview = null;          // { anim, frame, last, total, fr, paused }
+    let previewData = null;
+    let previewB = null;
+    let previewC = null;
+    let attemptsCount = 1;
+    let rafId = 0, lastTick = 0;
 
     function isPageVisible() {
         const pg = $('emojiGamePage');
         return !!(pg && !pg.classList.contains('hidden')) && !document.hidden;
+    }
+
+    function createAnim(box, data) {
+        const anim = lottie.loadAnimation({
+            container: box,
+            renderer: 'svg',
+            loop: false,
+            autoplay: false,
+            animationData: data,
+            rendererSettings: {
+                preserveAspectRatio: 'xMidYMid meet',
+                progressiveLoad: false,
+                hideOnTransparent: true
+            }
+        });
+        if (anim.setSubframe) anim.setSubframe(false);
+        return anim;
     }
 
     async function loadData(name) {
@@ -9212,15 +9250,193 @@ function playRoll(anim, totalMs) {
         return null;
     }
 
-    // Заранее подтягиваем все броски игры (darts1…darts6, basketball1…5,
-    // bowling1…6), чтобы нужный номер проигрывался без задержки.
-    function preloadRolls(gameKey, count) {
-        if (!gameKey || !count || !window.TgsCache) return;
-        for (let n = 1; n <= count; n++) {
-            setTimeout(() => {
-                try { window.TgsCache.peekRaw(DIRS[1] + gameKey + n); } catch (e) {}
-            }, n * 100);
+    /* ---------- цикл превью (60 FPS, только когда страница открыта) ---------- */
+    function tick(now) {
+        rafId = 0;
+        if (!pageActive || !preview || preview.paused || !isPageVisible()) return;
+        rafId = requestAnimationFrame(tick);
+        const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.05) : (1 / 60);
+        lastTick = now;
+        preview.frame += dt * preview.fr;
+        if (preview.frame >= preview.total) preview.frame %= preview.total;
+        const fi = Math.floor(preview.frame);
+        if (fi !== preview.last) {
+            preview.last = fi;
+            preview.anim.goToAndStop(fi, true);
+            if (visibleCount() >= 2 && previewB) previewB.goToAndStop(fi, true);
+            if (visibleCount() >= 3 && previewC) previewC.goToAndStop(fi, true);
         }
+    }
+    function ensureLoop() {
+        if (!rafId && pageActive && preview && !preview.paused && isPageVisible()) {
+            lastTick = 0;
+            rafId = requestAnimationFrame(tick);
+        }
+    }
+    function setPreviewPaused(v) {
+        if (!preview) return;
+        preview.paused = v;
+        if (v && rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        else if (!v) ensureLoop();
+    }
+
+    function visibleCount() {
+        return (cfg && cfg.slots) ? 1 : attemptsCount;
+    }
+
+    /* ---------- превью из трёх ячеек: раздвоение / растроение ---------- */
+    function buildPair(el, emoji) {
+        el.textContent = '';
+        const pair = document.createElement('div');
+        pair.className = 'dice-pair' + (emoji ? ' is-fallback' : '');
+        const a = document.createElement('div'); a.className = 'dice-cell a';
+        const b = document.createElement('div'); b.className = 'dice-cell b';
+        const c = document.createElement('div'); c.className = 'dice-cell c';
+        if (emoji) { a.textContent = emoji; b.textContent = emoji; c.textContent = emoji; }
+        pair.appendChild(a); pair.appendChild(b); pair.appendChild(c);
+        el.appendChild(pair);
+        return { a, b, c };
+    }
+
+    function ensurePreviewCell(cell, current) {
+        if (current || !previewData || !cell || typeof lottie === 'undefined') return current;
+        const box = document.createElement('div');
+        box.className = 'sticker-lottie';
+        cell.appendChild(box);
+        const anim = createAnim(box, JSON.parse(JSON.stringify(previewData)));
+        anim.goToAndStop(preview ? Math.max(preview.last, 0) : 0, true);
+        return anim;
+    }
+
+    function applyAttempts() {
+        const prev = $('emojiGamePreview');
+        if (!prev) return;
+        const n = visibleCount();
+        if (cells && previewData) {
+            const f = preview ? Math.max(preview.last, 0) : 0;
+            if (n >= 2) {
+                previewB = ensurePreviewCell(cells.b, previewB);
+                if (previewB) previewB.goToAndStop(f, true);
+            }
+            if (n >= 3) {
+                previewC = ensurePreviewCell(cells.c, previewC);
+                if (previewC) previewC.goToAndStop(f, true);
+            }
+        }
+        prev.classList.toggle('pair', n === 2);
+        prev.classList.toggle('triple', n === 3);
+    }
+
+    function setAttempts(n) {
+        attemptsCount = n === 3 ? 3 : (n === 2 ? 2 : 1);
+        applyAttempts();
+    }
+
+    function destroyPreview() {
+        [preview && preview.anim, previewB, previewC].forEach(a => {
+            if (a) { try { a.destroy(); } catch (e) {} }
+        });
+        preview = null; previewB = null; previewC = null;
+        previewData = null; cells = null;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    }
+
+    /* ---------- пул готовых анимаций бросков (basketball1…5, darts1…6, bowling1…6) ---------- */
+    const rollPool = new Map();   // "game|n" -> Promise<{ box, anim }>
+    function getPooledRoll(gameKey, roll) {
+        const k = gameKey + '|' + roll;
+        if (rollPool.has(k)) return rollPool.get(k);
+        const p = (async () => {
+            if (typeof lottie === 'undefined' || !window.TgsCache) return { box: null, anim: null };
+            let data = await window.TgsCache.load(DIRS[1] + gameKey + roll);
+            if (!data) data = await loadData(gameKey);
+            if (!data) return { box: null, anim: null };
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            const anim = createAnim(box, data);
+            anim.goToAndStop(0, true);
+            return { box, anim };
+        })();
+        rollPool.set(k, p);
+        return p;
+    }
+
+    function clearPool() {
+        rollPool.forEach(p => p.then(r => { if (r && r.anim) { try { r.anim.destroy(); } catch (e) {} } }));
+        rollPool.clear();
+    }
+
+    async function warmUpPool(gameKey, count) {
+        for (let n = 1; n <= count; n++) {
+            if (!pageActive || key !== gameKey) break;
+            await getPooledRoll(gameKey, n);
+            await nextFrame();
+        }
+    }
+
+    /* ---------- подготовка выпавшего броска ---------- */
+    let prepared = null;
+    function prepare(roll) {
+        const rollEl = $('emojiGameRoll');
+        if (!rollEl || !cfg || cfg.slots) return null;
+        if (prepared && prepared.roll === roll && !prepared.used) return prepared.ready;
+
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        // Ставим стартовую позицию (за краем) МГНОВЕННО, без перехода — иначе
+        // следующий выезд сбоку стартует из центра и «свайп» пропадает.
+        rollEl.style.transition = 'none';
+        rollEl.className = 'dice-layer dice-roll from-' + side;
+        rollEl.innerHTML = '';
+        reflow(rollEl);
+        rollEl.style.transition = '';
+
+        const gameKey = key;
+        const st = { roll, side, box: null, anim: null, used: false };
+        st.ready = (async () => {
+            const pooled = await getPooledRoll(gameKey, roll);
+            if (pooled && pooled.anim && pooled.box) {
+                st.box = pooled.box;
+                st.anim = pooled.anim;
+                st.anim.goToAndStop(0, true);
+                rollEl.appendChild(st.box);
+            } else {
+                const fb = document.createElement('div');
+                fb.className = 'sticker-lottie';
+                rollEl.appendChild(fb);
+                st.box = fb;
+            }
+            return st;
+        })();
+        prepared = st;
+        return st.ready;
+    }
+
+    /* ---------- 60 FPS воспроизведение броска ---------- */
+    function playRoll(anim) {
+        return new Promise(resolve => {
+            const fr = anim.frameRate || 60;
+            const last = Math.max((anim.totalFrames || 2) - 1, 1);
+            let prevTarget = -1;
+            const t0 = performance.now();
+            let guard = setTimeout(resolve, last / fr * 1000 + 1500);
+            (function step(now) {
+                const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
+                if (target !== prevTarget) {
+                    anim.goToAndStop(target, true);
+                    prevTarget = target;
+                }
+                if (target < last) requestAnimationFrame(step);
+                else { clearTimeout(guard); resolve(); }
+            })(t0);
+        });
+    }
+
+    async function fallbackRoll(box) {
+        box.className = 'dice-fallback';
+        box.innerHTML = '<span class="tge-spinner big"></span>';
+        await wait(900);
+        box.textContent = (cfg && cfg.fallback) || '🎲';
+        await wait(450);
     }
 
     function sparkles() {
@@ -9248,83 +9464,100 @@ function playRoll(anim, totalMs) {
             '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
-    function reset() {
+    function hideResult(slideUp) {
+        const res = $('emojiGameResult');
+        if (!res || !res.classList.contains('show')) return;
+        res.classList.remove('show');
+        if (slideUp) res.classList.add('hide-up');
+        setTimeout(() => { if (!res.classList.contains('show')) res.innerHTML = ''; }, 650);
+    }
+
+    function showPreview() {
         const prev = $('emojiGamePreview');
+        if (!prev || !prev.classList.contains('out')) {
+            setPreviewPaused(false);
+            return;
+        }
+        prev.style.transition = 'none';
+        prev.classList.remove('out');
+        prev.style.opacity = '0';
+        prev.style.transform = 'translateY(40px) scale(0.94)';
+        reflow(prev);
+        prev.style.transition = '';
+        prev.style.opacity = '';
+        prev.style.transform = '';
+        setPreviewPaused(false);
+    }
+
+    function reset() {
+        hideResult(false);
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
-        const roll = $('emojiGameRoll');
-
-        if (res) {
-            res.classList.remove('show', 'hide-up', 'win', 'lose');
-            res.innerHTML = '';
-        }
+        const rollEl = $('emojiGameRoll');
+        if (res && !res.classList.contains('show')) res.classList.remove('hide-up');
         if (slots) slots.classList.remove('show');
-        if (roll) {
-            roll.className = 'dice-layer dice-roll';
-            roll.innerHTML = '';
+        if (rollEl) {
+            rollEl.className = 'dice-layer dice-roll';
+            rollEl.innerHTML = '';
         }
-        if (prev) {
-            prev.classList.remove('out');
-            prev.style.opacity = '';
-            prev.style.transform = '';
-        }
-        if (previewAnim) {
-            if (pageActive && isPageVisible()) previewAnim.play();
-            else previewAnim.pause();
-        }
+        prepared = null;
+        showPreview();
     }
 
     async function init(gameKey) {
+        const same = previewKey === gameKey && preview;
         key = gameKey;
         cfg = GAME_CONFIGS[gameKey] || null;
+        attemptsCount = 1;
         reset();
-        if (cfg) preloadRolls(gameKey, cfg.rolls || 0);
 
         const prev = $('emojiGamePreview');
         if (!prev) return;
 
-        if (previewKey === gameKey && previewAnim) {
-            if (pageActive && isPageVisible()) previewAnim.play();
+        if (same) {
+            applyAttempts();
+            ensureLoop();
             return;
         }
 
         const token = ++initToken;
         previewKey = gameKey;
+        destroyPreview();
+        clearPool();
 
-        if (previewAnim) {
-            try { previewAnim.destroy(); } catch (e) {}
-            previewAnim = null;
-        }
-
-        prev.classList.remove('has-anim', 'is-fallback');
+        prev.classList.remove('has-anim', 'is-fallback', 'pair', 'triple');
         prev.innerHTML = '<span class="tge-spinner big"></span>';
 
         const data = await loadData(gameKey);
         if (token !== initToken) return;
 
-        prev.innerHTML = '';
         if (data && typeof lottie !== 'undefined') {
+            cells = buildPair(prev, null);
+            previewData = data;
             const box = document.createElement('div');
             box.className = 'sticker-lottie';
-            prev.appendChild(box);
-            previewAnim = lottie.loadAnimation({
-                container: box,
-                renderer: 'svg',
-                loop: true,
-                autoplay: true,
-                animationData: data,
-                rendererSettings: {
-                    preserveAspectRatio: 'xMidYMid meet',
-                    progressiveLoad: false,
-                    hideOnTransparent: true
-                }
-            });
-            if (previewAnim.setSubframe) previewAnim.setSubframe(false);
+            cells.a.appendChild(box);
             prev.classList.add('has-anim');
-            if (!pageActive || !isPageVisible()) previewAnim.pause();
+            const anim = createAnim(box, data);
+            anim.goToAndStop(0, true);
+            preview = {
+                anim, frame: 0, last: 0,
+                total: Math.max(1, anim.totalFrames || 1),
+                fr: anim.frameRate || 60,
+                paused: false
+            };
+            applyAttempts();
+            ensureLoop();
+            setTimeout(() => {
+                if (token !== initToken) return;
+                applyAttempts();
+                if (cfg && !cfg.slots) warmUpPool(gameKey, cfg.rolls || 0);
+            }, 150);
         } else {
+            prev.textContent = '';
+            cells = buildPair(prev, (cfg && cfg.fallback) || '🎲');
             prev.classList.add('is-fallback');
-            prev.textContent = (cfg && cfg.fallback) || '🎲';
+            applyAttempts();
         }
     }
 
@@ -9359,75 +9592,28 @@ function playRoll(anim, totalMs) {
         await wait(600);
     }
 
-    async function playRollAnimation(rollEl, rollNumber) {
-        // Сначала берём анимацию конкретного броска (darts3, bowling6,
-        // basketball2…) из animations/dice, а если её нет — общий баннер игры.
-        const numbered = (key && rollNumber) ? key + rollNumber : null;
-        let data = null;
-        if (numbered && window.TgsCache) {
-            data = await window.TgsCache.load(DIRS[1] + numbered);
-        }
-        if (!data && key) data = await loadData(key);
-        if (!data || typeof lottie === 'undefined') {
-            const fb = document.createElement('div');
-            fb.className = 'dice-fallback';
-            fb.innerHTML = '<span class="tge-spinner big"></span>';
-            rollEl.appendChild(fb);
-            await wait(900);
-            fb.textContent = (cfg && cfg.fallback) || '🎲';
-            await wait(450);
-            return;
-        }
-
-        const box = document.createElement('div');
-        box.className = 'sticker-lottie';
-        rollEl.appendChild(box);
-
-        const anim = lottie.loadAnimation({
-            container: box,
-            renderer: 'svg',
-            loop: false,
-            autoplay: true,
-            animationData: data,
-            rendererSettings: {
-                preserveAspectRatio: 'xMidYMid meet',
-                progressiveLoad: false,
-                hideOnTransparent: true
-            }
-        });
-        if (anim.setSubframe) anim.setSubframe(false);
-
-        const startedAt = performance.now();
-        await new Promise(resolve => {
-            let done = false;
-            const finish = () => {
-                if (done) return;
-                done = true;
-                resolve();
-            };
-            anim.addEventListener('complete', finish);
-            setTimeout(finish, 3800);
-        });
-
-        const elapsed = performance.now() - startedAt;
-        if (elapsed < 950) await wait(950 - elapsed);
-        try { anim.destroy(); } catch (e) {}
+    function showResult(res, win, amountText, title) {
+        res.style.transition = 'none';
+        res.classList.remove('show', 'hide-up');
+        res.innerHTML = resultHtml(win, amountText, title);
+        res.classList.toggle('win', !!win);
+        res.classList.toggle('lose', !win);
+        reflow(res);
+        res.style.transition = '';
+        res.classList.add('show');
     }
 
-    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols }) {
+    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols, nextRoll }) {
         const prev = $('emojiGamePreview');
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
         const rollEl = $('emojiGameRoll');
         if (!prev || !res) return;
 
-        if (res.classList.contains('show')) {
-            res.classList.remove('show');
-            res.classList.add('hide-up');
-            await wait(150);
-        }
-
-        if (previewAnim) previewAnim.pause();
+        // 1) превью (или прошлый результат) плавно уплывает вверх
+        const hadResult = res.classList.contains('show');
+        hideResult(true);
+        setPreviewPaused(true);
         prev.classList.add('out');
 
         if (cfg && cfg.slots) {
@@ -9435,53 +9621,58 @@ function playRoll(anim, totalMs) {
                 rollEl.className = 'dice-layer dice-roll';
                 rollEl.innerHTML = '';
             }
+            if (hadResult) await wait(160); else await nextFrame();
             if (slots) slots.classList.add('show');
             await playSlots(symbols, win);
-        } else {
-            if (slots) slots.classList.remove('show');
-            if (rollEl) {
-                const side = Math.random() < 0.5 ? 'from-left' : 'from-right';
-                rollEl.className = 'dice-layer dice-roll ' + side;
-                rollEl.innerHTML = '';
-                await nextFrame();
-                rollEl.classList.add('in');
-                await playRollAnimation(rollEl, rollNumber);
-                rollEl.classList.add('away');
-            }
+            await wait(220);
+            showResult(res, win, amountText, title);
+            await waitResultAnimationEnd(res, 1050);
+            return;
         }
 
-        await wait(220);
-        res.style.transition = 'none';
-        res.classList.remove('show', 'hide-up');
-        res.innerHTML = resultHtml(win, amountText, title);
-        res.classList.toggle('win', !!win);
-        res.classList.toggle('lose', !win);
-        void res.offsetWidth;
-        res.style.transition = '';
-        res.classList.add('show');
+        if (slots) slots.classList.remove('show');
+        const st = await ((prepared && prepared.roll === rollNumber && !prepared.used) ? prepared.ready : prepare(rollNumber));
+        prepared.used = true;
+        const { box, anim } = st;
 
-        // Галочка/крестик всегда доигрывают до конца, даже перед следующим броском.
+        if (hadResult) await wait(160); else await nextFrame();
+        // 2) бросок плавно заезжает сбоку (спрайт уже внутри слоя) и играет в 60 FPS
+        rollEl.classList.add('in');
+        if (anim) await playRoll(anim);
+        else await fallbackRoll(box);
+        await wait(350);
+
+        // 3) бросок плавно уходит вверх — одновременно появляется галочка / крестик
+        rollEl.classList.add('away');
+        showResult(res, win, amountText, title);
+
+        // Галочка/крестик, искры и текст доигрывают полностью и не обрываются
+        // следующим броском — ждём именно конца анимации.
         await waitResultAnimationEnd(res, 1050);
-        if (rollEl) {
-            rollEl.className = 'dice-layer dice-roll';
-            rollEl.innerHTML = '';
+        if (box && box.parentNode === rollEl) rollEl.removeChild(box);
+        if (anim) { try { anim.goToAndStop(0, true); } catch (e) {} }
+        rollEl.className = 'dice-layer dice-roll';
+        prepared = null;
+        if (nextRoll) {
+            await prepare(nextRoll);
+            await wait(350);
+            return;
         }
+        await wait(300);
     }
 
     function setPageActive(active) {
         pageActive = !!active;
-        if (!previewAnim) return;
-        if (pageActive && isPageVisible()) previewAnim.play();
-        else previewAnim.pause();
+        if (pageActive) ensureLoop();
+        else if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
     }
 
     document.addEventListener('visibilitychange', () => {
-        if (!previewAnim) return;
-        if (document.hidden || !pageActive || !isPageVisible()) previewAnim.pause();
-        else previewAnim.play();
+        if (document.hidden && rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        else ensureLoop();
     });
 
-    window.EmojiGameStage = { init, reset, playAttempt, setPageActive };
+    window.EmojiGameStage = { init, reset, prepare, playAttempt, setAttempts, setPageActive };
 })();
 
 /* Переключение активности анимаций при смене страниц — чтобы в играх 100% CPU/GPU шло на 60 FPS */
