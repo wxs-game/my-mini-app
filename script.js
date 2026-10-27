@@ -9170,7 +9170,7 @@ function playRoll(anim, totalMs) {
         box.className = 'dice-fallback';
         box.innerHTML = '<span class="tge-spinner big"></span>';
         await wait(ms * 0.75);
-        box.textContent = '';
+        box.textContent = '⚽';
         await wait(ms * 0.25);
     }
 
@@ -9229,93 +9229,64 @@ function playRoll(anim, totalMs) {
         // а не результат прошлой партии.
         playGen++;
         hideResult(false);
-        cells.forEach(cell => {
-            cell.querySelectorAll('.dice-roll, .cell-badge').forEach(el => el.remove());
-            const box = cell.querySelector('.sticker-lottie');
-            if (box) box.style.opacity = '';
-        });
+        const rollEl = $('footballRoll');
+        if (rollEl) { rollEl.className = 'dice-layer dice-roll'; rollEl.innerHTML = ''; }
         showPreview();
     }
 
-    // Удар в своей ячейке: превью этой ячейки гаснет, играет лотти,
-    // в конце — галочка / крестик. Остальные ячейки продолжают превью —
-    // получается тот самый «сплит», как у двух-трёх кубов.
-    // Физическая ячейка: в тройке центр — c, поэтому порядок ударов [a, c, b].
-    function cellIndexForAttempt(idx, total) {
-        if (total <= 1) return 0;
-        if (total === 2) return idx === 0 ? 0 : 1;
-        return [0, 2, 1][idx] || 0;
-    }
-
-    async function playRollInCell(i, roll, win) {
-        const cell = cells[i] || cells[0];
-        if (!cell) return;
-        const box = cell.querySelector('.sticker-lottie');
-        if (box) box.style.opacity = '0';
-
-        const layer = document.createElement('div');
-        layer.className = 'dice-layer dice-roll from-' + (Math.random() < 0.5 ? 'left' : 'right');
-        cell.appendChild(layer);
-
-        const pooled = await getPooledRoll(roll);
-        if (pooled && pooled.anim && pooled.box) {
-            pooled.anim.goToAndStop(0, true);
-            layer.appendChild(pooled.box);
-            await nextFrame();
-            layer.classList.add('in');
-            await playRoll(pooled.anim, ROLL_MS);
-        } else {
-            await nextFrame();
-            layer.classList.add('in');
-            await fallbackRoll(layer, roll, ROLL_MS);
-        }
-        layer.classList.add('away');
-        await wait(380);
-        if (layer.parentNode) layer.parentNode.removeChild(layer);
-        if (pooled && pooled.box && pooled.box.parentNode) pooled.box.parentNode.removeChild(pooled.box);
-
-        const badge = document.createElement('div');
-        badge.className = 'cell-badge ' + (win ? 'win' : 'lose');
-        badge.innerHTML = '<span>' + (win ? '✓' : '✕') + '</span>';
-        cell.appendChild(badge);
-    }
-
-    async function play({ roll, win, amountText, title, index = 0, total = 1, showResult = null }) {
-        const prev = $('footballPreview'), res = $('footballResult');
-        if (!prev || !res) return;
+    // Тот же сценарий, что и у куба: превью (или прошлый итог) плавно уплывает вверх,
+    // удар заезжает сбоку, играет в честные 60 FPS, уходит — появляется итог.
+    // Для серии из 2–3 ударов итог показывается после КАЖДОГО удара, как в кубе.
+    async function play({ roll, win, amountText, title }) {
+        const prev = $('footballPreview'), rollEl = $('footballRoll'), res = $('footballResult');
+        if (!prev || !rollEl || !res) return;
         const myGen = ++playGen;
+        const alive = () => myGen === playGen;
 
+        // 1) слой с ударом собираем из пула за кадром
+        const pooled = await getPooledRoll(roll);
+        if (!alive()) return;
+        const anim = pooled && pooled.anim && pooled.box ? pooled.anim : null;
+        let box = anim ? pooled.box : null;
+        rollEl.className = 'dice-layer dice-roll from-' + (Math.random() < 0.5 ? 'left' : 'right');
+        rollEl.innerHTML = '';
+        if (anim) anim.goToAndStop(0, true);
+        else { box = document.createElement('div'); box.className = 'sticker-lottie'; }
+        rollEl.appendChild(box);
+
+        // 2) превью / прошлый итог уплывают вверх, затем заезжает удар
+        const hadResult = res.classList.contains('show');
         hideResult(true);
-        await wait(140);
-        if (myGen !== playGen) return;
+        setPreviewPaused(true);
+        prev.classList.add('out');
+        if (hadResult) await wait(160); else await nextFrame();
+        if (!alive()) return;
+        reflow(rollEl);
+        rollEl.classList.add('in');
 
-        if (index === 0) {
-            cells.forEach(cell => {
-                cell.querySelectorAll('.dice-roll, .cell-badge').forEach(el => el.remove());
-                const box = cell.querySelector('.sticker-lottie');
-                if (box) box.style.opacity = '';
-            });
-        }
+        // 3) 60 FPS, замирает на последнем кадре
+        if (anim) await playRoll(anim, ROLL_MS);
+        else await fallbackRoll(box, roll, ROLL_MS);
+        if (!alive()) return;
+        await wait(350);
+        if (!alive()) return;
 
-        await playRollInCell(cellIndexForAttempt(index, total), roll, win);
-        if (myGen !== playGen) return;
+        // 4) удар уходит, появляется итог
+        rollEl.classList.add('away');
+        res.style.transition = 'none';
+        res.classList.remove('show', 'hide-up');
+        res.innerHTML = resultHtml(win, amountText, title);
+        res.classList.toggle('win', !!win);
+        res.classList.toggle('lose', !win);
+        reflow(res);
+        res.style.transition = '';
+        res.classList.add('show');
 
-        // Итог показываем один раз — после последнего удара серии,
-        // чтобы не накрывать сплит из 2–3 анимаций.
-        const needResult = showResult === null ? (total <= 1 || index === total - 1) : !!showResult;
-        if (needResult) {
-            await wait(180);
-            if (myGen !== playGen) return;
-            res.style.transition = 'none';
-            res.classList.remove('show', 'hide-up');
-            res.innerHTML = resultHtml(win, amountText, title);
-            res.classList.toggle('win', win);
-            res.classList.toggle('lose', !win);
-            reflow(res);
-            res.style.transition = '';
-            res.classList.add('show');
-            await waitResultAnimationEnd(res, 1050);
-        }
+        await waitResultAnimationEnd(res, 1050);
+        if (!alive()) return;
+        if (box && box.parentNode === rollEl) rollEl.removeChild(box);
+        rollEl.className = 'dice-layer dice-roll';
+        await wait(300);
     }
 
     function setPageActive(active) {
@@ -9525,25 +9496,20 @@ function playRoll(anim, totalMs) {
         ensurePreviewLoop();
     }
 
-    // Физическая ячейка для попытки. В тройке центр — это ячейка c,
-    // поэтому вторая попытка играет в центре, третья — справа:
-    // 2 попытки: [a, b]; 3 попытки: [a, c, b].
-    function cellIndexForAttempt(idx, total) {
-        if (total <= 1) return 0;
-        if (total === 2) return idx === 0 ? 0 : 1;
-        return [0, 2, 1][idx] || 0;
-    }
-
-    // Вернуть сцену к превью: убрать ролики и галочки/крестики, запустить анимации.
+    // Вернуть сцену к превью: тем же плавным заездом снизу, что и в кубе.
     function resumePreview() {
         const prev = $('emojiGamePreview');
-        if (prev) {
+        if (prev && prev.classList.contains('out')) {
+            prev.style.transition = 'none';
             prev.classList.remove('out');
+            prev.style.opacity = '0';
+            prev.style.transform = 'translateY(40px) scale(0.94)';
+            void prev.offsetWidth;
+            prev.style.transition = '';
             prev.style.opacity = '';
             prev.style.transform = '';
         }
         cells.forEach(cell => {
-            cell.querySelectorAll('.dice-roll, .cell-badge').forEach(el => el.remove());
             const box = cell.querySelector('.sticker-lottie');
             if (box) box.style.opacity = '';
         });
@@ -9588,6 +9554,7 @@ function playRoll(anim, totalMs) {
 
         reset();
         if (cfg) preloadRolls(gameKey, cfg.rolls || 0);
+        warmUpRolls();
 
         const prev = $('emojiGamePreview');
         if (!prev) return;
@@ -9656,163 +9623,179 @@ function playRoll(anim, totalMs) {
         await wait(600);
     }
 
-    async function playRollAnimation(rollEl, rollNumber) {
-        // Сначала берём анимацию конкретного броска (darts3, bowling6,
-        // basketball2…) из animations/dice, а если её нет — общий баннер игры.
-        const numbered = (key && rollNumber) ? key + rollNumber : null;
-        let data = null;
-        if (numbered && window.TgsCache) {
-            data = await window.TgsCache.load(DIRS[1] + numbered);
-        }
-        if (!data && key) data = await loadData(key);
-        if (!data || typeof lottie === 'undefined') {
-            const fb = document.createElement('div');
-            fb.className = 'dice-fallback';
-            fb.innerHTML = '<span class="tge-spinner big"></span>';
-            rollEl.appendChild(fb);
-            await wait(900);
-            fb.textContent = (cfg && cfg.fallback) || '🎲';
-            await wait(450);
-            return;
-        }
+    /* ---------- пул готовых анимаций бросков (как у куба) ---------- */
+    const ROLL_MS = 4000;      // общее время броска: анимация + удержание последнего кадра
+    const reflow = el => void el.offsetWidth;
+    const rollPool = new Map(); // 'darts:3' -> Promise<{ box, anim }>
 
-        const box = document.createElement('div');
-        box.className = 'sticker-lottie';
-        rollEl.appendChild(box);
-
-        const anim = lottie.loadAnimation({
-            container: box,
-            renderer: 'svg',
-            loop: false,
-            autoplay: true,
-            animationData: data,
-            rendererSettings: {
-                preserveAspectRatio: 'xMidYMid meet',
-                progressiveLoad: false,
-                hideOnTransparent: true
-            }
-        });
-        if (anim.setSubframe) anim.setSubframe(false);
-
-        const startedAt = performance.now();
-        await new Promise(resolve => {
-            let done = false;
-            const finish = () => {
-                if (done) return;
-                done = true;
-                resolve();
-            };
-            anim.addEventListener('complete', finish);
-            setTimeout(finish, 3800);
-        });
-
-        const elapsed = performance.now() - startedAt;
-        if (elapsed < 950) await wait(950 - elapsed);
-        try { anim.destroy(); } catch (e) {}
+    function getPooledRoll(n) {
+        const gameKey = key;
+        const id = gameKey + ':' + n;
+        if (rollPool.has(id)) return rollPool.get(id);
+        const p = (async () => {
+            let data = null;
+            if (window.TgsCache) data = await window.TgsCache.load(DIRS[1] + gameKey + n);
+            if (!data) data = await loadData(gameKey);   // нет номерного файла — общий баннер игры
+            if (!data || typeof lottie === 'undefined') return { box: null, anim: null };
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            const anim = lottie.loadAnimation({
+                container: box,
+                renderer: 'svg',
+                loop: false,
+                autoplay: false,
+                animationData: data,
+                rendererSettings: {
+                    preserveAspectRatio: 'xMidYMid meet',
+                    progressiveLoad: false,
+                    hideOnTransparent: true
+                }
+            });
+            if (anim.setSubframe) anim.setSubframe(false);
+            anim.goToAndStop(0, true);
+            return { box, anim };
+        })();
+        rollPool.set(id, p);
+        return p;
     }
 
-    // Бросок в конкретной ячейке сплита: превью этой ячейки гаснет,
-    // играет лотти-анимация, в конце — галочка или крестик.
-    async function playRollInCell(i, rollNumber, win) {
-        const cell = cells[i] || cells[0];
-        if (!cell) return;
-        const anim = cellAnims[i];
-        if (anim) { try { anim.pause(); } catch (e) {} }
-        const previewBox = cell.querySelector('.sticker-lottie:not(.cell-roll-box)');
-        if (previewBox) previewBox.style.opacity = '0';
-
-        const layer = document.createElement('div');
-        layer.className = 'dice-layer dice-roll from-' + (Math.random() < 0.5 ? 'left' : 'right');
-        cell.appendChild(layer);
-        await nextFrame();
-        layer.classList.add('in');
-        await playRollAnimation(layer, rollNumber);
-        layer.classList.remove('in');
-        layer.classList.add('away');
-        await wait(380);
-        if (layer.parentNode) layer.parentNode.removeChild(layer);
-
-        const badge = document.createElement('div');
-        badge.className = 'cell-badge ' + (win ? 'win' : 'lose');
-        badge.innerHTML = '<span>' + (win ? '✓' : '✕') + '</span>';
-        cell.appendChild(badge);
+    async function warmUpRolls() {
+        const gameKey = key;
+        const count = (cfg && !cfg.slots && cfg.rolls) || 0;
+        for (let n = 1; n <= count; n++) {
+            if (key !== gameKey) break;
+            await getPooledRoll(n);
+            await nextFrame();
+        }
     }
 
-    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols, index = 0, total = 1, showResult = null }) {
+    /* ---------- честные 60 FPS: кадр = прошедшее время × frameRate ---------- */
+    function playRoll(anim, totalMs) {
+        return new Promise(resolve => {
+            const fr = anim.frameRate || 60;
+            const last = Math.max((anim.totalFrames || 2) - 1, 1);
+            const nativeMs = last / fr * 1000;
+            let prevTarget = -1;
+            const t0 = performance.now();
+            (function step(now) {
+                const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
+                if (target !== prevTarget) {
+                    anim.goToAndStop(target, true);
+                    prevTarget = target;
+                }
+                if (target < last) requestAnimationFrame(step);
+                else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
+            })(t0);
+        });
+    }
+
+    async function fallbackRoll(box, ms) {
+        box.className = 'dice-fallback';
+        box.innerHTML = '<span class="tge-spinner big"></span>';
+        await wait(ms * 0.75);
+        box.textContent = (cfg && cfg.fallback) || '🎲';
+        await wait(ms * 0.25);
+    }
+
+    function hideResult(slideUp) {
+        const res = $('emojiGameResult');
+        if (!res || !res.classList.contains('show')) return;
+        res.classList.remove('show');
+        if (slideUp) res.classList.add('hide-up');
+        setTimeout(() => { if (!res.classList.contains('show')) res.innerHTML = ''; }, 650);
+    }
+
+    function showResult(win, amountText, title) {
+        const res = $('emojiGameResult');
+        if (!res) return;
+        res.style.transition = 'none';
+        res.classList.remove('show', 'hide-up');
+        res.innerHTML = resultHtml(win, amountText, title);
+        res.classList.toggle('win', !!win);
+        res.classList.toggle('lose', !win);
+        reflow(res);
+        res.style.transition = '';
+        res.classList.add('show');
+    }
+
+    // Один сценарий для баскетбола, дартса, боулинга и слотов — как в кубе:
+    // превью (или прошлый итог) уплывает вверх → бросок заезжает сбоку и играет
+    // в 60 FPS → уходит → итог (галочка/крестик, искры, текст).
+    // Итог показывается после КАЖДОГО раунда, как в кубе.
+    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols }) {
         const prev = $('emojiGamePreview');
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
         const rollEl = $('emojiGameRoll');
-        if (!prev || !res) return;
-        // номер «поколения»: reset() (уход со страницы, смена режима) отменяет
-        // доигрывание прошлой партии, чтобы её результат не всплыл при возврате
+        if (!prev || !res || !rollEl) return;
+        // reset() (уход со страницы, смена режима) отменяет доигрывание прошлой партии
         const myGen = ++playGen;
+        const alive = () => myGen === playGen;
 
-        if (res.classList.contains('show')) {
-            res.classList.remove('show');
-            res.classList.add('hide-up');
-            await wait(150);
-            if (myGen !== playGen) return;
-        }
-
+        /* ----- слоты: тот же «въезд → результат», но барабаны вместо ролика ----- */
         if (cfg && cfg.slots) {
+            const hadResult = res.classList.contains('show');
+            hideResult(true);
             pausePreview();
+            previewPaused = true;
             prev.classList.add('out');
-            if (rollEl) {
-                rollEl.className = 'dice-layer dice-roll';
-                rollEl.innerHTML = '';
-            }
+            rollEl.className = 'dice-layer dice-roll';
+            rollEl.innerHTML = '';
+            if (hadResult) await wait(160); else await nextFrame();
+            if (!alive()) return;
+
             if (slots) slots.classList.add('show');
             await playSlots(symbols, win);
-            if (myGen !== playGen) return;
-
+            if (!alive()) return;
             await wait(220);
-            if (myGen !== playGen) return;
-            res.style.transition = 'none';
-            res.classList.remove('show', 'hide-up');
-            res.innerHTML = resultHtml(win, amountText, title);
-            res.classList.toggle('win', !!win);
-            res.classList.toggle('lose', !win);
-            void res.offsetWidth;
-            res.style.transition = '';
-            res.classList.add('show');
+            if (!alive()) return;
+
+            if (slots) slots.classList.remove('show');   // барабаны плавно гаснут, итог плавно появляется
+            showResult(win, amountText, title);
             await waitResultAnimationEnd(res, 1050);
+            if (!alive()) return;
+            await wait(300);
             return;
         }
 
-        // Новая партия — снимаем прошлые галочки/крестики и возвращаем превью
-        if (index === 0) {
-            cells.forEach(cell => {
-                cell.querySelectorAll('.dice-roll, .cell-badge').forEach(el => el.remove());
-                const box = cell.querySelector('.sticker-lottie');
-                if (box) box.style.opacity = '';
-            });
-        }
+        /* ----- 1) слой с броском собираем из пула за кадром ----- */
+        const pooled = await getPooledRoll(rollNumber);
+        if (!alive()) return;
+        const anim = pooled && pooled.anim && pooled.box ? pooled.anim : null;
+        let box = anim ? pooled.box : null;
         if (slots) slots.classList.remove('show');
-        if (rollEl) {
-            rollEl.className = 'dice-layer dice-roll';
-            rollEl.innerHTML = '';
-        }
+        rollEl.className = 'dice-layer dice-roll from-' + (Math.random() < 0.5 ? 'left' : 'right');
+        rollEl.innerHTML = '';
+        if (anim) anim.goToAndStop(0, true);
+        else { box = document.createElement('div'); box.className = 'sticker-lottie'; }
+        rollEl.appendChild(box);
 
-        await playRollInCell(cellIndexForAttempt(index, total), rollNumber, win);
-        if (myGen !== playGen) return;
+        /* ----- 2) превью / прошлый итог уплывают вверх, заезжает бросок ----- */
+        const hadResult = res.classList.contains('show');
+        hideResult(true);
+        pausePreview();
+        previewPaused = true;
+        prev.classList.add('out');
+        if (hadResult) await wait(160); else await nextFrame();
+        if (!alive()) return;
+        reflow(rollEl);
+        rollEl.classList.add('in');
 
-        // Большой итог показываем после последней сыгранной попытки: иначе он
-        // накрывал бы собой сплит из 2–3 анимаций, которые как раз и просили.
-        const needResult = showResult === null ? (total <= 1 || index === total - 1) : !!showResult;
-        if (needResult) {
-            await wait(180);
-            if (myGen !== playGen) return;
-            res.style.transition = 'none';
-            res.classList.remove('show', 'hide-up');
-            res.innerHTML = resultHtml(win, amountText, title);
-            res.classList.toggle('win', !!win);
-            res.classList.toggle('lose', !win);
-            void res.offsetWidth;
-            res.style.transition = '';
-            res.classList.add('show');
-            await waitResultAnimationEnd(res, 1050);
-        }
+        /* ----- 3) 60 FPS, замирает на последнем кадре ----- */
+        if (anim) await playRoll(anim, ROLL_MS);
+        else await fallbackRoll(box, ROLL_MS);
+        if (!alive()) return;
+        await wait(350);
+        if (!alive()) return;
+
+        /* ----- 4) бросок уходит, появляется итог ----- */
+        rollEl.classList.add('away');
+        showResult(win, amountText, title);
+        await waitResultAnimationEnd(res, 1050);
+        if (!alive()) return;
+        if (box && box.parentNode === rollEl) rollEl.removeChild(box);
+        rollEl.className = 'dice-layer dice-roll';
+        await wait(300);
     }
 
     function setPageActive(active) {
