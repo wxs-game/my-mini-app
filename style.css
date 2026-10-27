@@ -100,13 +100,13 @@ button, input, select, textarea {
         radial-gradient(circle at 50% 0%, rgba(255, 160, 0, 0.15), transparent 40%),
         radial-gradient(circle at 80% 50%, rgba(255, 120, 0, 0.05), transparent 50%),
         #090909;
-    transition: transform 0.14s cubic-bezier(0.55, 0, 1, 0.45), opacity 0.14s ease;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease;
 }
 
-/* При завершении загрузки экран резко "уезжает" вверх, как свайп */
+/* При завершении загрузки экран плавно уходит вверх и растворяется */
 .app-loader.app-loader-hidden {
-    transform: translateY(-115%);
-    opacity: 0.3;
+    transform: translateY(-8%) scale(1.03);
+    opacity: 0;
     pointer-events: none;
 }
 
@@ -4668,4 +4668,102 @@ body.anim-page .top {
     .dice-mode .dice-mode-coef {
         margin-left: 2px;
     }
+}
+
+
+/* ==========================================================
+   ПЛАВНОСТЬ И СПИННЕРЫ ЗАГРУЗКИ
+========================================================== */
+
+/* Быстрее отклик на тап, без задержки двойного тапа и серой вспышки */
+button, a, input, select, textarea, [onclick] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* --- Спиннер на кнопке (любой цвет текста — берётся currentColor) --- */
+button.is-loading {
+    cursor: progress;
+    pointer-events: none;
+}
+button.is-loading::before {
+    content: '';
+    display: inline-block;
+    width: 0.95em;
+    height: 0.95em;
+    margin-right: 0.55em;
+    vertical-align: -0.12em;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: tgeSpin 0.7s linear infinite;
+}
+button.is-loading:disabled { opacity: 0.85; }
+
+/* --- Тонкая полоса сетевой активности вверху экрана --- */
+.net-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: env(safe-area-inset-top, 0px);
+    height: 3px;
+    z-index: 9990;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+.net-bar.on { opacity: 1; }
+.net-bar > i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(255, 200, 0, 0), #ffd23f 60%, #ffb300);
+    box-shadow: 0 0 10px rgba(255, 200, 0, 0.55);
+    animation: netBarSlide 1.05s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+    will-change: transform;
+}
+@keyframes netBarSlide {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(260%); }
+}
+
+/* --- Скелетон истории операций (вкладка «Баланс») --- */
+.hist-skel {
+    pointer-events: none;
+    animation: lbPulse 1.2s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 120ms);
+}
+.hist-skel .hs-ic   { width: 36px; height: 36px; border-radius: 12px; background: rgba(255, 255, 255, 0.07); flex: 0 0 auto; }
+.hist-skel .hs-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 7px; margin-left: 12px; }
+.hist-skel .hs-lines i { display: block; height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.07); }
+.hist-skel .hs-lines i:first-child { width: 46%; }
+.hist-skel .hs-lines i:last-child  { width: 68%; height: 8px; opacity: 0.7; }
+.hist-skel .hs-amt  { width: 58px; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.07); flex: 0 0 auto; }
+
+/* --- Картинки: спиннер, пока грузятся, и мягкое появление --- */
+img.game-image, img.game-banner-img {
+    transition: opacity 0.4s ease;
+}
+img.img-pending { opacity: 0; }
+.img-wait { position: relative; }
+.img-wait > .img-spin {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 28px;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+    z-index: 1;
+}
+
+/* --- Мягкие переходы там, где раньше всё «щёлкало» --- */
+
+@media (prefers-reduced-motion: reduce) {
+    .net-bar > i { animation-duration: 2.4s; }
+    .app-loader { transition: opacity 0.2s ease; }
+    .app-loader.app-loader-hidden { transform: none; }
 }

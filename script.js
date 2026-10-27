@@ -1086,6 +1086,7 @@ async function placeBetServer(amount, gameLabel) {
 
     const task = saveQueue.then(runCall, runCall);
     saveQueue = task.then(() => {}, () => {});
+    netBar.track(task);
 
     try {
         const { data, error } = await task;
@@ -1112,6 +1113,7 @@ async function resolveWinServer(winAmount, multiplier) {
 
     const task = saveQueue.then(runCall, runCall);
     saveQueue = task.then(() => {}, () => {});
+    netBar.track(task);
 
     try {
         const { data, error } = await task;
@@ -4113,7 +4115,7 @@ function upgRelease() {
     isBetProcessing = false;
     unlockEconomy();
     const btn = document.getElementById('upgPlayBtn');
-    if (btn) { btn.disabled = false; btn.textContent = 'ИГРАТЬ'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'ИГРАТЬ'; setBtnLoading(btn, false); }
     document.getElementById('upgraderPage')?.classList.remove('upg-locked');
     document.body.classList.remove('upg-spinning');
 }
@@ -4121,9 +4123,11 @@ function upgRelease() {
 // Ставку, бросок и выплату делает Supabase (upgrader_play), клиент только показывает итог
 async function upgApi(bet, chance) {
     try {
-        const { data, error } = await supabase.rpc('upgrader_play', {
+        const _upgP = supabase.rpc('upgrader_play', {
             p_init: tg?.initData || '', p_bet: bet, p_chance: chance
         });
+        netBar.track(_upgP);
+        const { data, error } = await _upgP;
         if (error) return { ok: false, error: error.message || 'Ошибка сервера' };
         return data;
     } catch (e) {
@@ -4143,7 +4147,7 @@ async function playUpgrader() {
     upg.busy = true;
     isBetProcessing = true;
     const btn = document.getElementById('upgPlayBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Вращение...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Вращение...'; setBtnLoading(btn, true); }
     document.getElementById('upgraderPage')?.classList.add('upg-locked');
     document.body.classList.add('upg-spinning');
 
@@ -4216,11 +4220,16 @@ function setUIBalance(newBalance) {
 
     Object.keys(elementsMap).forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.textContent = elementsMap[id];
+        if (!el) return;
+        if (id === "topBalance" || id === "balanceCardValue" || id === "profileBalance") {
+            tweenMoneyText(el, currentBalance, " $");
+        } else {
+            el.textContent = elementsMap[id];
+        }
     });
 
     document.querySelectorAll('.balance-val, .profile-balance-val').forEach(el => {
-        el.textContent = formatted;
+        tweenMoneyText(el, currentBalance, " $");
     });
 
     updateLevelUI();
@@ -5420,6 +5429,105 @@ function handleBalanceAction() {
 // выплату. Деньги на баланс попадают на сервере — после подписанного вебхука
 // от CryptoBot (см. supabase/functions и CRYPTOBOT_SETUP.md).
 // ==========================================
+
+// ==========================================
+// ПЛАВНОСТЬ И ЗАГРУЗКА: спиннеры на кнопках, тонкая полоса сетевой активности
+// ==========================================
+function setBtnLoading(btn, on) {
+    if (!btn) return;
+    btn.classList.toggle('is-loading', !!on);
+    if (on) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
+}
+
+const netBar = (function () {
+    let count = 0, showTimer = null, bar = null;
+    function el() {
+        if (bar) return bar;
+        bar = document.createElement('div');
+        bar.className = 'net-bar';
+        bar.innerHTML = '<i></i>';
+        document.body.appendChild(bar);
+        return bar;
+    }
+    function inc() {
+        count++;
+        if (count === 1) {
+            clearTimeout(showTimer);
+            // быстрые запросы (<150 мс) полосу не показывают — без мерцания
+            showTimer = setTimeout(() => { if (count > 0) el().classList.add('on'); }, 150);
+        }
+    }
+    function dec() {
+        count = Math.max(0, count - 1);
+        if (count === 0) {
+            clearTimeout(showTimer);
+            if (bar) bar.classList.remove('on');
+        }
+    }
+    return {
+        track(promise) {
+            inc();
+            const done = () => dec();
+            Promise.resolve(promise).then(done, done);
+            return promise;
+        }
+    };
+})();
+
+// Анимированная смена чисел баланса (вместо резкой подмены текста)
+const _numTweens = new WeakMap();
+function tweenMoneyText(el, to, suffix, prefix) {
+    prefix = prefix || '';
+    const fmt = v => prefix + v.toFixed(2) + suffix;
+    const prev = _numTweens.get(el);
+    if (prev) cancelAnimationFrame(prev.raf);
+    const from = prev ? prev.cur : (parseFloat(String(el.textContent).replace(/[^0-9.\-]/g, '')) || 0);
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !isFinite(from) || Math.abs(to - from) < 0.005 || document.hidden) {
+        _numTweens.set(el, { cur: to, raf: 0 });
+        el.textContent = fmt(to);
+        return;
+    }
+    const t0 = performance.now();
+    const dur = Math.min(650, 280 + Math.abs(to - from) * 4);
+    const state = { cur: from, raf: 0 };
+    _numTweens.set(el, state);
+    const step = now => {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - k, 3);
+        state.cur = k >= 1 ? to : from + (to - from) * e;
+        el.textContent = fmt(state.cur);
+        if (k < 1) state.raf = requestAnimationFrame(step);
+    };
+    state.raf = requestAnimationFrame(step);
+}
+
+// Плавное появление картинок: пока грузятся — спиннер, потом fade-in
+function enhanceImages(root) {
+    (root || document).querySelectorAll('img.game-image, img.game-banner-img').forEach(img => {
+        if (img.dataset.fx) return;
+        img.dataset.fx = '1';
+        if (img.complete && img.naturalWidth > 0) return;
+        const host = img.parentElement;
+        img.classList.add('img-pending');
+        let sp = null;
+        if (host) {
+            host.classList.add('img-wait');
+            sp = document.createElement('span');
+            sp.className = 'tge-spinner img-spin';
+            host.appendChild(sp);
+        }
+        const done = () => {
+            img.classList.remove('img-pending');
+            if (host) host.classList.remove('img-wait');
+            if (sp) sp.remove();
+        };
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+    });
+}
+document.addEventListener('DOMContentLoaded', () => enhanceImages());
+
 const WALLET_FN_URL = SUPABASE_URL + '/functions/v1/';
 const MIN_DEPOSIT_UI = 1;
 const MIN_WITHDRAW_UI = 2;
@@ -5427,6 +5535,10 @@ let walletBusy = false;
 let depositWatchTimer = null;
 
 async function walletCall(fn, body) {
+    const _p = _walletCallRaw(fn, body);
+    return fn === 'wallet-history' ? _p : netBar.track(_p);
+}
+async function _walletCallRaw(fn, body) {
     try {
         const res = await fetch(WALLET_FN_URL + fn, {
             method: 'POST',
@@ -5458,7 +5570,7 @@ function setBalanceActionLoading(on) {
     const btn = document.getElementById('balanceAction');
     if (!btn) return;
     btn.disabled = on;
-    btn.style.opacity = on ? '0.6' : '';
+    setBtnLoading(btn, on);
 }
 
 function formatTxDate(iso) {
@@ -5468,13 +5580,23 @@ function formatTxDate(iso) {
 }
 
 // Подтягивает баланс и историю операций с сервера
+let walletHistoryLoadedOnce = false;
+function renderHistorySkeleton() {
+    const list = document.getElementById('historyList');
+    if (!list) return;
+    list.innerHTML = [0, 1, 2].map(i => `<div class="history-item hist-skel" style="--i:${i}"><div class="hs-ic"></div><div class="hs-lines"><i></i><i></i></div><div class="hs-amt"></div></div>`).join('');
+}
 async function loadWalletHistory(silent) {
     if (!tg?.initData) return null;
+    const showSkel = !walletHistoryLoadedOnce && transactions.length === 0;
+    if (showSkel) renderHistorySkeleton();
     const r = await walletCall('wallet-history');
     if (!r.ok) {
+        if (showSkel) renderTransactions();
         if (!silent) showMessage(walletErrorText(r));
         return r;
     }
+    walletHistoryLoadedOnce = true;
 
     const statusMap = { paid: 'success', completed: 'success', pending: 'pending', processing: 'pending',
                         review: 'pending', failed: 'failed', expired: 'failed' };
@@ -5829,13 +5951,13 @@ async function claimDailyTask(taskId, btn) {
     }
 
     dailyClaimBusy = true;
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Начисляем'; setBtnLoading(btn, true); }
 
     const credit = await resolveWinServerWithRetry(task.reward, null, 3);
     dailyClaimBusy = false;
 
     if (!credit.ok) {
-        if (btn) { btn.disabled = false; btn.textContent = 'Забрать'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Забрать'; setBtnLoading(btn, false); }
         showMessage('Не удалось получить награду. Попробуйте позже.');
         return;
     }
@@ -5944,10 +6066,11 @@ async function claimVipBonus() {
     const amount = roundMoney(getVipTier().tier.daily);
     const btn = document.getElementById('vipClaimBtn');
     dailyClaimBusy = true;
-    if (btn) btn.disabled = true;
+    if (btn) { btn.disabled = true; setBtnLoading(btn, true); }
 
     const credit = await resolveWinServerWithRetry(amount, null, 3);
     dailyClaimBusy = false;
+    setBtnLoading(btn, false);
 
     if (!credit.ok) {
         if (btn) btn.disabled = false;
@@ -6080,7 +6203,8 @@ async function sharePreparedInvite() {
 
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Готовим сообщение…';
+        btn.textContent = 'Готовим сообщение';
+        setBtnLoading(btn, true);
     }
 
     try {
@@ -6097,6 +6221,7 @@ async function sharePreparedInvite() {
         if (btn) {
             btn.disabled = false;
             btn.textContent = 'Отправить…';
+            setBtnLoading(btn, false);
         }
     }
 }
@@ -6154,10 +6279,11 @@ async function applyPromoCode() {
 
     if (dailyClaimBusy) return;
     dailyClaimBusy = true;
-    if (btn) btn.disabled = true;
+    if (btn) { btn.disabled = true; setBtnLoading(btn, true); }
 
     const credit = await resolveWinServerWithRetry(promo.amount, null, 3);
     dailyClaimBusy = false;
+    setBtnLoading(btn, false);
 
     if (!credit.ok) {
         if (btn) btn.disabled = false;
@@ -6463,8 +6589,9 @@ function hideAppLoader(assetsReady) {
             if (fill) fill.style.width = '100%';
             setTimeout(() => {
                 loader.classList.add('app-loader-hidden');
-                setTimeout(() => loader.remove(), 220);
-            }, 100);
+                try { playPageEnter(document.getElementById('homePage')); } catch (e) {}
+                setTimeout(() => loader.remove(), 560);
+            }, 120);
         }, remaining);
     });
 }
