@@ -3877,6 +3877,15 @@ input, textarea {
     height: calc(var(--dice-size) * 0.9);
     contain: layout paint style;
 }
+/* Сплит 2–3 удара: превью живёт в ячейках, размер держим прежним */
+#footballPreview .dice-cell > .sticker-lottie {
+    width: calc(var(--dice-size) * 0.9);
+    height: calc(var(--dice-size) * 0.9);
+}
+#footballPreview .dice-cell > .dice-roll > .sticker-lottie {
+    width: 100%;
+    height: 100%;
+}
 #footballPreview > .sticker-lottie svg,
 #footballPreview > .sticker-lottie canvas {
     display: block;
@@ -4345,20 +4354,80 @@ body.anim-page .top {
 /* ==========================================================
    ОБЩАЯ СТРАНИЦА EMOJI-ИГР (баскетбол, дартс, боулинг, слоты)
 ========================================================== */
-.emoji-game-page { --dice-size: min(54vw, 214px); }   /* спрайты чуть меньше, чем раньше (было 72vw / 290px) */
 .emoji-game-page .dice-stage {
-    height: min(66vw, 264px);
+    height: min(66vw, 275px);
     margin-top: 4px;
 }
+/* Превью баскетбола / дартса / боулинга чуть меньше, чем в кубах:
+   сцена не «съедает» экран, а под ней ещё блоки ставки и режимов. */
+.emoji-game-page { --dice-size: min(58vw, 235px); }
+.emoji-game-page .dice-preview > .sticker-lottie,
 .emoji-game-page .dice-roll > .sticker-lottie {
-    width: var(--dice-size);
-    height: var(--dice-size);
+    width: min(58vw, 235px);
+    height: min(58vw, 235px);
 }
-.emoji-game-page .dice-roll > .sticker-lottie svg,
-.emoji-game-page .dice-roll > .sticker-lottie canvas {
+.emoji-game-page .dice-cell > .sticker-lottie {
+    width: 100%;
+    height: 100%;
+    contain: layout paint style;
+}
+.emoji-game-page .dice-cell > .sticker-lottie svg,
+.emoji-game-page .dice-cell > .sticker-lottie canvas {
     width: 100% !important;
     height: 100% !important;
     display: block;
+}
+/* Ролик броска внутри ячейки сплита (2 / 3 попытки) */
+.emoji-game-page .dice-cell > .dice-roll,
+.dice-page .dice-cell > .dice-roll {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+}
+.dice-cell > .dice-roll > .sticker-lottie {
+    width: 100%;
+    height: 100%;
+    contain: layout paint style;
+}
+.dice-cell > .dice-roll > .sticker-lottie svg,
+.dice-cell > .dice-roll > .sticker-lottie canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+/* Галочка / крестик по итогу отдельной попытки в своей ячейке */
+.cell-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    pointer-events: none;
+    animation: cellBadgeIn 0.42s cubic-bezier(.22, 1.4, .36, 1) both;
+}
+.cell-badge span {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    font-weight: 900;
+    line-height: 1;
+    color: #1d140a;
+    background: linear-gradient(160deg, #ffe08a, #f2bd42);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    transform: translateZ(0);
+}
+.cell-badge.lose span {
+    color: #2a0d0e;
+    background: linear-gradient(160deg, #ff8a8d, #e5484d);
+}
+@keyframes cellBadgeIn {
+    from { opacity: 0; transform: scale(0.45); }
+    to   { opacity: 1; transform: scale(1); }
 }
 .emoji-game-page .dice-modes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
