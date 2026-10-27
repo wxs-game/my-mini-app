@@ -4806,7 +4806,8 @@ async function handleFootballPlay() {
                     title,
                     amountText: isFinal ? amountText : "",
                     index: i,
-                    total: rolls.length
+                    total: kicks,
+                    showResult: isFinal
                 });
             }
         }
@@ -5216,7 +5217,8 @@ async function handleEmojiGamePlay() {
                     amountText: isFinal ? amountText : "",
                     symbols: cfg.slots ? emojiSlotSymbols(cfg, mode.key, pass) : null,
                     index: i,
-                    total: results.length
+                    total: attempts,
+                    showResult: isFinal
                 });
             }
         }
@@ -9278,7 +9280,7 @@ function playRoll(anim, totalMs) {
         cell.appendChild(badge);
     }
 
-    async function play({ roll, win, amountText, title, index = 0, total = 1 }) {
+    async function play({ roll, win, amountText, title, index = 0, total = 1, showResult = null }) {
         const prev = $('footballPreview'), res = $('footballResult');
         if (!prev || !res) return;
         const myGen = ++playGen;
@@ -9300,7 +9302,8 @@ function playRoll(anim, totalMs) {
 
         // Итог показываем один раз — после последнего удара серии,
         // чтобы не накрывать сплит из 2–3 анимаций.
-        if (total <= 1 || index === total - 1) {
+        const needResult = showResult === null ? (total <= 1 || index === total - 1) : !!showResult;
+        if (needResult) {
             await wait(180);
             if (myGen !== playGen) return;
             res.style.transition = 'none';
@@ -9735,7 +9738,7 @@ function playRoll(anim, totalMs) {
         cell.appendChild(badge);
     }
 
-    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols, index = 0, total = 1 }) {
+    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols, index = 0, total = 1, showResult = null }) {
         const prev = $('emojiGamePreview');
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
@@ -9794,9 +9797,10 @@ function playRoll(anim, totalMs) {
         await playRollInCell(cellIndexForAttempt(index, total), rollNumber, win);
         if (myGen !== playGen) return;
 
-        // Большой итог показываем после последней попытки: иначе он накрывал
-        // бы собой сплит из 2–3 анимаций, которые как раз и просили показать.
-        if (total <= 1 || index === total - 1) {
+        // Большой итог показываем после последней сыгранной попытки: иначе он
+        // накрывал бы собой сплит из 2–3 анимаций, которые как раз и просили.
+        const needResult = showResult === null ? (total <= 1 || index === total - 1) : !!showResult;
+        if (needResult) {
             await wait(180);
             if (myGen !== playGen) return;
             res.style.transition = 'none';
