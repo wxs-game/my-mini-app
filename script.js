@@ -1333,7 +1333,7 @@ function applyMinesWin(res) {
     currentBalance = res.balance;
     setUIBalance(currentBalance);
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    showMessage(`Выигрыш: +${winAmount.toFixed(2)}$ (${Number(res.mult).toFixed(2)}x)`);
+    window.showWinPopup?.(winAmount, res.mult);
     resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, winAmount);
 }
 
@@ -3301,7 +3301,7 @@ async function cashOutCrash() {
     crashGame.isProcessing = false;
 
     if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
-    showMessage(`Забрано: +${winAmount.toFixed(2)}$ (${mult.toFixed(2)}x)`);
+    window.showWinPopup?.(winAmount, mult);
     resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
 
     if (crashGame.myBetRowId != null) {
@@ -4185,6 +4185,7 @@ async function playUpgrader() {
         setUIBalance(Number(srv.balance));
         resolveLiveBetWin(liveBetId, bet, credited);
         window.haptic(credited > 0 ? 'success' : 'error');
+        if (credited > 0) window.showWinPopup?.(credited, srvCoef);
         if (res) {
             clearTimeout(upgResTimer);
             res.style.opacity = '1';
@@ -4578,6 +4579,7 @@ async function handleDicePlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setDiceBusy(false);
+    if (win) window.showWinPopup?.(winAmount, coef);
 }
 
 /* ---------- ФУТБОЛ ---------- */
@@ -4829,6 +4831,7 @@ async function handleFootballPlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setFootballBusy(false);
+    if (win) window.showWinPopup?.(winAmount, coef);
 }
 
 /* ---------- EMOJI-ИГРЫ: БАСКЕТБОЛ, ДАРТС, БОУЛИНГ, СЛОТЫ ---------- */
@@ -5240,6 +5243,7 @@ async function handleEmojiGamePlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setEmojiGameBusy(false);
+    if (win) window.showWinPopup?.(winAmount, coef);
 }
 
 function openMines() {
@@ -7641,6 +7645,9 @@ async function tryIceArenaPayout(round) {
         if (creditResult.ok) {
             currentBalance = creditResult.balance;
             setUIBalance(currentBalance);
+            const myP = (iceArena.players || []).find(p => Number(p.telegramId) === Number(myId));
+            const myBet = Number(myP?.bet || iceArena.myBet || 0);
+            window.showWinPopup?.(payout, myBet > 0 ? payout / myBet : null);
         } else {
             showMessage('Не удалось зачислить выигрыш. Откройте Айс Арену ещё раз — сервер попробует снова.');
             await supabase.from(ICE_ARENA_ROUNDS_TABLE)
@@ -10628,3 +10635,110 @@ document.addEventListener('visibilitychange', () => {
 document.addEventListener('visibilitychange', function () {
     document.documentElement.classList.toggle('app-paused', document.hidden);
 });
+
+/* =========================================================
+   ПОП-АП ВЫИГРЫША (для любой игры)
+   window.showWinPopup(сумма, коэффициент)
+   Иконка — случайная из 5 .tgs: animations/stickers/win1.tgs … win5.tgs
+   (папку и имена можно поменять в WIN_TGS_DIR / WIN_TGS_NAMES)
+========================================================= */
+(function () {
+    const WIN_TGS_DIR = 'animations/stickers/';
+    const WIN_TGS_NAMES = ['win1', 'win2', 'win3', 'win4', 'win5'];
+    const SHOW_MS = 4000;
+
+    let root = null, iconBox = null, textEl = null, barEl = null;
+    let hideTimer = null, anim = null, lastIdx = -1, token = 0;
+
+    function build() {
+        if (root) return;
+        root = document.createElement('div');
+        root.className = 'win-popup';
+        root.innerHTML =
+            '<div class="win-popup-icon"></div>' +
+            '<div class="win-popup-text"></div>' +
+            '<div class="win-popup-bar"><i></i></div>';
+        document.body.appendChild(root);
+        iconBox = root.querySelector('.win-popup-icon');
+        textEl = root.querySelector('.win-popup-text');
+        barEl = root.querySelector('.win-popup-bar i');
+    }
+
+    function fmtAmount(n) {
+        return '+' + Number(n).toFixed(2).replace('.', ',') + '$';
+    }
+    function fmtMult(m) {
+        // 9.80 -> x9.8, 1.62 -> x1.62, 2.00 -> x2
+        return 'x' + String(parseFloat(Number(m).toFixed(2)));
+    }
+
+    function destroyAnim() {
+        if (anim) { try { anim.destroy(); } catch (e) {} anim = null; }
+        if (iconBox) iconBox.textContent = '';
+    }
+
+    async function mountIcon(my) {
+        let idx;
+        do { idx = Math.floor(Math.random() * WIN_TGS_NAMES.length); }
+        while (idx === lastIdx && WIN_TGS_NAMES.length > 1);
+        lastIdx = idx;
+
+        let data = null;
+        try {
+            if (window.TgsCache && typeof lottie !== 'undefined') {
+                data = await window.TgsCache.load(WIN_TGS_DIR + WIN_TGS_NAMES[idx]);
+            }
+        } catch (e) {}
+        if (my !== token) return;   // за время загрузки пришёл новый поп-ап
+
+        destroyAnim();
+        if (data) {
+            anim = lottie.loadAnimation({
+                container: iconBox,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                animationData: data
+            });
+        } else {
+            iconBox.textContent = '🎉';   // запасной вариант, пока .tgs не загружены
+        }
+    }
+
+    window.showWinPopup = function (amount, mult) {
+        const win = Number(amount);
+        if (!(win > 0)) return;
+        build();
+        const my = ++token;
+
+        let text = 'Выигрыш ' + fmtAmount(win);
+        const m = Number(mult);
+        if (isFinite(m) && m > 0) text += ' (' + fmtMult(m) + ')';
+        textEl.textContent = text;
+
+        // перезапуск полоски времени и анимации появления
+        clearTimeout(hideTimer);
+        root.classList.remove('show');
+        barEl.style.animation = 'none';
+        void root.offsetWidth;
+        barEl.style.animation = 'winPopupBar ' + SHOW_MS + 'ms linear forwards';
+        root.classList.add('show');
+
+        mountIcon(my);
+
+        hideTimer = setTimeout(function () {
+            root.classList.remove('show');
+            setTimeout(function () { if (my === token) destroyAnim(); }, 350);
+        }, SHOW_MS);
+    };
+
+    // Прогрев: тихо подгружаем 5 стикеров в кэш, чтобы поп-ап появлялся мгновенно
+    window.addEventListener('load', function () {
+        setTimeout(function () {
+            if (!window.TgsCache) return;
+            WIN_TGS_NAMES.forEach(function (n) {
+                try { window.TgsCache.peekRaw(WIN_TGS_DIR + n); } catch (e) {}
+            });
+        }, 3000);
+    }, { once: true });
+})();
