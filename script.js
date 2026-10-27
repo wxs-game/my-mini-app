@@ -9059,7 +9059,6 @@ function playRoll(anim, totalMs) {
         box.className = 'sticker-lottie';
         cells[i].appendChild(box);
         const anim = createAnim(box, JSON.parse(JSON.stringify(previewData)));
-        anim.goToAndStop(0, true);
         cellAnims[i] = anim;
         if (!preview) {
             preview = {
@@ -9069,6 +9068,7 @@ function playRoll(anim, totalMs) {
                 visible: true, paused: false
             };
         }
+        anim.goToAndStop(Math.floor(preview.frame) % preview.total, true);
     }
 
     function setKicks(n) {
@@ -9077,14 +9077,12 @@ function playRoll(anim, totalMs) {
         if (!prev || !cells.length) return;
         prev.classList.toggle('pair', kicksCount === 2);
         prev.classList.toggle('triple', kicksCount === 3);
-        for (let i = 0; i < cells.length; i++) {
-            if (i < kicksCount) {
-                ensureCellAnim(i);
-            } else if (cellAnims[i]) {
-                try { cellAnims[i].destroy(); } catch (e) {}
-                cellAnims[i] = null;
-                cells[i].innerHTML = '';
-            }
+        // Держим все три ячейки живыми: при 1→3 они разъезжаются, при 3→1
+        // съезжаются к центру — без «выскакивания» новой анимации.
+        for (let i = 0; i < cells.length; i++) ensureCellAnim(i);
+        if (preview) {
+            const fi = Math.floor(preview.frame) % preview.total;
+            cellAnims.forEach(a => { if (a) { try { a.goToAndStop(fi, true); } catch (e) {} } });
         }
         ensureLoop();
     }
@@ -9240,6 +9238,13 @@ function playRoll(anim, totalMs) {
     // Удар в своей ячейке: превью этой ячейки гаснет, играет лотти,
     // в конце — галочка / крестик. Остальные ячейки продолжают превью —
     // получается тот самый «сплит», как у двух-трёх кубов.
+    // Физическая ячейка: в тройке центр — c, поэтому порядок ударов [a, c, b].
+    function cellIndexForAttempt(idx, total) {
+        if (total <= 1) return 0;
+        if (total === 2) return idx === 0 ? 0 : 1;
+        return [0, 2, 1][idx] || 0;
+    }
+
     async function playRollInCell(i, roll, win) {
         const cell = cells[i] || cells[0];
         if (!cell) return;
@@ -9290,7 +9295,7 @@ function playRoll(anim, totalMs) {
             });
         }
 
-        await playRollInCell(index, roll, win);
+        await playRollInCell(cellIndexForAttempt(index, total), roll, win);
         if (myGen !== playGen) return;
 
         // Итог показываем один раз — после последнего удара серии,
@@ -9355,6 +9360,12 @@ function playRoll(anim, totalMs) {
     let cells = [];
     let cellAnims = [];
     let playGen = 0;
+    // Единый драйвер превью: одна rAF-петля двигает ВСЕ ячейки на один и тот
+    // же кадр, поэтому анимации всегда синхронны (а не «кто когда стартовал»).
+    let preview = null;
+    let previewRaf = 0;
+    let previewLastTick = 0;
+    let previewPaused = false;
 
     function isPageVisible() {
         const pg = $('emojiGamePage');
@@ -9426,8 +9437,10 @@ function playRoll(anim, totalMs) {
         prev.appendChild(pair);
     }
 
-    // Одна лотти-анимация превью на ячейку. Создаётся только для реально
-    // видимых ячеек (1/2/3), лишние уничтожаются — не жжём CPU зря.
+    // Одна лотти-анимация превью на ячейку. Все ячейки создаются сразу
+    // (1 / 2 / 3 — в зависимости от maxAttempts игры) и живут всё время:
+    // так при смене количества попыток они плавно разъезжаются/съезжаются,
+    // а не появляются «из ниоткуда».
     function ensureCellAnim(i) {
         if (!previewData || !cells[i]) return null;
         if (cellAnims[i]) return cellAnims[i];
@@ -9437,7 +9450,7 @@ function playRoll(anim, totalMs) {
         const anim = lottie.loadAnimation({
             container: box,
             renderer: 'svg',
-            loop: true,
+            loop: false,
             autoplay: false,
             animationData: JSON.parse(JSON.stringify(previewData)),
             rendererSettings: {
@@ -9448,8 +9461,50 @@ function playRoll(anim, totalMs) {
         });
         if (anim.setSubframe) anim.setSubframe(false);
         cellAnims[i] = anim;
-        if (pageActive && isPageVisible()) anim.play();
+        if (!preview) {
+            preview = {
+                frame: 0, last: 0,
+                total: Math.max(1, anim.totalFrames || 1),
+                fr: anim.frameRate || 60
+            };
+        }
+        // Новая ячейка входит в общий ритм с текущего кадра остальных.
+        anim.goToAndStop(Math.floor(preview.frame) % preview.total, true);
         return anim;
+    }
+
+    function ensureAllCellAnims() {
+        const total = (cfg && cfg.maxAttempts > 1) ? 3 : 1;
+        for (let i = 0; i < total; i++) ensureCellAnim(i);
+    }
+
+    function tickPreview(now) {
+        previewRaf = 0;
+        if (!preview || previewPaused || !pageActive || !isPageVisible()) return;
+        previewRaf = requestAnimationFrame(tickPreview);
+        const dt = previewLastTick ? Math.min((now - previewLastTick) / 1000, 0.05) : (1 / 60);
+        previewLastTick = now;
+        preview.frame += dt * preview.fr;
+        if (preview.frame >= preview.total) preview.frame %= preview.total;
+        const fi = Math.floor(preview.frame);
+        if (fi === preview.last) return;
+        preview.last = fi;
+        for (let i = 0; i < cellAnims.length; i++) {
+            const a = cellAnims[i];
+            if (!a) continue;
+            try { a.goToAndStop(fi, true); } catch (e) {}
+        }
+    }
+
+    function ensurePreviewLoop() {
+        if (!previewRaf && !previewPaused && pageActive && isPageVisible()) {
+            previewLastTick = 0;
+            previewRaf = requestAnimationFrame(tickPreview);
+        }
+    }
+
+    function pausePreview() {
+        if (previewRaf) { cancelAnimationFrame(previewRaf); previewRaf = 0; }
     }
 
     function applyAttempts() {
@@ -9458,15 +9513,22 @@ function playRoll(anim, totalMs) {
         const n = Math.max(1, Math.min(3, attemptsCount || 1));
         prev.classList.toggle('pair', n === 2);
         prev.classList.toggle('triple', n === 3);
-        for (let i = 0; i < cells.length; i++) {
-            if (i < n) {
-                ensureCellAnim(i);
-            } else if (cellAnims[i]) {
-                try { cellAnims[i].destroy(); } catch (e) {}
-                cellAnims[i] = null;
-                cells[i].innerHTML = '';
-            }
+        ensureAllCellAnims();
+        // Пока идёт CSS-морф (0.75 с), новые ячейки уже на актуальном кадре.
+        if (preview) {
+            const fi = Math.floor(preview.frame) % preview.total;
+            cellAnims.forEach(a => { if (a) { try { a.goToAndStop(fi, true); } catch (e) {} } });
         }
+        ensurePreviewLoop();
+    }
+
+    // Физическая ячейка для попытки. В тройке центр — это ячейка c,
+    // поэтому вторая попытка играет в центре, третья — справа:
+    // 2 попытки: [a, b]; 3 попытки: [a, c, b].
+    function cellIndexForAttempt(idx, total) {
+        if (total <= 1) return 0;
+        if (total === 2) return idx === 0 ? 0 : 1;
+        return [0, 2, 1][idx] || 0;
     }
 
     // Вернуть сцену к превью: убрать ролики и галочки/крестики, запустить анимации.
@@ -9482,13 +9544,12 @@ function playRoll(anim, totalMs) {
             const box = cell.querySelector('.sticker-lottie');
             if (box) box.style.opacity = '';
         });
-        cellAnims.forEach(a => {
-            if (!a) return;
-            try {
-                if (pageActive && isPageVisible()) a.play();
-                else a.pause();
-            } catch (e) {}
-        });
+        previewPaused = false;
+        if (preview) {
+            const fi = Math.floor(preview.frame) % preview.total;
+            cellAnims.forEach(a => { if (a) { try { a.goToAndStop(fi, true); } catch (e) {} } });
+        }
+        ensurePreviewLoop();
     }
 
     function reset() {
@@ -9692,7 +9753,7 @@ function playRoll(anim, totalMs) {
         }
 
         if (cfg && cfg.slots) {
-            cellAnims.forEach(a => { if (a) { try { a.pause(); } catch (e) {} } });
+            pausePreview();
             prev.classList.add('out');
             if (rollEl) {
                 rollEl.className = 'dice-layer dice-roll';
@@ -9730,7 +9791,7 @@ function playRoll(anim, totalMs) {
             rollEl.innerHTML = '';
         }
 
-        await playRollInCell(index, rollNumber, win);
+        await playRollInCell(cellIndexForAttempt(index, total), rollNumber, win);
         if (myGen !== playGen) return;
 
         // Большой итог показываем после последней попытки: иначе он накрывал
@@ -9752,23 +9813,17 @@ function playRoll(anim, totalMs) {
 
     function setPageActive(active) {
         pageActive = !!active;
-        cellAnims.forEach(a => {
-            if (!a) return;
-            try {
-                if (pageActive && isPageVisible()) a.play();
-                else a.pause();
-            } catch (e) {}
-        });
+        if (pageActive) {
+            previewPaused = false;
+            ensurePreviewLoop();
+        } else {
+            pausePreview();
+        }
     }
 
     document.addEventListener('visibilitychange', () => {
-        cellAnims.forEach(a => {
-            if (!a) return;
-            try {
-                if (document.hidden || !pageActive || !isPageVisible()) a.pause();
-                else a.play();
-            } catch (e) {}
-        });
+        if (document.hidden || !pageActive) pausePreview();
+        else { previewPaused = false; ensurePreviewLoop(); }
     });
 
     window.EmojiGameStage = { init, reset, playAttempt, setAttempts, setPageActive };

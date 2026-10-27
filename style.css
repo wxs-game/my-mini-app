@@ -4345,11 +4345,14 @@ body.anim-page .top {
 
 /* ==========================================================
    ТРИ КУБА: третья ячейка превью
+   Порядок в тройке: a — слева, b — справа, c — ЦЕНТР.
+   Так переход 2 → 3 выглядит логично: две уже стоящие анимации
+   чуть раздвигаются, а новая аккуратно проявляется между ними.
 ========================================================== */
-.dice-cell.c { opacity: 0.01; }
+.dice-cell.c { opacity: 0.01; transform: scale(0.55); }
 .dice-preview.triple .dice-cell.a { transform: translateX(calc(var(--dice-size) * -0.38)) scale(0.55); }
-.dice-preview.triple .dice-cell.b { transform: translateX(0) scale(0.55); opacity: 1; }
-.dice-preview.triple .dice-cell.c { transform: translateX(calc(var(--dice-size) * 0.38)) scale(0.55); opacity: 1; }
+.dice-preview.triple .dice-cell.b { transform: translateX(calc(var(--dice-size) * 0.38)) scale(0.55); opacity: 1; }
+.dice-preview.triple .dice-cell.c { transform: translateX(0) scale(0.55); opacity: 1; }
 
 /* ==========================================================
    ОБЩАЯ СТРАНИЦА EMOJI-ИГР (баскетбол, дартс, боулинг, слоты)
