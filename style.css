@@ -3941,6 +3941,7 @@ input, textarea {
 .dr-disc  { fill: var(--disc); }
 .dr-spark { fill: var(--sp); }
 .dr-dot   { fill: var(--sp); }
+.dr-icon, .dr-icon * { shape-rendering: geometricPrecision; }
 .dr-ring, .dr-disc, .dr-spark, .dr-dot {
     transform-box: fill-box;
     transform-origin: center;
@@ -3956,14 +3957,17 @@ input, textarea {
 }
 
 /* Появление по частям: быстро, но мягко (без «пружинистых» рывков) */
-.dice-result.show .dr-ring  { animation: drPop 0.32s cubic-bezier(.22, 1, .36, 1) both; }
-.dice-result.show .dr-disc  { animation: drPop 0.34s 0.06s cubic-bezier(.3, 1.25, .5, 1) both; }
+.dice-result.show .dr-ring  { animation: drPop 0.32s cubic-bezier(.22, 1, .36, 1) backwards; }
+.dice-result.show .dr-disc  { animation: drPop 0.34s 0.06s cubic-bezier(.3, 1.25, .5, 1) backwards; }
 .dice-result.show .dr-mark  { animation: drDraw 0.3s 0.24s cubic-bezier(.4, 0, .2, 1) forwards; }
 .dice-result.show .dr-second { animation-delay: 0.38s; }
 .dice-result.show .dr-spark,
 .dice-result.show .dr-dot {
-    opacity: 0;
-    animation: drSpark 0.36s var(--d, 0.4s) cubic-bezier(.22, 1.1, .4, 1) forwards;
+    /* backwards, а не forwards: после анимации элемент возвращается в обычную
+       отрисовку и перерастеризуется чётко (при forwards остаётся GPU-слой с
+       растром от scale(0.2) — отсюда мыльные блёстки) */
+    opacity: 1;
+    animation: drSpark 0.36s var(--d, 0.4s) cubic-bezier(.22, 1.1, .4, 1) backwards;
 }
 
 .dice-result-title,
@@ -3975,8 +3979,8 @@ input, textarea {
 }
 .dice-result-title  { font-size: 17px; margin-top: 2px; }
 .dice-result-amount { font-size: 22px; }
-.dice-result.show .dice-result-title  { animation: drText 0.35s 0.42s cubic-bezier(.22, 1, .36, 1) forwards; }
-.dice-result.show .dice-result-amount { animation: drText 0.35s 0.52s cubic-bezier(.22, 1, .36, 1) forwards; }
+.dice-result.show .dice-result-title  { opacity: 1; animation: drText 0.35s 0.42s cubic-bezier(.22, 1, .36, 1) backwards; }
+.dice-result.show .dice-result-amount { opacity: 1; animation: drText 0.35s 0.52s cubic-bezier(.22, 1, .36, 1) backwards; }
 
 @keyframes drPop   { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes drDraw  { to { stroke-dashoffset: 0; } }

@@ -29,7 +29,7 @@
             if (w < 1 || h < 1 || (w === rec.w && h === rec.h)) continue;
             rec.w = w; rec.h = h;
             try {
-                rec.anim.resize(w, h);
+                rec.anim.resize();   // без аргументов: lottie сам берёт размер контейнера × dpr (с (w,h) canvas выходил 1× и «сползал»)
                 // на паузе (goToAndStop) кадр сам не перерисуется — перерисуем
                 if (rec.anim.isPaused) rec.anim.goToAndStop(rec.anim.currentFrame, true);
             } catch (err) { /* анимацию уже уничтожили */ }
