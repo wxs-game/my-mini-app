@@ -4404,60 +4404,173 @@ function openTgEmojiMode(mode) {
     openEmojiGame(mode);
 }
 
+/* ---------- HOUSE EDGE ДЛЯ TELEGRAM EMOJI ---------- */
+// Маржа заведения 2.5%: коэффициент = 0.975 / вероятность выигрыша,
+// округлённый ВНИЗ до сотых (в пользу заведения). Считаем в целых числах,
+// чтобы не ловить ошибки дробной арифметики: ×2.50 → ×2.43, ×6.00 → ×5.85, ×1.66 → ×1.62.
+// wins/total — вероятность одного броска, n — сколько бросков подряд должны зайти.
+const EMOJI_HOUSE_EDGE_PERCENT = 2.5;
+function houseCoef(wins, total, n) {
+    const k = Math.max(1, n | 0);
+    const num = Math.pow(total, k);
+    const den = Math.pow(wins, k);
+    const keep = 1000 - EMOJI_HOUSE_EDGE_PERCENT * 10;          // 975
+    return Math.floor((keep * num) / (den * 10)) / 100;
+}
+
 /* ---------- КУБ ---------- */
-const diceGame = { cubes: 1, mode: null, busy: false };
+const diceGame = { cubes: 1, mode: null, busy: false, view: "main", numbers: [] };
 // Сцена кубика объявлена отдельным IIFE ниже, поэтому текущее число
 // кубиков нужно отдавать ей через window (иначе initDicePreview падает).
 window.getDiceCubes = () => diceGame.cubes || 1;
-const DICE_MODE_COEFS = {
-    high: 1.95, low: 1.95,      // 4-6 / 1-3
-    even: 1.95, odd: 1.95,      // чёт / нечёт
-    edges: 2.93, center: 2.93,  // края (1 или 6) / центр (3 или 4)
+// Вероятность одного куба [выигрышных граней, всего граней].
+// Режимы 2/3 куба — компаунд: каждый куб должен попасть в выбранный исход.
+const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6] };
+const DICE_MODE_ORDER = ["high", "low", "even", "odd", "number"];
+const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", number: "Число" };
+const DICE_MAX_NUMBERS = 5;                          // «Число»: можно выбрать от 1 до 5 граней
+const DICE_NUM_IMG_DIR = "images/dice/";             // запасные modecube1.png … modecube6.png, back.png
+const DICE_NUM_TGS_DIR = "animations/dice/";         // modecube1.tgs … modecube6.tgs (если нет — берём png)
+const DICE_BACK_PNG = "images/back.png";                // запасная иконка «Назад», если нет back.tgs
+const DICE_BACK_TGS = "images/ui/back.tgs";          // анимированная иконка «Назад»
 
-    // Каждый следующий куб должен попасть в тот же исход.
-    // Коэффициенты считаются от базовой вероятности: 1.95² ≈ 3.89, 1.95³ ≈ 7.58.
-    high2: 3.89, low2: 3.89, even2: 3.89, odd2: 3.89,
-    high3: 7.58, low3: 7.58, even3: 7.58, odd3: 7.58,
-    edges2: 8.60, center2: 8.60,
-    edges3: 25.15, center3: 25.15
-};
+// Коэффициент режима: 0.975 / вероятность, округление вниз до сотых.
+// «Число»: k выбранных граней из 6 → вероятность k/6 (на каждый куб).
+function diceCoefFor(mode, cubes, numCount) {
+    const n = cubes || 1;
+    if (mode === "number") {
+        const k = Math.max(1, Math.min(DICE_MAX_NUMBERS, numCount || 1));
+        return houseCoef(k, 6, n);
+    }
+    const p = DICE_MODE_PROB[mode];
+    return p ? houseCoef(p[0], p[1], n) : 0;
+}
+function diceModeTitle(mode) {
+    const c = diceGame.cubes || 1;
+    return (c > 1 ? c + " " : "") + DICE_MODE_NAMES[mode];
+}
+function diceCoefText(c) { return "×" + c.toFixed(2); }
+function diceCurrentCoef() {
+    return diceGame.mode ? diceCoefFor(diceGame.mode, diceGame.cubes, diceGame.numbers.length) : null;
+}
 
-// Какие плитки показываем при 1, 2 и 3 кубах
-const DICE_MODE_SETS = {
-    1: ["high", "low", "even", "odd", "edges", "center"],
-    2: ["high2", "low2", "even2", "odd2", "edges2", "center2"],
-    3: ["high3", "low3", "even3", "odd3", "edges3", "center3"]
-};
+// Общий загрузчик .tgs-иконок куба (modecube1…6, back). Текст Lottie-JSON кэшируется,
+// а для каждой иконки парсится заново — lottie мутирует данные.
+const _diceTgsText = {};
+function loadDiceTgsText(urls) {
+    const key = urls.join("|");
+    if (_diceTgsText[key]) return _diceTgsText[key];
+    return (_diceTgsText[key] = (async () => {
+        for (const url of urls) {
+            try {
+                const res = await fetch(url);
+                if (!res.ok) continue;
+                const buf = new Uint8Array(await res.arrayBuffer());
+                if (buf[0] === 0x1f && buf[1] === 0x8b) {
+                    if (typeof DecompressionStream !== "undefined") {
+                        const st = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+                        return await new Response(st).text();
+                    }
+                    if (window.pako) return window.pako.ungzip(buf, { to: "string" });
+                    continue;
+                }
+                return new TextDecoder().decode(buf);   // обычный Lottie .json
+            } catch (e) { /* пробуем следующий url */ }
+        }
+        return null;
+    })());
+}
 
-const DICE_MODE_NAMES = {
-    high: "Больше", low: "Меньше",
-    even: "Чёт", odd: "Нечёт",
-    edges: "Края", center: "Центр",
-    high2: "2 Больше", low2: "2 Меньше",
-    even2: "2 Чёт", odd2: "2 Нечёт",
-    edges2: "2 Края", center2: "2 Центр",
-    high3: "3 Больше", low3: "3 Меньше",
-    even3: "3 Чёт", odd3: "3 Нечёт",
-    edges3: "3 Края", center3: "3 Центр"
-};
+// Монтирует .tgs в контейнер; если файла нет или Lottie недоступен — ставит png.
+async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass) {
+    if (!el) return;
+    const fallback = () => {
+        if (!el.isConnected || !fallbackPng) return;
+        el.innerHTML = '<img' + (imgClass ? ' class="' + imgClass + '"' : '') + ' src="' + fallbackPng +
+            '" alt="" draggable="false" onerror="this.remove()">';
+    };
+    try {
+        if (typeof lottie === "undefined") throw new Error("no lottie");
+        const text = await loadDiceTgsText(urls);
+        if (!text) throw new Error("not found");
+        if (!el.isConnected) return;
+        el.innerHTML = "";
+        el._anim = lottie.loadAnimation({
+            container: el, renderer: "svg", loop: false, autoplay: true,
+            animationData: JSON.parse(text),
+            rendererSettings: { preserveAspectRatio: "xMidYMid meet" }
+        });
+    } catch (e) {
+        fallback();
+    }
+}
 
-// Плитки режимов строятся из таблиц DICE_MODE_SETS / DICE_MODE_NAMES / DICE_MODE_COEFS,
-// поэтому плитка и кнопка «Играть» всегда показывают одно и то же число.
-// animate=true — плавная смена набора плиток (при переключении 1 куб ↔ 2 куба).
+// Иконка «Назад» — back.tgs (Lottie); если файла нет, берём images/dice/back.png.
+function mountDiceBackIcon(el) {
+    return mountDiceTgsIcon(el, [DICE_BACK_TGS], DICE_BACK_PNG);
+}
+
+// Иконка грани «Число» — modecubeN.tgs; запасной вариант modecubeN.png.
+function mountDiceNumIcon(el, n) {
+    return mountDiceTgsIcon(
+        el,
+        [DICE_NUM_TGS_DIR + "modecube" + n + ".tgs", DICE_NUM_IMG_DIR + "modecube" + n + ".tgs"],
+        DICE_NUM_IMG_DIR + "modecube" + n + ".png",
+        "dice-num-img"
+    );
+}
+
+// Плитки строятся из состояния diceGame:
+//   view "main"   — Больше / Меньше / Чёт / Нечёт / Число (до ×N)
+//   view "number" — 6 граней (до 5 можно выбрать) + «Назад»
+// animate=true — плавная смена набора плиток.
 function renderDiceModes(animate) {
     const box = document.getElementById("diceModes");
     if (!box) return;
-    const keys = DICE_MODE_SETS[diceGame.cubes] || DICE_MODE_SETS[1];
     const oldH = box.offsetHeight;
+    const cubes = diceGame.cubes || 1;
+    const inNumbers = diceGame.view === "number";
+    const enter = animate ? " enter" : "";
+    let html = "";
 
-    box.innerHTML = keys.map((k, i) =>
-        '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + k +
-        '" onclick="selectDiceMode(\'' + k + '\', this)">' +
-        '<span class="dice-mode-name">' + DICE_MODE_NAMES[k] + '</span> ' +
-        '<span class="dice-mode-coef">(' + DICE_MODE_COEFS[k].toFixed(2) + '×)</span></button>'
-    ).join("");
+    if (inNumbers) {
+        const coefTxt = diceCoefText(diceCoefFor("number", cubes, diceGame.numbers.length));
+        for (let n = 1; n <= 6; n++) {
+            const sel = diceGame.numbers.indexOf(n) !== -1;
+            html += '<button class="dice-tile dice-mode dice-num' + (sel ? " selected" : "") + enter +
+                '" style="--i:' + (n - 1) + '" data-num="' + n + '" onclick="toggleDiceNumber(' + n + ', this)">' +
+                '<span class="dice-num-icon" data-n="' + n + '"></span>' +
+                '<span class="dice-mode-name">' + n + '</span> ' +
+                '<span class="dice-mode-coef">(' + coefTxt + ')</span></button>';
+        }
+        html += '<button class="dice-tile dice-mode dice-mode-back' + enter + '" style="--i:6" onclick="diceNumbersBack()">' +
+            '<span class="dice-back-icon"></span><span class="dice-mode-name">Назад</span></button>';
+    } else {
+        html = DICE_MODE_ORDER.map((k, i) => {
+            if (k === "number") {
+                const max = diceCoefFor("number", cubes, 1);
+                return '<button class="dice-tile dice-mode' + enter + '" style="--i:' + i + '" data-mode="number" onclick="openDiceNumbers()">' +
+                    '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
+                    '<span class="dice-mode-coef">(до ' + diceCoefText(max) + ')</span></button>';
+            }
+            return '<button class="dice-tile dice-mode' + enter + '" style="--i:' + i + '" data-mode="' + k +
+                '" onclick="selectDiceMode(\'' + k + '\', this)">' +
+                '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
+                '<span class="dice-mode-coef">(' + diceCoefText(diceCoefFor(k, cubes)) + ')</span></button>';
+        }).join("");
+    }
 
-    // плавное изменение высоты блока (6 плиток → 4 и обратно), чтобы нижняя часть не прыгала
+    box.classList.toggle("is-numbers", inNumbers);
+    box.querySelectorAll(".dice-num-icon, .dice-back-icon").forEach(el => {
+        try { el._anim && el._anim.destroy(); } catch (e) {}
+    });
+    box.innerHTML = html;
+    if (inNumbers) {
+        mountDiceBackIcon(box.querySelector(".dice-back-icon"));
+        box.querySelectorAll(".dice-num-icon").forEach(el => mountDiceNumIcon(el, +el.dataset.n));
+    }
+
+    // плавное изменение высоты блока, чтобы нижняя часть не прыгала
     if (animate && oldH) {
         box.style.height = "auto";
         const newH = box.offsetHeight;
@@ -4469,8 +4582,59 @@ function renderDiceModes(animate) {
     }
 }
 
+// Сброс выбора «Число»: возврат на основной набор плиток
+function resetDiceNumbers() {
+    diceGame.view = "main";
+    diceGame.numbers = [];
+}
+
+function openDiceNumbers() {
+    if (diceGame.busy) return;
+    diceGame.view = "number";
+    diceGame.numbers = [];
+    diceGame.mode = null;               // режим «Число» активен, когда выбрана хотя бы одна грань
+    renderDiceModes(true);
+    updateDicePlayLabel();
+}
+
+function diceNumbersBack() {
+    if (diceGame.busy) return;
+    resetDiceNumbers();
+    diceGame.mode = null;               // «Назад» сбрасывает выбор
+    renderDiceModes(true);
+    updateDicePlayLabel();
+}
+
+function toggleDiceNumber(n, btn) {
+    if (diceGame.busy) return;
+    const i = diceGame.numbers.indexOf(n);
+    if (i !== -1) {
+        diceGame.numbers.splice(i, 1);
+    } else {
+        if (diceGame.numbers.length >= DICE_MAX_NUMBERS) {
+            showMessage("Можно выбрать не больше " + DICE_MAX_NUMBERS + " чисел");
+            return;
+        }
+        diceGame.numbers.push(n);
+        diceGame.numbers.sort((a, b) => a - b);
+    }
+    diceGame.mode = diceGame.numbers.length ? "number" : null;
+    if (btn) {
+        btn.classList.toggle("selected", diceGame.numbers.indexOf(n) !== -1);
+        const ic = btn.querySelector(".dice-num-icon");
+        try { ic && ic._anim && ic._anim.goToAndPlay(0, true); } catch (e) {}
+    }
+    // у всех граней показываем коэффициент при текущем количестве выбранных
+    const txt = "(" + diceCoefText(diceCoefFor("number", diceGame.cubes, diceGame.numbers.length)) + ")";
+    document.querySelectorAll("#diceModes .dice-num .dice-mode-coef").forEach(el => { el.textContent = txt; });
+    updateDicePlayLabel();
+}
+
 function openDiceGame() {
+    resetDiceNumbers();
+    diceGame.mode = null;
     renderDiceModes(false);
+    updateDicePlayLabel();
     document.querySelectorAll("#diceGamePage .dice-count-btn").forEach((b, i) => {
         b.classList.toggle("active", i === (diceGame.cubes || 1) - 1);
     });
@@ -4484,11 +4648,12 @@ function openDiceGame() {
 function updateDicePlayLabel() {
     const btn = document.getElementById("dicePlayBtn");
     if (!btn) return;
-    const c = diceGame.mode ? DICE_MODE_COEFS[diceGame.mode] : null;
-    btn.textContent = c ? "Играть (" + c.toFixed(2) + "×)" : "Играть";
+    const c = diceCurrentCoef();
+    btn.textContent = c ? "Играть (" + diceCoefText(c) + ")" : "Играть";
 }
 
 function selectDiceMode(mode, btn) {
+    resetDiceNumbers();                         // другой режим — выбор чисел сбрасывается
     diceGame.mode = mode;
     document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
     if (btn) btn.classList.add("selected");
@@ -4501,6 +4666,7 @@ function selectDiceCubes(n, btn) {
     if (diceGame.busy || n === diceGame.cubes) return;
     diceGame.cubes = n;
     diceGame.mode = null;                       // набор режимов другой — выбор сбрасываем
+    resetDiceNumbers();
     document.querySelectorAll("#diceGamePage .dice-count-btn").forEach(b => b.classList.remove("active"));
     if (btn) btn.classList.add("active");
     renderDiceModes(true);
@@ -4538,21 +4704,23 @@ function calcDiceWin(bet, coef) {
     return Math.floor((cents * coefHundredths) / 100) / 100;
 }
 
-function isDiceWin(mode, r) {
+function isDiceWin(mode, r, nums) {
     switch (mode) {
         case "high":   return r >= 4;
         case "low":    return r <= 3;
         case "even":   return r % 2 === 0;
         case "odd":    return r % 2 === 1;
-        case "edges":  return r === 1 || r === 6;
-        case "center": return r === 3 || r === 4;
+        case "number": return Array.isArray(nums) && nums.indexOf(r) !== -1;
     }
     return false;
 }
 
 async function handleDicePlay() {
     if (diceGame.busy) return;
-    if (!diceGame.mode) { showMessage("Выберите режим ставки!"); return; }
+    if (!diceGame.mode) {
+        showMessage(diceGame.view === "number" ? "Выберите хотя бы одно число!" : "Выберите режим ставки!");
+        return;
+    }
     if (!lockEconomy()) return;
 
     const input = document.getElementById("diceBetInput");
@@ -4571,7 +4739,8 @@ async function handleDicePlay() {
     setDiceBusy(true);
     const mode = diceGame.mode;
     const cubes = diceGame.cubes;
-    const coef = DICE_MODE_COEFS[mode];
+    const nums = diceGame.numbers.slice();      // выбранные грани для «Число»
+    const coef = diceCoefFor(mode, cubes, nums.length);
 
     // --- 1. списываем ставку ---
     const snapshot = snapshotBalanceState();
@@ -4594,13 +4763,12 @@ async function handleDicePlay() {
     // --- 2. броски и расчёт ---
     // Каждый следующий куб кидается только если предыдущий подошёл.
     // Выигрыш — когда подошли ВСЕ кубы выбранного режима.
-    const baseMode = mode.replace(/[23]$/, "");   // "even2" → "even", "edges3" → "edges"
     const rolls = [];
     const passes = [];
     let allPass = true;
     for (let i = 0; i < cubes; i++) {
         const r = rollDie();
-        const p = isDiceWin(baseMode, r);
+        const p = isDiceWin(mode, r, nums);
         rolls.push(r);
         passes.push(p);
         if (!p) { allPass = false; break; }
@@ -4665,15 +4833,14 @@ async function handleDicePlay() {
 
 /* ---------- ФУТБОЛ ---------- */
 const footballGame = { kicks: 1, mode: null, busy: false };
-const FOOTBALL_MODE_COEFS = {
-    goal: 1.62,         // Гол
-    miss: 2.43,         // Промах
-    bar: 2.43,          // Удар об штангу
-
-    // Компаунд: все удары должны попасть в выбранный исход.
-    goal2: 2.62, miss2: 5.90, bar2: 5.90,
-    goal3: 4.25, miss3: 14.35, bar3: 14.35
-};
+// Вероятность одного удара [выигрышных исходов, всего исходов 1..5]:
+// гол = 3,4,5; промах = 1,2; штанга = 2,4. Режимы 2/3 ударов — компаунд.
+const FOOTBALL_MODE_PROB = { goal: [3, 5], miss: [2, 5], bar: [2, 5] };
+const FOOTBALL_MODE_COEFS = {};
+Object.keys(FOOTBALL_MODE_PROB).forEach(base => {
+    const [w, t] = FOOTBALL_MODE_PROB[base];
+    for (let n = 1; n <= 3; n++) FOOTBALL_MODE_COEFS[base + (n > 1 ? n : "")] = houseCoef(w, t, n);
+});
 
 // Какие плитки показываем при разном количестве ударов
 const FOOTBALL_MODE_SETS = {
@@ -4941,15 +5108,15 @@ const EMOJI_GAME_CONFIGS = {
         attemptLabels: ['1 БРОСОК', '2 БРОСКА', '3 БРОСКА'],
         modes: [
             // 1 — отскок, 2 — близко, 3 — застрял, 4 — попал с краем, 5 — чистый гол
-            { key: 'bounce', name: 'Отскок', coef: 5.00, wins: [1] },
-            { key: 'close', name: 'Близко', coef: 5.00, wins: [2] },
-            { key: 'stuck', name: 'Застрял', coef: 5.00, wins: [3] },
-            { key: 'edge', name: 'Попал с краем', coef: 5.00, wins: [4] },
-            { key: 'clean', name: 'Чистый гол', coef: 5.00, wins: [5] },
+            { key: 'bounce', name: 'Отскок', wins: [1] },
+            { key: 'close', name: 'Близко', wins: [2] },
+            { key: 'stuck', name: 'Застрял', wins: [3] },
+            { key: 'edge', name: 'Попал с краем', wins: [4] },
+            { key: 'clean', name: 'Чистый гол', wins: [5] },
             // Прокрут — мяч крутится по кольцу: либо мимо (2), либо всё же в кольцо (4).
-            { key: 'spin', name: 'Прокрут', coef: 2.50, wins: [2, 4] },
-            { key: 'anyGoal', name: 'Любой гол', coef: 2.50, wins: [4, 5] },
-            { key: 'miss', name: 'Промах', coef: 1.66, wins: [1, 2, 3] }
+            { key: 'spin', name: 'Прокрут', wins: [2, 4] },
+            { key: 'anyGoal', name: 'Любой гол', wins: [4, 5] },
+            { key: 'miss', name: 'Промах', wins: [1, 2, 3] }
         ]
     },
     darts: {
@@ -4963,15 +5130,15 @@ const EMOJI_GAME_CONFIGS = {
         modes: [
             // 1 — отскок, 2 — красный сектор 1, 3 — белый сектор 1,
             // 4 — красный сектор 2, 5 — белый сектор 2, 6 — центр
-            { key: 'center', name: 'Центр', coef: 6.00, wins: [6] },
-            { key: 'miss', name: 'Промах', coef: 6.00, wins: [1] },
-            { key: 's1red', name: 'Сектор 1 🔴', coef: 6.00, wins: [2] },
-            { key: 's1white', name: 'Сектор 1 ⚪️', coef: 6.00, wins: [3] },
-            { key: 's2red', name: 'Сектор 2 🔴', coef: 6.00, wins: [4] },
-            { key: 's2white', name: 'Сектор 2 ⚪️', coef: 6.00, wins: [5] },
-            { key: 'anySector', name: 'Любой сектор', coef: 1.50, wins: [2, 3, 4, 5] },
-            { key: 'redCenter', name: '🔴 Сектор или центр', coef: 2.00, wins: [2, 4, 6] },
-            { key: 'whiteBounce', name: '⚪️ Сектор или отскок', coef: 2.00, wins: [1, 3, 5] }
+            { key: 'center', name: 'Центр', wins: [6] },
+            { key: 'miss', name: 'Промах', wins: [1] },
+            { key: 's1red', name: 'Сектор 1 🔴', wins: [2] },
+            { key: 's1white', name: 'Сектор 1 ⚪️', wins: [3] },
+            { key: 's2red', name: 'Сектор 2 🔴', wins: [4] },
+            { key: 's2white', name: 'Сектор 2 ⚪️', wins: [5] },
+            { key: 'anySector', name: 'Любой сектор', wins: [2, 3, 4, 5] },
+            { key: 'redCenter', name: '🔴 Сектор или центр', wins: [2, 4, 6] },
+            { key: 'whiteBounce', name: '⚪️ Сектор или отскок', wins: [1, 3, 5] }
         ]
     },
     bowling: {
@@ -4985,12 +5152,12 @@ const EMOJI_GAME_CONFIGS = {
         modes: [
             // 1 — промах, 2 — сбито 1 из 6, 3 — сбито 3 из 6,
             // 4 — сбито 4 из 6, 5 — сбито 5 из 6, 6 — страйк
-            { key: 'miss', name: 'Промах', coef: 6.00, wins: [1] },
-            { key: 'pin1', name: 'Сбито 1 / 6', coef: 6.00, wins: [2] },
-            { key: 'pin3', name: 'Сбито 3 / 6', coef: 6.00, wins: [3] },
-            { key: 'pin4', name: 'Сбито 4 / 6', coef: 6.00, wins: [4] },
-            { key: 'pin5', name: 'Сбито 5 / 6', coef: 6.00, wins: [5] },
-            { key: 'strike', name: 'Страйк', coef: 6.00, wins: [6] }
+            { key: 'miss', name: 'Промах', wins: [1] },
+            { key: 'pin1', name: 'Сбито 1 / 6', wins: [2] },
+            { key: 'pin3', name: 'Сбито 3 / 6', wins: [3] },
+            { key: 'pin4', name: 'Сбито 4 / 6', wins: [4] },
+            { key: 'pin5', name: 'Сбито 5 / 6', wins: [5] },
+            { key: 'strike', name: 'Страйк', wins: [6] }
         ]
     },
     slots: {
@@ -5002,13 +5169,14 @@ const EMOJI_GAME_CONFIGS = {
         slots: true,
         attemptLabels: ['1 РАУНД', '2 РАУНДА', '3 РАУНДА'],
         modes: [
-            { key: 'seven', name: '3 Семёрки', coef: 64.00, symbol: 'seven' },
-            { key: 'lemon', name: '3 Лимона', coef: 64.00, symbol: 'lemon' },
-            { key: 'grape', name: '3 Винограда', coef: 64.00, symbol: 'grape' },
-            { key: 'bar', name: '3 Бара', coef: 64.00, symbol: 'bar' },
-            { key: 'anyCombo', name: 'Любая комбинация', coef: 16.00 },
-            { key: 'unique', name: 'Уникальные символы', coef: 2.66 },
-            { key: 'duel', name: 'Дуэль', coef: 1.85 }
+            // p: [выигрышных исходов, всего] из 64 комбинаций (4 символа × 3 барабана)
+            { key: 'seven', name: '3 Семёрки', p: [1, 64], symbol: 'seven' },
+            { key: 'lemon', name: '3 Лимона', p: [1, 64], symbol: 'lemon' },
+            { key: 'grape', name: '3 Винограда', p: [1, 64], symbol: 'grape' },
+            { key: 'bar', name: '3 Бара', p: [1, 64], symbol: 'bar' },
+            { key: 'anyCombo', name: 'Любая комбинация', p: [4, 64] },          // три одинаковых
+            { key: 'unique', name: 'Уникальные символы', p: [24, 64] },        // три разных
+            { key: 'duel', name: 'Дуэль', p: [36, 64] }                        // ровно пара
         ]
     }
 };
@@ -5034,9 +5202,16 @@ function emojiModeCfg(key) {
     return cfg ? cfg.modes.find(m => m.key === key) || null : null;
 }
 
-function emojiCompoundCoef(baseCoef, attempts) {
-    const n = Math.max(1, attempts || 1);
-    return Math.round(Math.min(9999.99, Math.pow(baseCoef, n)) * 100) / 100;
+// [выигрышных исходов, всего] одного броска выбранного режима
+function emojiModeProb(mode, cfg) {
+    if (mode.p) return mode.p;
+    return [mode.wins.length, (cfg || emojiGameCfg()).rolls];
+}
+
+// Итоговый коэффициент режима с маржой 2.5%, округление вниз до сотых
+function emojiCompoundCoef(mode, attempts, cfg) {
+    const p = emojiModeProb(mode, cfg);
+    return Math.min(9999.99, houseCoef(p[0], p[1], attempts));
 }
 
 function openEmojiGame(key) {
@@ -5077,7 +5252,7 @@ function renderEmojiGameModes(animate) {
     const oldH = box.offsetHeight;
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
     box.innerHTML = cfg.modes.map((m, i) => {
-        const coef = emojiCompoundCoef(m.coef, attempts);
+        const coef = emojiCompoundCoef(m, attempts, cfg);
         return '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
             '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
             '<span class="dice-mode-name">' + m.name + '</span> ' +
@@ -5102,7 +5277,7 @@ function updateEmojiGamePlayLabel() {
     const mode = emojiModeCfg(emojiGame.mode);
     if (!mode) { btn.textContent = "Играть"; return; }
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
-    btn.textContent = "Играть (" + emojiCompoundCoef(mode.coef, attempts).toFixed(2) + "×)";
+    btn.textContent = "Играть (" + emojiCompoundCoef(mode, attempts, cfg).toFixed(2) + "×)";
 }
 
 function selectEmojiMode(modeKey, btn) {
@@ -5155,9 +5330,10 @@ function cryptoUnitRandom() {
     }
 }
 
-// Вероятность выигрыша честно следует за коэффициентом: 5× → 20%, 2× → 50%.
-function emojiAttemptWin(baseCoef) {
-    return cryptoUnitRandom() < (1 / baseCoef);
+// Вероятность выигрыша задана точно (wins/total), а не через коэффициент,
+// чтобы маржа заведения ровно 2.5% не «плавала» из-за округления коэффициента.
+function emojiAttemptWin(p) {
+    return cryptoUnitRandom() < (p[0] / p[1]);
 }
 
 // Честный номер броска 1..count (crypto вместо Math.random), как у Куба и Футбола.
@@ -5188,8 +5364,9 @@ function emojiSlotSymbols(cfg, modeKey, win) {
     } else if (win && modeKey === 'unique') {
         result = keys.slice().sort(() => Math.random() - 0.5).slice(0, 3);
     } else if (win && modeKey === 'duel') {
+        // Дуэль = ровно пара одинаковых (не тройка)
         const s = randomSymbol();
-        result = [s, s, randomSymbol()];
+        result = [s, s, keys.filter(k => k !== s)[Math.floor(Math.random() * 3)]];
     } else {
         result = [randomSymbol(), randomSymbol(), randomSymbol()];
         if (mode.symbol) {
@@ -5199,6 +5376,8 @@ function emojiSlotSymbols(cfg, modeKey, win) {
             if (result.every(s => s === result[0])) result[2] = keys.find(s => s !== result[0]) || 'bar';
         } else if (modeKey === 'unique') {
             if (new Set(result).size === 3) result[2] = result[0];
+        } else if (modeKey === 'duel') {
+            if (new Set(result).size === 2) result = [result[0], result[0], result[0]];   // пара → тройка (проигрыш)
         }
     }
     return result.map(s => EMOJI_SLOT_SYMBOLS[s] || s);
@@ -5233,7 +5412,7 @@ async function handleEmojiGamePlay() {
 
     setEmojiGameBusy(true);
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
-    const coef = emojiCompoundCoef(mode.coef, attempts);
+    const coef = emojiCompoundCoef(mode, attempts, cfg);
 
     // --- 1. списываем ставку ---
     const snapshot = snapshotBalanceState();
@@ -5263,7 +5442,7 @@ async function handleEmojiGamePlay() {
         let pass;
         let roll = null;
         if (cfg.slots) {
-            pass = emojiAttemptWin(mode.coef);
+            pass = emojiAttemptWin(emojiModeProb(mode, cfg));
         } else {
             roll = rollEmojiOutcome(cfg.rolls || 1);
             pass = Array.isArray(mode.wins) && mode.wins.indexOf(roll) !== -1;
