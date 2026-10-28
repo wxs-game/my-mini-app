@@ -813,6 +813,18 @@ main {
     color: #2ecc71;
 }
 
+.live-wins-game {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.live-wins-dot-sep,
+.live-wins-meta .live-wins-amount {
+    flex-shrink: 0;
+}
+
 .live-wins-arrow {
     color: #555555;
     font-weight: 700;

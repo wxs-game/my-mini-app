@@ -4818,6 +4818,7 @@ async function handleFootballPlay() {
             for (let i = 0; i < rolls.length; i++) {
                 const isFinal = i === rolls.length - 1;
                 const pass = passes[i];
+                const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
                 const title = kicks > 1
                     ? (pass ? "Удар забит" : "Удар не забит") + " (" + (i + 1) + "/" + kicks + ")"
                     : undefined;
@@ -4828,7 +4829,8 @@ async function handleFootballPlay() {
                     amountText: isFinal ? amountText : "",
                     index: i,
                     total: kicks,
-                    showResult: isFinal
+                    showResult: isFinal,
+                    nextRoll
                 });
             }
         }
@@ -9082,15 +9084,20 @@ function playRoll(anim, totalMs) {
 })();
 
 /* ==========================================
-   ФУТБОЛ — сцена 60 FPS: превью → удар → результат
+   ФУТБОЛ — сцена 60 FPS: превью → замах (prefootball.tgs) → удар (football1..5.tgs) → результат
    • Полные 60 кадров/с без пропуска кадров.
-   • Все 5 анимаций ударов (football1 … football5) предзаготавливаются в пуле,
-     чтобы удар запускался мгновенно и шёл без единого фриза.
+   • Замах (animations/dice/prefootball.tgs) и все 5 анимаций ударов
+     (animations/dice/football1 … football5) предзаготавливаются в пуле
+     и монтируются в один общий контейнер.
+   • Как только заканчивается последний кадр замаха, в тот же самый кадр
+     requestAnimationFrame без задержки, паузы или мигания включается 0-й кадр
+     удара — точь-в-точь как в настоящем Telegram.
 ========================================== */
 (function () {
     const PREVIEW_SRC = 'animations/dice/banners/football';
-    const ROLL_DIR = 'animations/dice/';     // football1 … football5
-    const ROLL_MS = 4000;
+    const PRE_KICK_SRC = 'animations/dice/prefootball'; // замах перед ударом
+    const ROLL_DIR = 'animations/dice/';                // football1 … football5
+    const HOLD_AFTER_KICK_MS = 450;                     // пауза на последнем кадре после удара (как в ТГ)
     const wait = ms => new Promise(r => setTimeout(r, ms));
     // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
     const nextFrame = () => new Promise(r => {
@@ -9123,19 +9130,20 @@ function playRoll(anim, totalMs) {
         return anim;
     }
 
-    /* ---------- предзагрузка файлов ---------- */
+    /* ---------- предзагрузка файлов (включая prefootball.tgs) ---------- */
     let preloadPromise = null;
     window.preloadFootball = function () {
-    if (preloadPromise) return preloadPromise;
-    preloadPromise = (async () => {
-        await loadRaw(PREVIEW_SRC);
-        for (let n = 1; n <= 5; n++) {
-            await loadRaw(ROLL_DIR + 'football' + n);
-            await wait(20);
-        }
-    })();
-    return preloadPromise;
-};
+        if (preloadPromise) return preloadPromise;
+        preloadPromise = (async () => {
+            await loadRaw(PREVIEW_SRC);
+            await loadRaw(PRE_KICK_SRC);
+            for (let n = 1; n <= 5; n++) {
+                await loadRaw(ROLL_DIR + 'football' + n);
+                await wait(20);
+            }
+        })();
+        return preloadPromise;
+    };
 
     /* ---------- превью (60 FPS), с ячейками под 2–3 удара ---------- */
     let preview = null;
@@ -9233,7 +9241,23 @@ function playRoll(anim, totalMs) {
         ensureLoop();
     }
 
-    /* ---------- пул анимаций ударов 1..5 ---------- */
+    /* ---------- пул анимаций: замах (prefootball) + удары 1..5 ---------- */
+    let preKickPoolPromise = null;
+    function getPooledPreKick() {
+        if (preKickPoolPromise) return preKickPoolPromise;
+        preKickPoolPromise = (async () => {
+            const data = await loadClone(PRE_KICK_SRC);
+            if (!data) return { box: null, anim: null };
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            box.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+            const anim = createAnim(box, data);
+            anim.goToAndStop(0, true);
+            return { box, anim };
+        })();
+        return preKickPoolPromise;
+    }
+
     const rollPool = new Map();
     function getPooledRoll(roll) {
         if (rollPool.has(roll)) return rollPool.get(roll);
@@ -9242,6 +9266,7 @@ function playRoll(anim, totalMs) {
             if (!data) return { box: null, anim: null };
             const box = document.createElement('div');
             box.className = 'sticker-lottie';
+            box.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
             const anim = createAnim(box, data);
             anim.goToAndStop(0, true);
             return { box, anim };
@@ -9251,6 +9276,8 @@ function playRoll(anim, totalMs) {
     }
 
     async function warmUpFootballPool() {
+        await getPooledPreKick();
+        await nextFrame();
         for (let n = 1; n <= 5; n++) {
             if (!pageActive) break;
             await getPooledRoll(n);
@@ -9285,30 +9312,128 @@ function playRoll(anim, totalMs) {
         setTimeout(warmUpFootballPool, 120);
     };
 
-    /* ---------- подготовка анимации удара ---------- */
+    /* ---------- подготовка связки «замах + удар» ---------- */
+    let prepared = null;
     function prepare(roll) {
-        void getPooledRoll(roll);
+        const rollEl = $('footballRoll');
+        if (!rollEl) {
+            void getPooledPreKick();
+            void getPooledRoll(roll);
+            return null;
+        }
+        if (prepared && prepared.roll === roll && !prepared.used) return prepared.ready;
+
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        rollEl.className = 'dice-layer dice-roll from-' + side;
+        rollEl.innerHTML = '';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'sticker-lottie';
+        wrap.style.position = 'relative';
+        rollEl.appendChild(wrap);
+
+        const st = { roll, side, wrap, preBox: null, preAnim: null, kickBox: null, kickAnim: null, used: false };
+        st.ready = (async () => {
+            const [pre, kick] = await Promise.all([getPooledPreKick(), getPooledRoll(roll)]);
+
+            if (pre && pre.anim && pre.box) {
+                st.preBox = pre.box;
+                st.preAnim = pre.anim;
+                st.preAnim.goToAndStop(0, true);
+                st.preBox.style.opacity = '1';
+                wrap.appendChild(st.preBox);
+            }
+
+            if (kick && kick.anim && kick.box) {
+                st.kickBox = kick.box;
+                st.kickAnim = kick.anim;
+                st.kickAnim.goToAndStop(0, true);
+                st.kickBox.style.opacity = st.preAnim ? '0' : '1';
+                wrap.appendChild(st.kickBox);
+            }
+            return st;
+        })();
+        prepared = st;
+        return st.ready;
     }
 
-/* ---------- удар: честные 60 FPS ---------- */
-function playRoll(anim, totalMs) {
-    return new Promise(resolve => {
-        const fr = anim.frameRate || 60;
-        const last = Math.max((anim.totalFrames || 2) - 1, 1);
-        const nativeMs = last / fr * 1000;
-        let prevTarget = -1;
-        const t0 = performance.now();
-        (function step(now) {
-            const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
-            if (target !== prevTarget) {
-                anim.goToAndStop(target, true);
-                prevTarget = target;
+    /* ---------- бесшовное 60 FPS воспроизведение: замах -> сразу пинок ---------- */
+    function playPreAndKick(preAnim, preBox, kickAnim, kickBox, holdMs, alive) {
+        return new Promise(resolve => {
+            const hasPre = !!(preAnim && preBox);
+            const hasKick = !!(kickAnim && kickBox);
+            if (!hasPre && !hasKick) {
+                setTimeout(resolve, 1200);
+                return;
             }
-            if (target < last) requestAnimationFrame(step);
-            else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
-        })(t0);
-    });
-}
+
+            const preFr = hasPre ? (preAnim.frameRate || 60) : 60;
+            const preLast = hasPre ? Math.max((preAnim.totalFrames || 2) - 1, 1) : 0;
+            const preDurationMs = hasPre ? (preLast / preFr) * 1000 : 0;
+
+            const kickFr = hasKick ? (kickAnim.frameRate || 60) : 60;
+            const kickLast = hasKick ? Math.max((kickAnim.totalFrames || 2) - 1, 1) : 0;
+
+            let phase = hasPre ? 'pre' : 'kick';
+            let prevFrame = -1;
+            const t0 = performance.now();
+            let kickStartTime = t0;
+
+            if (phase === 'pre') {
+                preBox.style.opacity = '1';
+                if (hasKick) kickBox.style.opacity = '0';
+                preAnim.goToAndStop(0, true);
+            } else if (hasKick) {
+                kickBox.style.opacity = '1';
+                kickAnim.goToAndStop(0, true);
+            }
+
+            (function step(now) {
+                if (alive && !alive()) { resolve(); return; }
+
+                if (phase === 'pre') {
+                    const elapsed = now - t0;
+                    const target = Math.min(Math.floor((elapsed / 1000) * preFr), preLast);
+                    if (target !== prevFrame) {
+                        preAnim.goToAndStop(target, true);
+                        prevFrame = target;
+                    }
+                    if (elapsed < preDurationMs) {
+                        requestAnimationFrame(step);
+                        return;
+                    }
+                    // Стык кадр-в-кадр (как в Telegram): в этот же тик rAF
+                    // переключаем видимость со статичного последнего кадра замаха
+                    // на 0-й кадр удара без паузы и без моргания.
+                    if (hasKick) {
+                        phase = 'kick';
+                        prevFrame = 0;
+                        kickStartTime = now;
+                        kickAnim.goToAndStop(0, true);
+                        kickBox.style.opacity = '1';
+                        preBox.style.opacity = '0';
+                        requestAnimationFrame(step);
+                    } else {
+                        setTimeout(resolve, holdMs);
+                    }
+                    return;
+                }
+
+                // Фаза 2: сам удар и полёт мяча в ворота
+                const elapsedKick = now - kickStartTime;
+                const target = Math.min(Math.floor((elapsedKick / 1000) * kickFr), kickLast);
+                if (target !== prevFrame) {
+                    kickAnim.goToAndStop(target, true);
+                    prevFrame = target;
+                }
+                if (target < kickLast) {
+                    requestAnimationFrame(step);
+                } else {
+                    setTimeout(resolve, holdMs);
+                }
+            })(t0);
+        });
+    }
 
     async function fallbackRoll(box, roll, ms) {
         box.className = 'dice-fallback';
@@ -9372,33 +9497,30 @@ function playRoll(anim, totalMs) {
         // Отменяем недоигранный удар: при возврате в режим показываем превью,
         // а не результат прошлой партии.
         playGen++;
+        prepared = null;
         hideResult(false);
         const rollEl = $('footballRoll');
         if (rollEl) { rollEl.className = 'dice-layer dice-roll'; rollEl.innerHTML = ''; }
         showPreview();
     }
 
-    // Тот же сценарий, что и у куба: превью (или прошлый итог) плавно уплывает вверх,
-    // удар заезжает сбоку, играет в честные 60 FPS, уходит — появляется итог.
-    // Для серии из 2–3 ударов итог показывается после КАЖДОГО удара, как в кубе.
-    async function play({ roll, win, amountText, title }) {
+    // Сценарий: превью (или прошлый итог) плавно уплывает вверх,
+    // сцена с замахом заезжает сбоку, проигрывает замах (prefootball.tgs) и
+    // мгновенно кадр-в-кадр переходит в сам пинок (football1..5.tgs) в 60 FPS,
+    // затем уходит — появляется итог.
+    async function play({ roll, win, amountText, title, nextRoll }) {
         const prev = $('footballPreview'), rollEl = $('footballRoll'), res = $('footballResult');
         if (!prev || !rollEl || !res) return;
         const myGen = ++playGen;
         const alive = () => myGen === playGen;
 
-        // 1) слой с ударом собираем из пула за кадром
-        const pooled = await getPooledRoll(roll);
-        if (!alive()) return;
-        const anim = pooled && pooled.anim && pooled.box ? pooled.anim : null;
-        let box = anim ? pooled.box : null;
-        rollEl.className = 'dice-layer dice-roll from-' + (Math.random() < 0.5 ? 'left' : 'right');
-        rollEl.innerHTML = '';
-        if (anim) anim.goToAndStop(0, true);
-        else { box = document.createElement('div'); box.className = 'sticker-lottie'; }
-        rollEl.appendChild(box);
+        // 1) получаем подготовленную связку «замах + удар»
+        const st = await ((prepared && prepared.roll === roll && !prepared.used) ? prepared.ready : prepare(roll));
+        if (!alive() || !st) return;
+        st.used = true;
+        const { wrap, preBox, preAnim, kickBox, kickAnim } = st;
 
-        // 2) превью / прошлый итог уплывают вверх, затем заезжает удар
+        // 2) превью / прошлый итог уплывают вверх, затем заезжает сцена с замахом
         const hadResult = res.classList.contains('show');
         hideResult(true);
         setPreviewPaused(true);
@@ -9408,14 +9530,15 @@ function playRoll(anim, totalMs) {
         reflow(rollEl);
         rollEl.classList.add('in');
 
-        // 3) 60 FPS, замирает на последнем кадре
-        if (anim) await playRoll(anim, ROLL_MS);
-        else await fallbackRoll(box, roll, ROLL_MS);
-        if (!alive()) return;
-        await wait(350);
+        // 3) замах (prefootball.tgs) -> бесшовный переход в удар (football1..5.tgs)
+        if (preAnim || kickAnim) {
+            await playPreAndKick(preAnim, preBox, kickAnim, kickBox, HOLD_AFTER_KICK_MS, alive);
+        } else {
+            await fallbackRoll(wrap, roll, 3000);
+        }
         if (!alive()) return;
 
-        // 4) удар уходит, появляется итог
+        // 4) ворота плавно уходят, появляется итог
         rollEl.classList.add('away');
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
@@ -9428,8 +9551,17 @@ function playRoll(anim, totalMs) {
 
         await waitResultAnimationEnd(res, 1050);
         if (!alive()) return;
-        if (box && box.parentNode === rollEl) rollEl.removeChild(box);
+        if (preBox && preBox.parentNode) preBox.parentNode.removeChild(preBox);
+        if (kickBox && kickBox.parentNode) kickBox.parentNode.removeChild(kickBox);
+        if (wrap && wrap.parentNode === rollEl) rollEl.removeChild(wrap);
         rollEl.className = 'dice-layer dice-roll';
+        prepared = null;
+
+        if (nextRoll) {
+            await prepare(nextRoll);
+            await wait(350);
+            return;
+        }
         await wait(300);
     }
 
