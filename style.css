@@ -3679,7 +3679,7 @@ input, textarea {
     box-shadow: none;
     color: #ffffff;
     text-align: center;
-    contain: layout paint;        /* перерисовка анимации не трогает остальную страницу */
+    contain: layout style;        /* paint-containment с rounded-углами заставлял GPU маскировать плитку каждый кадр */
 }
 
 .tge-tile:active {
@@ -4822,7 +4822,8 @@ img.img-pending { opacity: 0; }
     font-size: 16px;
     line-height: 1;
 }
-.win-popup-icon svg { width: 100% !important; height: 100% !important; }
+.win-popup-icon svg,
+.win-popup-icon canvas { width: 100% !important; height: 100% !important; }
 .win-popup-text {
     font-size: 12px;
     font-weight: 800;
@@ -4851,4 +4852,21 @@ img.img-pending { opacity: 0; }
 @keyframes winPopupBar {
     from { transform: scaleX(1); }
     to   { transform: scaleX(0); }
+}
+
+
+/* ==========================================================
+   PERF: Lottie теперь рисуется в <canvas> (см. «WXS PERF» в script.js).
+   Общие правила размера для любых стикеров + убираем скруглённую
+   обрезку у баннеров с анимацией: overflow+border-radius поверх
+   обновляющегося canvas заставляет GPU пересобирать маску каждый кадр.
+========================================================== */
+.sticker-lottie > canvas,
+.sticker-lottie > svg {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+.tge-banner.has-anim {
+    overflow: visible;
 }

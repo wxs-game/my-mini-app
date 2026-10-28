@@ -14,18 +14,16 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- eruda (консоль отладки) включена по умолчанию: внутри Telegram нельзя
-         просто дописать ?debug=1 к адресу мини-аппа, поэтому открыть консоль
-         иначе было невозможно.
-         Выключить насовсем: открыть мини-апп с ?debug=0 (запомнится в localStorage,
-         вернуть: ?debug=1). Eruda перехватывает console.log и все запросы,
-         поэтому на слабых телефонах она заметно тормозит. -->
+    <!-- eruda (консоль отладки) теперь ВЫКЛЮЧЕНА по умолчанию: она перехватывает
+         console.log, все запросы и следит за DOM, из-за чего анимации лагают.
+         Включить на время отладки: открыть мини-апп с ?debug=1 (запомнится в
+         localStorage). Выключить: ?debug=0. -->
     <script>
     (function () {
         try {
             var q = location.search.match(/[?&]debug=([01])/);
             if (q) localStorage.setItem('wxsDebug', q[1]);
-            if (localStorage.getItem('wxsDebug') === '0') return;
+            if (localStorage.getItem('wxsDebug') !== '1') return;   // по умолчанию ВЫКЛ: eruda сильно роняет FPS
         } catch (e) {}
 
         function bootEruda() {

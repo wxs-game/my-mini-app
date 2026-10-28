@@ -1,3 +1,74 @@
+/* =========================================================
+   WXS PERF: единый слой оптимизации Lottie (подключён первым)
+   • Все .tgs-анимации, которые раньше рисовались тяжёлым SVG-рендерером
+     (кубик, футбол, баскетбол/дартс/боулинг/слоты, стикеры, поп-ап выигрыша),
+     теперь рисуются в <canvas>: браузер не пересчитывает сотни SVG-узлов,
+     масок и фильтров на каждом кадре. Частота кадров и кадры анимации — те же.
+   • Чёткость: canvas рисуется в пикселях экрана (DPR до WXS_MAX_DPR, по умолчанию 2.5).
+   • Размер canvas сам подстраивается под контейнер (ResizeObserver) —
+     поэтому анимации можно создавать заранее, пока они ещё не в DOM.
+   • Аварийный выключатель: window.WXS_LOTTIE_FORCE_SVG = true (до загрузки скрипта).
+========================================================= */
+(function () {
+    'use strict';
+    if (typeof lottie === 'undefined' || lottie.__wxsPerf) return;
+    lottie.__wxsPerf = true;
+
+    const MAX_DPR = window.WXS_MAX_DPR || 2.5;
+    const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, MAX_DPR));
+    window.WXS_LOTTIE_DPR = DPR;
+    const useCanvas = window.WXS_LOTTIE_FORCE_SVG !== true;
+
+    const tracked = new Map();   // контейнер -> { anim, w, h }
+    const ro = ('ResizeObserver' in window) ? new ResizeObserver(entries => {
+        for (const e of entries) {
+            const rec = tracked.get(e.target);
+            if (!rec) continue;
+            const w = Math.round(e.contentRect.width);
+            const h = Math.round(e.contentRect.height);
+            if (w < 1 || h < 1 || (w === rec.w && h === rec.h)) continue;
+            rec.w = w; rec.h = h;
+            try {
+                rec.anim.resize(w, h);
+                // на паузе (goToAndStop) кадр сам не перерисуется — перерисуем
+                if (rec.anim.isPaused) rec.anim.goToAndStop(rec.anim.currentFrame, true);
+            } catch (err) { /* анимацию уже уничтожили */ }
+        }
+    }) : null;
+
+    function track(box, anim) {
+        if (!ro || !box || !anim || tracked.has(box)) return anim;
+        tracked.set(box, { anim, w: 0, h: 0 });
+        ro.observe(box);
+        const origDestroy = anim.destroy.bind(anim);
+        anim.destroy = function (name) {
+            tracked.delete(box);
+            try { ro.unobserve(box); } catch (err) {}
+            return origDestroy(name);
+        };
+        return anim;
+    }
+    lottie.wxsTrack = track;
+
+    const origLoad = lottie.loadAnimation.bind(lottie);
+    lottie.loadAnimation = function (opts) {
+        if (!useCanvas || !opts || opts.renderer !== 'svg' || !opts.container) return origLoad(opts);
+        const rs = opts.rendererSettings || {};
+        const o = Object.assign({}, opts, {
+            renderer: 'canvas',
+            rendererSettings: {
+                clearCanvas: true,
+                dpr: DPR,
+                progressiveLoad: false,
+                preserveAspectRatio: rs.preserveAspectRatio || 'xMidYMid meet'
+            }
+        });
+        let anim;
+        try { anim = origLoad(o); } catch (err) { return origLoad(opts); }   // не вышло — старый SVG
+        return track(opts.container, anim);
+    };
+})();
+
 (function () {
 // ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
@@ -8421,7 +8492,9 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
 (function () {
     const DIRS = ['animations/dice/banners/', 'animations/dice/banner/'];
     const IMG_EXTS = ['webp', 'gif', 'png'];
-    const BANNER_DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    // Баннеры рисуем в родном разрешении экрана (минимум 2×, максимум 3×) — иначе
+    // canvas растягивается браузером и картинка выходит мягкой/размытой.
+    const BANNER_DPR = window.WXS_LOTTIE_DPR || Math.min(window.devicePixelRatio || 1, 2.5);
     const STAGE_DPR = Math.min(window.devicePixelRatio || 1, 1.75);
     const wait = ms => new Promise(r => setTimeout(r, ms));
     // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
@@ -8562,6 +8635,7 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         });
     }
 
+let rrStart = 0;
 function tick(now) {
     rafId = 0;
     if (!pageActive || !isTgEmojiPageVisible()) return;
@@ -8575,14 +8649,33 @@ function tick(now) {
 
     const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.05) : (1 / 60);
     lastTick = now;
+
+    // 1) двигаем время у всех; в очередь на отрисовку — только те, у кого сменился кадр
+    const due = [];
     for (let i = 0; i < visibleList.length; i++) {
         const p = visibleList[i];
         p.frame += dt * p.fr;
         if (p.frame >= p.total) p.frame %= p.total;
         const fi = Math.floor(p.frame);
         if (fi === p.last) continue;
-        p.last = fi;
-        p.anim.goToAndStop(fi, true);
+        p.want = fi;
+        due.push(p);
+    }
+    if (!due.length) return;
+
+    // 2) рисуем в рамках бюджета кадра. На мощных телефонах бюджет не исчерпывается
+    //    и рисуются ВСЕ баннеры каждый кадр; на слабых — вместо общей просадки FPS
+    //    самый «обделённый» баннер на кадр пропускается и в следующем кадре
+    //    сразу прыгает на актуальный (очередь по кругу — справедливо для всех).
+    const budget = Math.min(12, Math.max(6, dt * 1000 * 0.6));
+    const t0 = performance.now();
+    const n = due.length;
+    const first = rrStart++ % n;
+    for (let k = 0; k < n; k++) {
+        if (k > 0 && performance.now() - t0 > budget) break;
+        const p = due[(first + k) % n];
+        p.last = p.want;
+        p.anim.goToAndStop(p.want, true);
     }
 }
 
@@ -8599,12 +8692,13 @@ function mountAnim(el, name, data) {
         animationData: data,
         rendererSettings: {
             clearCanvas: true,
-            dpr: 1.25,             // было 1.5 — на Android dpr 1.5 = 2.25× пикселей, 1.25 визуально неотличим
+            dpr: BANNER_DPR,       // чёткость = пиксели экрана 1:1 (было 1.25 — отсюда размытие)
             progressiveLoad: false,
             preserveAspectRatio: 'xMidYMid meet'
         }
     });
     if (anim.setSubframe) anim.setSubframe(false);
+    if (lottie.wxsTrack) lottie.wxsTrack(box, anim);
 
     // Прогрев: первый реальный рендер Lottie в canvas на Android WebView
     // может занять 30-50 мс (создание текстур). Делаем его заранее,
