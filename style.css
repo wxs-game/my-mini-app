@@ -4874,3 +4874,19 @@ img.img-pending { opacity: 0; }
 .tge-banner.has-anim {
     overflow: visible;
 }
+
+
+/* ==========================================================
+   FIX: анимация схлопывалась в тонкую полоску при смене режима.
+   Canvas был «в потоке» и сам задавал высоту контейнера: на миг контейнер
+   мерился маленьким → canvas ужимался → контейнер оставался маленьким.
+   Теперь canvas вынут из потока (absolute) и размер задаёт только контейнер.
+========================================================== */
+.dice-stage .sticker-lottie {
+    position: relative;
+}
+.dice-stage .sticker-lottie > canvas,
+.dice-stage .sticker-lottie > svg {
+    position: absolute;
+    inset: 0;
+}
