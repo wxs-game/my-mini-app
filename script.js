@@ -9639,6 +9639,8 @@ function playRoll(anim, totalMs) {
                 try { window.TgsCache.peekRaw(DIRS[1] + gameKey + n); } catch (e) {}
             }, n * 100);
         }
+        // замах (prebasketball / predarts / prebowling) — грузим первым
+        try { window.TgsCache.peekRaw(DIRS[1] + 'pre' + gameKey); } catch (e) {}
     }
 
     function sparkles() {
@@ -9899,10 +9901,47 @@ function playRoll(anim, totalMs) {
         await wait(600);
     }
 
-    /* ---------- пул готовых анимаций бросков (как у куба) ---------- */
-    const ROLL_MS = 4000;      // общее время броска: анимация + удержание последнего кадра
+    /* ---------- пул готовых анимаций: замах (pre<игра>) + броски 1..N ---------- */
+    const HOLD_AFTER_ROLL_MS = 450;   // пауза на последнем кадре броска (как в футболе)
+    const ABS_BOX = 'position:absolute;inset:0;width:100%;height:100%;';
     const reflow = el => void el.offsetWidth;
     const rollPool = new Map(); // 'darts:3' -> Promise<{ box, anim }>
+    const prePool = new Map();  // 'darts'   -> Promise<{ box, anim }>
+
+    function makeAnim(box, data) {
+        const anim = lottie.loadAnimation({
+            container: box,
+            renderer: 'svg',
+            loop: false,
+            autoplay: false,
+            animationData: data,
+            rendererSettings: {
+                preserveAspectRatio: 'xMidYMid meet',
+                progressiveLoad: false,
+                hideOnTransparent: true
+            }
+        });
+        if (anim.setSubframe) anim.setSubframe(false);
+        anim.goToAndStop(0, true);
+        return anim;
+    }
+
+    // Замах: animations/dice/prebasketball | predarts | prebowling (.tgs).
+    // Нет файла — { box: null, anim: null }, и бросок играет сразу, как раньше.
+    function getPooledPre(gameKey) {
+        if (prePool.has(gameKey)) return prePool.get(gameKey);
+        const p = (async () => {
+            let data = null;
+            if (window.TgsCache) data = await window.TgsCache.load(DIRS[1] + 'pre' + gameKey);
+            if (!data || typeof lottie === 'undefined') return { box: null, anim: null };
+            const box = document.createElement('div');
+            box.className = 'sticker-lottie';
+            box.style.cssText = ABS_BOX;
+            return { box, anim: makeAnim(box, data) };
+        })();
+        prePool.set(gameKey, p);
+        return p;
+    }
 
     function getPooledRoll(n) {
         const gameKey = key;
@@ -9915,21 +9954,8 @@ function playRoll(anim, totalMs) {
             if (!data || typeof lottie === 'undefined') return { box: null, anim: null };
             const box = document.createElement('div');
             box.className = 'sticker-lottie';
-            const anim = lottie.loadAnimation({
-                container: box,
-                renderer: 'svg',
-                loop: false,
-                autoplay: false,
-                animationData: data,
-                rendererSettings: {
-                    preserveAspectRatio: 'xMidYMid meet',
-                    progressiveLoad: false,
-                    hideOnTransparent: true
-                }
-            });
-            if (anim.setSubframe) anim.setSubframe(false);
-            anim.goToAndStop(0, true);
-            return { box, anim };
+            box.style.cssText = ABS_BOX;
+            return { box, anim: makeAnim(box, data) };
         })();
         rollPool.set(id, p);
         return p;
@@ -9938,6 +9964,9 @@ function playRoll(anim, totalMs) {
     async function warmUpRolls() {
         const gameKey = key;
         const count = (cfg && !cfg.slots && cfg.rolls) || 0;
+        if (!count) return;
+        await getPooledPre(gameKey);
+        await nextFrame();
         for (let n = 1; n <= count; n++) {
             if (key !== gameKey) break;
             await getPooledRoll(n);
@@ -9945,22 +9974,62 @@ function playRoll(anim, totalMs) {
         }
     }
 
-    /* ---------- честные 60 FPS: кадр = прошедшее время × frameRate ---------- */
-    function playRoll(anim, totalMs) {
+    /* ---------- бесшовные 60 FPS: замах -> сразу бросок (как prefootball -> football) ---------- */
+    function playPreAndRoll(preAnim, preBox, anim, box, holdMs, alive) {
         return new Promise(resolve => {
-            const fr = anim.frameRate || 60;
-            const last = Math.max((anim.totalFrames || 2) - 1, 1);
-            const nativeMs = last / fr * 1000;
-            let prevTarget = -1;
+            const hasPre = !!(preAnim && preBox);
+            const hasRoll = !!(anim && box);
+            if (!hasPre && !hasRoll) { setTimeout(resolve, 1200); return; }
+
+            const preFr = hasPre ? (preAnim.frameRate || 60) : 60;
+            const preLast = hasPre ? Math.max((preAnim.totalFrames || 2) - 1, 1) : 0;
+            const preDurationMs = hasPre ? (preLast / preFr) * 1000 : 0;
+
+            const rollFr = hasRoll ? (anim.frameRate || 60) : 60;
+            const rollLast = hasRoll ? Math.max((anim.totalFrames || 2) - 1, 1) : 0;
+
+            let phase = hasPre ? 'pre' : 'roll';
+            let prevFrame = -1;
             const t0 = performance.now();
+            let rollStart = t0;
+
+            if (phase === 'pre') {
+                preBox.style.opacity = '1';
+                if (hasRoll) box.style.opacity = '0';
+                preAnim.goToAndStop(0, true);
+            } else {
+                box.style.opacity = '1';
+                anim.goToAndStop(0, true);
+            }
+
             (function step(now) {
-                const target = Math.min(Math.floor((now - t0) / 1000 * fr), last);
-                if (target !== prevTarget) {
-                    anim.goToAndStop(target, true);
-                    prevTarget = target;
+                if (alive && !alive()) { resolve(); return; }
+
+                if (phase === 'pre') {
+                    const elapsed = now - t0;
+                    const target = Math.min(Math.floor(elapsed / 1000 * preFr), preLast);
+                    if (target !== prevFrame) { preAnim.goToAndStop(target, true); prevFrame = target; }
+                    if (elapsed < preDurationMs) { requestAnimationFrame(step); return; }
+                    // Стык кадр-в-кадр: в этом же тике rAF прячем замах и
+                    // показываем 0-й кадр броска — без паузы и моргания.
+                    if (hasRoll) {
+                        phase = 'roll';
+                        prevFrame = 0;
+                        rollStart = now;
+                        anim.goToAndStop(0, true);
+                        box.style.opacity = '1';
+                        preBox.style.opacity = '0';
+                        requestAnimationFrame(step);
+                    } else {
+                        setTimeout(resolve, holdMs);
+                    }
+                    return;
                 }
-                if (target < last) requestAnimationFrame(step);
-                else setTimeout(resolve, Math.max(0, totalMs - nativeMs));
+
+                const target = Math.min(Math.floor((now - rollStart) / 1000 * rollFr), rollLast);
+                if (target !== prevFrame) { anim.goToAndStop(target, true); prevFrame = target; }
+                if (target < rollLast) requestAnimationFrame(step);
+                else setTimeout(resolve, holdMs);
             })(t0);
         });
     }
@@ -10035,16 +10104,30 @@ function playRoll(anim, totalMs) {
         }
 
         /* ----- 1) слой с броском собираем из пула за кадром ----- */
-        const pooled = await getPooledRoll(rollNumber);
+        const gameKey = key;
+        const [prePooled, pooled] = await Promise.all([getPooledPre(gameKey), getPooledRoll(rollNumber)]);
         if (!alive()) return;
+        const preAnim = prePooled && prePooled.anim && prePooled.box ? prePooled.anim : null;
+        const preBox = preAnim ? prePooled.box : null;
         const anim = pooled && pooled.anim && pooled.box ? pooled.anim : null;
-        let box = anim ? pooled.box : null;
+        const box = anim ? pooled.box : null;
         if (slots) slots.classList.remove('show');
         rollEl.className = 'dice-layer dice-roll from-' + (Math.random() < 0.5 ? 'left' : 'right');
         rollEl.innerHTML = '';
-        if (anim) anim.goToAndStop(0, true);
-        else { box = document.createElement('div'); box.className = 'sticker-lottie'; }
-        rollEl.appendChild(box);
+        const wrap = document.createElement('div');
+        wrap.className = 'sticker-lottie';
+        wrap.style.position = 'relative';
+        rollEl.appendChild(wrap);
+        if (preAnim) {
+            preAnim.goToAndStop(0, true);
+            preBox.style.opacity = '1';
+            wrap.appendChild(preBox);
+        }
+        if (anim) {
+            anim.goToAndStop(0, true);
+            box.style.opacity = preAnim ? '0' : '1';
+            wrap.appendChild(box);
+        }
 
         /* ----- 2) превью / прошлый итог уплывают вверх, заезжает бросок ----- */
         const hadResult = res.classList.contains('show');
@@ -10057,11 +10140,9 @@ function playRoll(anim, totalMs) {
         reflow(rollEl);
         rollEl.classList.add('in');
 
-        /* ----- 3) 60 FPS, замирает на последнем кадре ----- */
-        if (anim) await playRoll(anim, ROLL_MS);
-        else await fallbackRoll(box, ROLL_MS);
-        if (!alive()) return;
-        await wait(350);
+        /* ----- 3) замах (pre<игра>) -> встык бросок, 60 FPS ----- */
+        if (preAnim || anim) await playPreAndRoll(preAnim, preBox, anim, box, HOLD_AFTER_ROLL_MS, alive);
+        else await fallbackRoll(wrap, 3000);
         if (!alive()) return;
 
         /* ----- 4) бросок уходит, появляется итог ----- */
@@ -10069,7 +10150,9 @@ function playRoll(anim, totalMs) {
         showResult(win, amountText, title);
         await waitResultAnimationEnd(res, 1050);
         if (!alive()) return;
-        if (box && box.parentNode === rollEl) rollEl.removeChild(box);
+        if (preBox && preBox.parentNode) preBox.parentNode.removeChild(preBox);
+        if (box && box.parentNode) box.parentNode.removeChild(box);
+        if (wrap.parentNode === rollEl) rollEl.removeChild(wrap);
         rollEl.className = 'dice-layer dice-roll';
         await wait(300);
     }
