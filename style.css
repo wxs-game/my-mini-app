@@ -4896,17 +4896,25 @@ img.img-pending { opacity: 0; }
    КУБ: режим «Число» — 6 граней + «Назад»
 ========================================================== */
 .dice-modes.is-numbers { grid-template-columns: repeat(3, 1fr); }
-.dice-mode-back { grid-column: 1 / -1; gap: 8px; }
+.dice-mode-back {
+    grid-column: 1 / -1;
+    gap: 10px;
+    min-height: 64px;
+    padding: 18px 10px;
+    font-size: 17px;
+}
 .dice-mode[data-mode="number"] { grid-column: 1 / -1; }   /* «Число» — на всю ширину последней строкой */
-.dice-mode-back .dice-mode-name { margin: 0; }
+.dice-mode-back .dice-mode-name { margin: 0; font-size: 17px; }
 .dice-back-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
     flex: none;
 }
+/* нет ни .tgs, ни png — иконка не занимает место, текст «Назад» ровно по центру плитки */
+.dice-back-icon.is-empty, .dice-num-icon.is-empty { display: none; }
 .dice-back-icon svg, .dice-back-icon img { width: 100%; height: 100%; object-fit: contain; }
 .dice-num { gap: 5px; padding-left: 4px; padding-right: 4px; }
 .dice-num-icon {

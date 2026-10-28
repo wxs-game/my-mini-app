@@ -4427,7 +4427,14 @@ window.getDiceCubes = () => diceGame.cubes || 1;
 // Режимы 2/3 куба — компаунд: каждый куб должен попасть в выбранный исход.
 const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [4, 6], edges: [2, 6] };
 const DICE_MODE_ORDER = ["low", "high", "even", "odd", "center", "edges", "number"];
-const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", center: "Центр", edges: "Края", number: "Число" };
+// 2 куба: Меньше/Больше, Чёт/Нечёт, Одинаковые (любой дубль) и Дубль (конкретные числа)
+const DICE_MODE_ORDER_2 = ["low", "high", "even", "odd", "same", "double"];
+function diceModeOrder(cubes) { return cubes === 2 ? DICE_MODE_ORDER_2 : DICE_MODE_ORDER; }
+// Режим, который включается выбором граней в подменю: «Число» (1/3 куба) или «Дубль» (2 куба)
+function diceNumbersMode(cubes) { return (cubes || 1) === 2 ? "double" : "number"; }
+// Префикс иконок граней: modecubeN (1/3 куба) или mode2cubeN (2 куба)
+function diceNumIconPrefix(cubes) { return (cubes || 1) === 2 ? "mode2cube" : "modecube"; }
+const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", center: "Центр", edges: "Края", number: "Число", same: "Одинаковые", double: "Дубль" };
 const DICE_MAX_NUMBERS = 5;                          // «Число»: можно выбрать от 1 до 5 граней
 const DICE_NUM_IMG_DIR = "images/dice/";             // запасные modecube1.png … modecube6.png, back.png
 const DICE_NUM_TGS_DIR = "animations/dice/";         // modecube1.tgs … modecube6.tgs (если нет — берём png)
@@ -4438,6 +4445,11 @@ const DICE_BACK_TGS = "images/ui/back.tgs";          // анимированна
 // «Число»: k выбранных граней из 6 → вероятность k/6 (на каждый куб).
 function diceCoefFor(mode, cubes, numCount) {
     const n = cubes || 1;
+    if (mode === "same") return houseCoef(1, 6, 1);          // оба куба одинаковые: 1/6 → ×5.85
+    if (mode === "double") {                                 // конкретный дубль: k/36 → ×35.10 при k=1
+        const k = Math.max(1, Math.min(DICE_MAX_NUMBERS, numCount || 1));
+        return houseCoef(k, 36, 1);
+    }
     if (mode === "number") {
         const k = Math.max(1, Math.min(DICE_MAX_NUMBERS, numCount || 1));
         return houseCoef(k, 6, n);
@@ -4447,6 +4459,7 @@ function diceCoefFor(mode, cubes, numCount) {
 }
 function diceModeTitle(mode) {
     const c = diceGame.cubes || 1;
+    if (mode === "same" || mode === "double") return DICE_MODE_NAMES[mode];
     return (c > 1 ? c + " " : "") + DICE_MODE_NAMES[mode];
 }
 function diceCoefText(c) { return "×" + c.toFixed(2); }
@@ -4487,7 +4500,7 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass) {
     const fallback = () => {
         if (!el.isConnected || !fallbackPng) return;
         el.innerHTML = '<img' + (imgClass ? ' class="' + imgClass + '"' : '') + ' src="' + fallbackPng +
-            '" alt="" draggable="false" onerror="this.remove()">';
+            '" alt="" draggable="false" onerror="var p=this.parentNode;this.remove();if(p)p.classList.add(\'is-empty\')">';
     };
     try {
         if (typeof lottie === "undefined") throw new Error("no lottie");
@@ -4510,12 +4523,13 @@ function mountDiceBackIcon(el) {
     return mountDiceTgsIcon(el, [DICE_BACK_TGS], DICE_BACK_PNG);
 }
 
-// Иконка грани «Число» — modecubeN.tgs; запасной вариант modecubeN.png.
-function mountDiceNumIcon(el, n) {
+// Иконка грани «Число» / «Дубль» — modecubeN.tgs (1/3 куба) или mode2cubeN.tgs (2 куба); запасной png — modecubeN.png.
+function mountDiceNumIcon(el, n, prefix) {
+    const p = prefix || "modecube";
     return mountDiceTgsIcon(
         el,
-        [DICE_NUM_TGS_DIR + "modecube" + n + ".tgs", DICE_NUM_IMG_DIR + "modecube" + n + ".tgs"],
-        DICE_NUM_IMG_DIR + "modecube" + n + ".png",
+        [DICE_NUM_TGS_DIR + p + n + ".tgs", DICE_NUM_IMG_DIR + p + n + ".tgs"],
+        DICE_NUM_IMG_DIR + "modecube" + n + ".png",      // запасной png — обычные грани
         "dice-num-img"
     );
 }
@@ -4534,7 +4548,7 @@ function renderDiceModes(animate) {
     let html = "";
 
     if (inNumbers) {
-        const coefTxt = diceCoefText(diceCoefFor("number", cubes, diceGame.numbers.length));
+        const coefTxt = diceCoefText(diceCoefFor(diceNumbersMode(cubes), cubes, diceGame.numbers.length));
         for (let n = 1; n <= 6; n++) {
             const sel = diceGame.numbers.indexOf(n) !== -1;
             html += '<button class="dice-tile dice-mode dice-num' + (sel ? " selected" : "") + enter +
@@ -4546,10 +4560,10 @@ function renderDiceModes(animate) {
         html += '<button class="dice-tile dice-mode dice-mode-back' + enter + '" style="--i:6" onclick="diceNumbersBack()">' +
             '<span class="dice-back-icon"></span><span class="dice-mode-name">Назад</span></button>';
     } else {
-        html = DICE_MODE_ORDER.map((k, i) => {
-            if (k === "number") {
-                const max = diceCoefFor("number", cubes, 1);
-                return '<button class="dice-tile dice-mode' + enter + '" style="--i:' + i + '" data-mode="number" onclick="openDiceNumbers()">' +
+        html = diceModeOrder(cubes).map((k, i) => {
+            if (k === "number" || k === "double") {
+                const max = diceCoefFor(k, cubes, 1);
+                return '<button class="dice-tile dice-mode' + enter + '" style="--i:' + i + '" data-mode="' + k + '" onclick="openDiceNumbers()">' +
                     '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
                     '<span class="dice-mode-coef">(до ' + diceCoefText(max) + ')</span></button>';
             }
@@ -4567,7 +4581,8 @@ function renderDiceModes(animate) {
     box.innerHTML = html;
     if (inNumbers) {
         mountDiceBackIcon(box.querySelector(".dice-back-icon"));
-        box.querySelectorAll(".dice-num-icon").forEach(el => mountDiceNumIcon(el, +el.dataset.n));
+        const iconPrefix = diceNumIconPrefix(cubes);
+        box.querySelectorAll(".dice-num-icon").forEach(el => mountDiceNumIcon(el, +el.dataset.n, iconPrefix));
     }
 
     // плавное изменение высоты блока, чтобы нижняя часть не прыгала
@@ -4618,14 +4633,14 @@ function toggleDiceNumber(n, btn) {
         diceGame.numbers.push(n);
         diceGame.numbers.sort((a, b) => a - b);
     }
-    diceGame.mode = diceGame.numbers.length ? "number" : null;
+    diceGame.mode = diceGame.numbers.length ? diceNumbersMode(diceGame.cubes) : null;
     if (btn) {
         btn.classList.toggle("selected", diceGame.numbers.indexOf(n) !== -1);
         const ic = btn.querySelector(".dice-num-icon");
         try { ic && ic._anim && ic._anim.goToAndPlay(0, true); } catch (e) {}
     }
     // у всех граней показываем коэффициент при текущем количестве выбранных
-    const txt = "(" + diceCoefText(diceCoefFor("number", diceGame.cubes, diceGame.numbers.length)) + ")";
+    const txt = "(" + diceCoefText(diceCoefFor(diceNumbersMode(diceGame.cubes), diceGame.cubes, diceGame.numbers.length)) + ")";
     document.querySelectorAll("#diceModes .dice-num .dice-mode-coef").forEach(el => { el.textContent = txt; });
     updateDicePlayLabel();
 }
@@ -4704,8 +4719,12 @@ function calcDiceWin(bet, coef) {
     return Math.floor((cents * coefHundredths) / 100) / 100;
 }
 
-function isDiceWin(mode, r, nums) {
+// i — номер куба (0, 1, …), rolls — уже выпавшие грани (для «Одинаковые» / «Дубль»).
+function isDiceWin(mode, r, nums, i, rolls) {
     switch (mode) {
+        case "same":   return i === 0 ? true : r === rolls[0];                       // второй куб = первому
+        case "double": return i === 0 ? (Array.isArray(nums) && nums.indexOf(r) !== -1)
+                                      : r === rolls[0];                              // первый в выбранных, второй такой же
         case "high":   return r >= 4;
         case "low":    return r <= 3;
         case "even":   return r % 2 === 0;
@@ -4720,7 +4739,7 @@ function isDiceWin(mode, r, nums) {
 async function handleDicePlay() {
     if (diceGame.busy) return;
     if (!diceGame.mode) {
-        showMessage(diceGame.view === "number" ? "Выберите хотя бы одно число!" : "Выберите режим ставки!");
+        showMessage(diceGame.view === "number" ? (diceGame.cubes === 2 ? "Выберите хотя бы один дубль!" : "Выберите хотя бы одно число!") : "Выберите режим ставки!");
         return;
     }
     if (!lockEconomy()) return;
@@ -4770,7 +4789,7 @@ async function handleDicePlay() {
     let allPass = true;
     for (let i = 0; i < cubes; i++) {
         const r = rollDie();
-        const p = isDiceWin(mode, r, nums);
+        const p = isDiceWin(mode, r, nums, i, rolls);
         rolls.push(r);
         passes.push(p);
         if (!p) { allPass = false; break; }
