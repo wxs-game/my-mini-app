@@ -8703,7 +8703,7 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
      «Играть» ничего не парсится и не создаётся — анимация стартует мгновенно в 60 FPS.
 ========================= */
 (function () {
-    const PREVIEW_SRC = 'animations/dice/preview/cube';
+    const PREVIEW_SRC = 'animations/dice/banners/dice';
     const ROLL_DIR = 'animations/dice/';   // cube1 … cube6
     const ROLL_MS = 4000;                  // общее время броска: анимация + удержание последнего кадра
     const wait = ms => new Promise(r => setTimeout(r, ms));
