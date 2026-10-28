@@ -615,6 +615,11 @@ async function loadUserData() {
 ========================= */
 const LIVE_BETS_TABLE = 'live_bets';
 const LIVE_BETS_MAX = 10;
+// Сколько последних выигрышей держим в ленте Live Wins (листается пальцем)
+const LIVE_WINS_MAX = 10;
+// Сколько завершённых ставок забираем из БД, чтобы среди них набралось
+// LIVE_WINS_MAX заметных выигрышей (проигрыши и мелкие ставки отсеиваются)
+const LIVE_BETS_FETCH = 100;
 // Лента LIVE WINS обновляется опросом (реалтайм снят из-за нагрузки на базу)
 const LIVE_BETS_POLL_MS = 10000;
 let liveBetsPollTimer = null;
@@ -681,8 +686,9 @@ async function loadLiveBetsHistory() {
         const { data, error } = await supabase
             .from(LIVE_BETS_TABLE)
             .select('id, name, amount, game, win_amount, multiplier, created_at')
+            .not('win_amount', 'is', null)
             .order('created_at', { ascending: false })
-            .limit(LIVE_BETS_MAX);
+            .limit(LIVE_BETS_FETCH);
 
         if (error) {
             console.error('Ошибка загрузки истории live_bets:', error);
@@ -690,7 +696,11 @@ async function loadLiveBetsHistory() {
             return;
         }
 
-        liveBetsQueue = (data || []).slice().reverse();
+        // data — от новых к старым; оставляем только заметные выигрыши, последние LIVE_WINS_MAX
+        liveBetsQueue = (data || [])
+            .filter(isLiveTickerItem)
+            .slice(0, LIVE_WINS_MAX)
+            .reverse();
         renderLiveBetsTicker();
     } catch (e) {
         console.error('Ошибка загрузки истории live_bets:', e);
@@ -775,8 +785,8 @@ function patchLiveBetLocally(id, patch) {
 
 function addLiveBetToTicker(bet) {
     liveBetsQueue.push(bet);
-    if (liveBetsQueue.length > LIVE_BETS_MAX) {
-        liveBetsQueue.splice(0, liveBetsQueue.length - LIVE_BETS_MAX);
+    if (liveBetsQueue.length > LIVE_WINS_MAX) {
+        liveBetsQueue.splice(0, liveBetsQueue.length - LIVE_WINS_MAX);
     }
     renderLiveBetsTicker();
 }
@@ -836,8 +846,9 @@ function renderLiveBetsTicker() {
             '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
             '<span class="live-wins-name" title="' + escapeHtml(topWin.name) + '">' + escapeHtml(topWin.name) + '</span>' +
             '<span class="live-wins-meta">' +
-                escapeHtml(topWin.game || 'Игра') + ' • ' +
-                '<span class="live-wins-amount live-wins-win">' + Number(topWin.win_amount).toFixed(2) + ' $</span>' +
+                '<span class="live-wins-game">' + escapeHtml(topWin.game || 'Игра') + '</span>' +
+                '<span class="live-wins-dot-sep">•</span>' +
+                '<span class="live-wins-amount live-wins-win">' + Number(topWin.win_amount).toFixed(2) + '</span>' +
                 '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">' +
             '</span>';
 
@@ -863,10 +874,9 @@ function createLiveWinCardEl(bet, animateEnter) {
     el.innerHTML =
         '<span class="live-wins-name" title="' + escapeHtml(bet.name) + '">' + escapeHtml(bet.name) + '</span>' +
         '<span class="live-wins-meta">' +
-            escapeHtml(bet.game || 'Игра') + ' • ' +
-            '<span class="live-wins-amount">' + Number(bet.amount).toFixed(2) + ' $</span>' +
-            '<span class="live-wins-arrow">→</span>' +
-            '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + ' $</span>' +
+            '<span class="live-wins-game">' + escapeHtml(bet.game || 'Игра') + '</span>' +
+            '<span class="live-wins-dot-sep">•</span>' +
+            '<span class="live-wins-amount live-wins-win">' + Number(bet.win_amount).toFixed(2) + '</span>' +
             '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">' +
         '</span>';
     return el;
@@ -10741,4 +10751,84 @@ document.addEventListener('visibilitychange', function () {
             });
         }, 3000);
     }, { once: true });
+})();
+
+
+/* =========================================================
+   СИНХРОНИЗАЦИЯ БАЛАНСА С БАЗОЙ (чат-бот ⇄ аппка)
+   Бот в чате («б», «баланс») читает wxs_game.balance из Supabase,
+   а аппка раньше показывала только то, что вернули её собственные
+   операции — любые изменения баланса снаружи (игры в чате, промокоды,
+   начисления) в ней не появлялись до перезапуска.
+   Теперь аппка раз в несколько секунд и при возврате в окно сверяет
+   баланс с базой и подтягивает его. Идущая игра/анимация не ломается:
+   пока её результат на экране ещё не раскрыт, к нему лишь прибавляется
+   внешнее изменение, а полная сверка происходит, когда всё затихло.
+========================================================= */
+(function balanceSync() {
+    const POLL_MS = 3000;       // как часто сверяемся
+    const IDLE_MS = 12000;      // сколько без своих операций, чтобы принудительно выровнять
+    const cents = (n) => Math.round(Number(n) * 100) / 100;
+
+    let base = null;            // баланс в базе при прошлой сверке
+    let baseSeq = -1;           // номер «своей» операции на тот момент
+    let seq = 0;                // растёт при каждом изменении баланса самой аппкой
+    let lastSetAt = Date.now();
+    let busy = false;
+
+    const origSetUIBalance = setUIBalance;
+    // все игры вызывают setUIBalance — перехватываем, чтобы знать о своих операциях
+    setUIBalance = function (v) {
+        seq++;
+        lastSetAt = Date.now();
+        return origSetUIBalance.apply(this, arguments);
+    };
+
+    async function pull() {
+        const tgUser = tg?.initDataUnsafe?.user;
+        if (!tgUser || busy || document.visibilityState === 'hidden') return;
+        busy = true;
+        const startSeq = seq;
+        try {
+            const { data, error } = await supabase
+                .from('wxs_game')
+                .select('balance')
+                .eq('telegram_id', tgUser.id)
+                .limit(1);
+            if (error || !data || !data.length) return;
+            const srv = cents(data[0].balance);
+            if (!isFinite(srv)) return;
+
+            // пока шла проверка, аппка сама меняла баланс (или идёт ставка) —
+            // этот ответ мог устареть, просто запомним ориентир и выйдем
+            if (startSeq !== seq || isEconomyLocked) { base = null; return; }
+
+            if (base !== null && baseSeq !== startSeq) base = null;
+
+            const ui = cents(currentBalance);
+            if (srv === ui) { base = srv; baseSeq = startSeq; return; }
+
+            if (base !== null && srv !== base) {
+                // база изменилась, а своих операций не было → изменение снаружи (чат и т.п)
+                origSetUIBalance(cents(ui + (srv - base)));
+                base = srv; baseSeq = startSeq;
+                return;
+            }
+
+            base = srv; baseSeq = startSeq;
+            // экран расходится с базой и давно ничего не происходит → выравниваем
+            if (Date.now() - lastSetAt > IDLE_MS) origSetUIBalance(srv);
+        } catch (e) {
+            console.warn('[balanceSync]', e);
+        } finally {
+            busy = false;
+        }
+    }
+
+    setInterval(pull, POLL_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') pull();
+    });
+    window.addEventListener('focus', pull);
+    window.refreshBalance = pull;
 })();
