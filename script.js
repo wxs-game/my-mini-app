@@ -4425,9 +4425,9 @@ const diceGame = { cubes: 1, mode: null, busy: false, view: "main", numbers: [] 
 window.getDiceCubes = () => diceGame.cubes || 1;
 // Вероятность одного куба [выигрышных граней, всего граней].
 // Режимы 2/3 куба — компаунд: каждый куб должен попасть в выбранный исход.
-const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6] };
-const DICE_MODE_ORDER = ["high", "low", "even", "odd", "number"];
-const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", number: "Число" };
+const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [4, 6], edges: [2, 6] };
+const DICE_MODE_ORDER = ["low", "high", "even", "odd", "center", "edges", "number"];
+const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", center: "Центр", edges: "Края", number: "Число" };
 const DICE_MAX_NUMBERS = 5;                          // «Число»: можно выбрать от 1 до 5 граней
 const DICE_NUM_IMG_DIR = "images/dice/";             // запасные modecube1.png … modecube6.png, back.png
 const DICE_NUM_TGS_DIR = "animations/dice/";         // modecube1.tgs … modecube6.tgs (если нет — берём png)
@@ -4710,6 +4710,8 @@ function isDiceWin(mode, r, nums) {
         case "low":    return r <= 3;
         case "even":   return r % 2 === 0;
         case "odd":    return r % 2 === 1;
+        case "center": return r >= 2 && r <= 5;     // 2,3,4,5
+        case "edges":  return r === 1 || r === 6;   // 1 и 6
         case "number": return Array.isArray(nums) && nums.indexOf(r) !== -1;
     }
     return false;
@@ -6889,6 +6891,9 @@ window.openTgEmoji = openTgEmoji;
 window.openTgEmojiMode = openTgEmojiMode;
 window.openDiceGame = openDiceGame;
 window.selectDiceMode = selectDiceMode;
+window.openDiceNumbers = openDiceNumbers;
+window.toggleDiceNumber = toggleDiceNumber;
+window.diceNumbersBack = diceNumbersBack;
 window.selectDiceCubes = selectDiceCubes;
 window.adjustDiceBet = adjustDiceBet;
 window.setDiceMaxBet = setDiceMaxBet;
