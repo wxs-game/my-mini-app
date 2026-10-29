@@ -4543,6 +4543,23 @@ function mountDiceNumIcon(el, n, prefix) {
 function renderDiceModes(animate) {
     const box = document.getElementById("diceModes");
     if (!box) return;
+    const tok = (box._renderTok = (box._renderTok || 0) + 1);   // только последний вызов рисует
+    if (animate && box.children.length) {
+        // 1) старые плитки быстро гаснут, 2) набор меняется, 3) высота блока плавно подгоняется
+        box.classList.add("leaving");
+        setTimeout(() => {
+            if (box._renderTok !== tok) return;
+            box.classList.remove("leaving");
+            doRenderDiceModes(true);
+        }, 110);
+        return;
+    }
+    box.classList.remove("leaving");
+    doRenderDiceModes(false);
+}
+function doRenderDiceModes(animate) {
+    const box = document.getElementById("diceModes");
+    if (!box) return;
     const oldH = box.offsetHeight;
     const cubes = diceGame.cubes || 1;
     const inNumbers = diceGame.view === "number";

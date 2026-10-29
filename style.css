@@ -4035,10 +4035,12 @@ input, textarea {
 /* Смена набора плиток при переключении 1 куб ↔ 2 куба */
 .dice-modes { transition: height 0.5s cubic-bezier(.32, .72, 0, 1); }
 .dice-modes.resizing { overflow: hidden; }
-.dice-mode.enter { animation: diceModeIn 0.4s calc(var(--i, 0) * 45ms) cubic-bezier(.22, 1, .36, 1) both; }
+.dice-mode.enter { animation: diceModeIn 0.3s calc(var(--i, 0) * 30ms) cubic-bezier(.22, 1, .36, 1) backwards; }
+.dice-modes.leaving { pointer-events: none; }
+.dice-modes.leaving > .dice-tile { opacity: 0; transition: opacity 0.1s ease; }
 @keyframes diceModeIn {
-    from { opacity: 0; transform: translateY(10px) scale(0.96); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
 }
 
 
@@ -4896,27 +4898,39 @@ img.img-pending { opacity: 0; }
    КУБ: режим «Число» — 6 граней + «Назад»
 ========================================================== */
 .dice-modes.is-numbers { grid-template-columns: repeat(3, 1fr); }
+/* «Назад»: той же высоты, что «Число»; слово строго по центру, иконка back.tgs слева от слова */
 .dice-mode-back {
     grid-column: 1 / -1;
-    gap: 10px;
-    min-height: 64px;
-    padding: 18px 10px;
-    font-size: 17px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: 6px;
+    min-height: 0;
+    padding: 14px 6px;
+    font-size: 14px;
 }
 .dice-mode[data-mode="number"] { grid-column: 1 / -1; }   /* «Число» — на всю ширину последней строкой */
-.dice-mode-back .dice-mode-name { margin: 0; font-size: 17px; }
+.dice-mode-back .dice-mode-name { grid-column: 2; grid-row: 1; margin: 0; font-size: 14px; }
 .dice-back-icon {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 22px;
+    height: 22px;
+    margin: -3px 0;               /* иконка не увеличивает высоту плитки */
     flex: none;
+    pointer-events: none;
 }
 /* нет ни .tgs, ни png — иконка не занимает место, текст «Назад» ровно по центру плитки */
 .dice-back-icon.is-empty, .dice-num-icon.is-empty { display: none; }
 .dice-back-icon svg, .dice-back-icon img { width: 100%; height: 100%; object-fit: contain; }
 .dice-num, .dice-has-icon { gap: 5px; padding-left: 4px; padding-right: 4px; }
+/* «Центр» с иконкой: один пробел между названием и коэффициентом (как в «Число»), высота плитки не растёт из-за иконки */
+.dice-has-icon .dice-mode-coef { margin-left: 0; }
+.dice-has-icon .dice-num-icon { margin-top: -3px; margin-bottom: -3px; }
 .dice-num-icon {
     display: inline-flex;
     align-items: center;
