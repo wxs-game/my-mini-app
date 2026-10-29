@@ -4926,7 +4926,17 @@ img.img-pending { opacity: 0; }
 }
 /* нет ни .tgs, ни png — иконка не занимает место, текст «Назад» ровно по центру плитки */
 .dice-back-icon.is-empty, .dice-num-icon.is-empty { display: none; }
-.dice-back-icon svg, .dice-back-icon img { width: 100%; height: 100%; object-fit: contain; }
+.dice-back-icon svg, .dice-back-icon img, .dice-back-icon canvas { width: 100% !important; height: 100% !important; object-fit: contain; }
+.dice-tgs-holder { display: block; width: 100%; height: 100%; transition: opacity .15s ease; }
+.dice-back-icon .dice-tgs-holder, .dice-num-icon .dice-tgs-holder { position: absolute; inset: 0; }
+.dice-back-icon, .dice-num-icon { position: relative; }
+/* мини-спиннер для иконок: тонкое жёлтое кольцо */
+.tge-spinner.mini {
+    width: 16px; height: 16px;
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
+    filter: drop-shadow(0 0 3px rgba(255, 200, 0, 0.4));
+}
 .dice-num, .dice-has-icon { gap: 5px; padding-left: 4px; padding-right: 4px; }
 /* «Центр» с иконкой: один пробел между названием и коэффициентом (как в «Число»), высота плитки не растёт из-за иконки */
 .dice-has-icon .dice-mode-coef { margin-left: 0; }

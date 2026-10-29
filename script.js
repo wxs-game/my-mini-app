@@ -4475,10 +4475,10 @@ const _diceTgsText = {};
 function loadDiceTgsText(urls) {
     const key = urls.join("|");
     if (_diceTgsText[key]) return _diceTgsText[key];
-    return (_diceTgsText[key] = (async () => {
+    const pr = (_diceTgsText[key] = (async () => {
         for (const url of urls) {
             try {
-                const res = await fetch(url);
+                const res = await fetch(url, { cache: "no-cache" });   // no-cache: не липнет старый 404 из кэша WebView
                 if (!res.ok) continue;
                 const buf = new Uint8Array(await res.arrayBuffer());
                 if (buf[0] === 0x1f && buf[1] === 0x8b) {
@@ -4494,6 +4494,9 @@ function loadDiceTgsText(urls) {
         }
         return null;
     })());
+    // неудачную загрузку не кэшируем — при следующей отрисовке попробуем снова
+    pr.then(t => { if (!t && _diceTgsText[key] === pr) delete _diceTgsText[key]; });
+    return pr;
 }
 
 // Монтирует .tgs в контейнер; если файла нет или Lottie недоступен — ставит png.
@@ -4504,17 +4507,33 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass) {
         el.innerHTML = '<img' + (imgClass ? ' class="' + imgClass + '"' : '') + ' src="' + fallbackPng +
             '" alt="" draggable="false" onerror="var p=this.parentNode;this.remove();if(p)p.classList.add(\'is-empty\')">';
     };
+    // пока .tgs грузится — аккуратный жёлтый спиннер
+    el.innerHTML = '<span class="tge-spinner mini"></span>';
     try {
         if (typeof lottie === "undefined") throw new Error("no lottie");
         const text = await loadDiceTgsText(urls);
         if (!text) throw new Error("not found");
         if (!el.isConnected) return;
-        el.innerHTML = "";
-        el._anim = lottie.loadAnimation({
-            container: el, renderer: "svg", loop: false, autoplay: true,
-            animationData: JSON.parse(text),
+        const data = JSON.parse(text);
+        const holder = document.createElement("span");          // анимацию строим в отдельном слое,
+        holder.className = "dice-tgs-holder";                   // спиннер убираем, когда она готова
+        holder.style.opacity = "0";
+        el.appendChild(holder);
+        const anim = lottie.loadAnimation({
+            container: holder, renderer: "svg", loop: false, autoplay: true,
+            animationData: data,
             rendererSettings: { preserveAspectRatio: "xMidYMid meet" }
         });
+        el._anim = anim;
+        let shown = false;
+        const show = () => {
+            if (shown) return; shown = true;
+            const sp = el.querySelector(".tge-spinner"); if (sp) sp.remove();
+            holder.style.opacity = "1";
+        };
+        anim.addEventListener("DOMLoaded", show);
+        anim.addEventListener("data_ready", show);
+        setTimeout(show, 400);   // страховка, если событие не придёт
     } catch (e) {
         fallback();
     }
