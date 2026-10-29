@@ -4204,9 +4204,11 @@ function upgRelease() {
 // Ставку, бросок и выплату делает Supabase (upgrader_play), клиент только показывает итог
 async function upgApi(bet, chance) {
     try {
-        const _upgP = supabase.rpc('upgrader_play', {
+        // rpc() возвращает «ленивый» thenable: КАЖДЫЙ .then() шлёт отдельный запрос.
+        // Оборачиваем в настоящий Promise, иначе netBar.track + await = два списания ставки.
+        const _upgP = Promise.resolve(supabase.rpc('upgrader_play', {
             p_init: tg?.initData || '', p_bet: bet, p_chance: chance
-        });
+        }));
         netBar.track(_upgP);
         const { data, error } = await _upgP;
         if (error) return { ok: false, error: error.message || 'Ошибка сервера' };
