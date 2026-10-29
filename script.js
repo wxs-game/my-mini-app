@@ -4427,7 +4427,7 @@ const diceGame = { cubes: 1, mode: null, busy: false, view: "main", numbers: [] 
 window.getDiceCubes = () => diceGame.cubes || 1;
 // Вероятность одного куба [выигрышных граней, всего граней].
 // Режимы 2/3 куба — компаунд: каждый куб должен попасть в выбранный исход.
-const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [4, 6], edges: [2, 6] };
+const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [2, 6], edges: [2, 6] };   // Центр = грани 3 и 4 (×2.92), Края = 1 и 6 (×2.92)
 const DICE_MODE_ORDER = ["low", "high", "even", "odd", "center", "edges", "number"];
 // 2 куба: Меньше/Больше, Чёт/Нечёт, Одинаковые (любой дубль) и Дубль (конкретные числа)
 const DICE_MODE_ORDER_2 = ["low", "high", "even", "odd", "same", "double"];
@@ -4569,8 +4569,10 @@ function renderDiceModes(animate) {
                     '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
                     '<span class="dice-mode-coef">(до ' + diceCoefText(max) + ')</span></button>';
             }
-            return '<button class="dice-tile dice-mode' + enter + '" style="--i:' + i + '" data-mode="' + k +
+            const hasIcon = (k === "center" && cubes === 1);   // иконка modecube34.tgs (грани 3 и 4)
+            return '<button class="dice-tile dice-mode' + (hasIcon ? " dice-has-icon" : "") + enter + '" style="--i:' + i + '" data-mode="' + k +
                 '" onclick="selectDiceMode(\'' + k + '\', this)">' +
+                (hasIcon ? '<span class="dice-num-icon" data-icon="modecube34"></span>' : '') +
                 '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
                 '<span class="dice-mode-coef">(' + diceCoefText(diceCoefFor(k, cubes)) + ')</span></button>';
         }).join("");
@@ -4581,6 +4583,10 @@ function renderDiceModes(animate) {
         try { el._anim && el._anim.destroy(); } catch (e) {}
     });
     box.innerHTML = html;
+    box.querySelectorAll(".dice-num-icon[data-icon]").forEach(el => {
+        const nm = el.dataset.icon;   // modecube34 → animations/dice/modecube34.tgs (запасной png)
+        mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + nm + ".tgs", DICE_NUM_IMG_DIR + nm + ".tgs"], DICE_NUM_IMG_DIR + nm + ".png", "dice-num-img");
+    });
     if (inNumbers) {
         mountDiceBackIcon(box.querySelector(".dice-back-icon"));
         const iconPrefix = diceNumIconPrefix(cubes);
@@ -4731,7 +4737,7 @@ function isDiceWin(mode, r, nums, i, rolls) {
         case "low":    return r <= 3;
         case "even":   return r % 2 === 0;
         case "odd":    return r % 2 === 1;
-        case "center": return r >= 2 && r <= 5;     // 2,3,4,5
+        case "center": return r === 3 || r === 4;   // 3 и 4
         case "edges":  return r === 1 || r === 6;   // 1 и 6
         case "number": return Array.isArray(nums) && nums.indexOf(r) !== -1;
     }

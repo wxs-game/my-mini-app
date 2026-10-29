@@ -4916,7 +4916,7 @@ img.img-pending { opacity: 0; }
 /* нет ни .tgs, ни png — иконка не занимает место, текст «Назад» ровно по центру плитки */
 .dice-back-icon.is-empty, .dice-num-icon.is-empty { display: none; }
 .dice-back-icon svg, .dice-back-icon img { width: 100%; height: 100%; object-fit: contain; }
-.dice-num { gap: 5px; padding-left: 4px; padding-right: 4px; }
+.dice-num, .dice-has-icon { gap: 5px; padding-left: 4px; padding-right: 4px; }
 .dice-num-icon {
     display: inline-flex;
     align-items: center;
