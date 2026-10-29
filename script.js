@@ -4500,10 +4500,12 @@ function loadDiceTgsText(urls) {
 }
 
 // Монтирует .tgs в контейнер; если файла нет или Lottie недоступен — ставит png.
-async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass) {
+async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
     if (!el) return;
     const fallback = () => {
-        if (!el.isConnected || !fallbackPng) return;
+        if (!el.isConnected) return;
+        if (fallbackHtml) { el.classList.remove("is-empty"); el.innerHTML = fallbackHtml; return; }
+        if (!fallbackPng) return;
         el.innerHTML = '<img' + (imgClass ? ' class="' + imgClass + '"' : '') + ' src="' + fallbackPng +
             '" alt="" draggable="false" onerror="var p=this.parentNode;this.remove();if(p)p.classList.add(\'is-empty\')">';
     };
@@ -4534,14 +4536,29 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass) {
         anim.addEventListener("DOMLoaded", show);
         anim.addEventListener("data_ready", show);
         setTimeout(show, 400);   // страховка, если событие не придёт
+        if (fallbackHtml) {
+            // если анимация нарисовалась пустой (прозрачный canvas) — показываем запасную иконку
+            setTimeout(() => {
+                try {
+                    const cv = holder.querySelector("canvas");
+                    if (!cv || !el.isConnected) return;
+                    const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+                    for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return;   // есть видимые пиксели
+                    console.warn("[dice] tgs нарисовался пустым:", urls[0]);
+                    try { anim.destroy(); } catch (e2) {}
+                    fallback();
+                } catch (e3) { /* canvas недоступен — оставляем как есть */ }
+            }, 900);
+        }
     } catch (e) {
+        console.warn("[dice] не удалось загрузить .tgs:", urls[0], e && e.message);
         fallback();
     }
 }
 
 // Иконка «Назад» — back.tgs (Lottie); если файла нет, берём images/dice/back.png.
 function mountDiceBackIcon(el) {
-    return mountDiceTgsIcon(el, [DICE_BACK_TGS], DICE_BACK_PNG);
+    return mountDiceTgsIcon(el, [DICE_BACK_TGS], null, null, '<span class="dice-back-chevron"></span>');
 }
 
 // Иконка грани «Число» / «Дубль» — modecubeN.tgs (1/3 куба) или mode2cubeN.tgs (2 куба); запасной png — modecubeN.png.

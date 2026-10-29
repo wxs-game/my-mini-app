@@ -4965,3 +4965,13 @@ img.img-pending { opacity: 0; }
     .dice-num-img { width: 20px; height: 20px; }
     .dice-num-icon { width: 20px; height: 20px; }
 }
+
+/* запасная стрелка «Назад» (как в кнопке сверху), если back.tgs не загрузился */
+.dice-back-chevron {
+    display: block;
+    width: 8px; height: 8px;
+    border-left: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
+    transform: rotate(45deg);
+    margin-left: 3px;
+}
