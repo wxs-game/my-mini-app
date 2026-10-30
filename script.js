@@ -4890,21 +4890,19 @@ async function handleDicePlay() {
                 const isFinal = i === rolls.length - 1;
                 const pass = passes[i];
                 const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
-                // Несколько кубов: пока не брошены все, выигрыш ещё не определён —
-                // удачный промежуточный бросок «зачтён» (зелёная галочка), «зашла» — только итог.
-                // «Одинаковые» / «Дубль»: первый бросок сам по себе ничего не решает — вердикта на нём нет,
-                // зачёт показываем только в режимах, где первый бросок важен (чёт, больше, число и т.д.)
-                const firstIrrelevant = (mode === "same" || mode === "double") && pass && !isFinal;
-                const counted = cubes > 1 && pass && !isFinal && !firstIrrelevant;
-                const title = cubes > 1
-                    ? (counted ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла")) + " (" + (i + 1) + "/" + cubes + ")"
-                    : undefined;
+                // Несколько кубов, промежуточный удачный бросок:
+                //  • «Одинаковые» / «Дубль» — первый куб вердикта не выносит → жёлтая галочка «Ставка зачтена»;
+                //  • остальные режимы (чёт, больше, число…) — в первом кубе вердикт есть → зелёная галочка «Ставка зашла».
+                // Выигрыш (включая итоговый бросок и режим на 1 куб) — зелёная галочка; проигрыш — красный крест.
+                const noVerdict = (mode === "same" || mode === "double") && pass && !isFinal;
+                const greenPass = pass && !noVerdict;   // вердикт есть → зелёная галочка; нет (только «Одинаковые»/«Дубль», 1-й куб) → жёлтая
+                const word = noVerdict ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла");
+                const title = cubes > 1 ? word + " (" + (i + 1) + "/" + cubes + ")" : undefined;
 
                 await window.DiceStage.play({
                     roll: rolls[i],
                     win: pass,
-                    counted,
-                    skipResult: firstIrrelevant,
+                    counted: greenPass,
                     title,
                     amountText: isFinal ? amountText : "",
                     nextRoll
