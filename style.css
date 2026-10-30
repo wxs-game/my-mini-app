@@ -3936,6 +3936,7 @@ input, textarea {
 }
 .dice-result.win  { --ring: #33291a; --disc: #f2bd42; --mark: #1d140a; --sp: #f7c948; }
 .dice-result.lose { --ring: #331a1a; --disc: #e5484d; --mark: #2a0d0e; --sp: #ff6b6b; }
+.dice-result.counted { --ring: #16301f; --disc: #2ecc71; --mark: #08210f; --sp: #4ade80; }
 
 .dr-ring  { fill: var(--ring); }
 .dr-disc  { fill: var(--disc); }

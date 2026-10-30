@@ -4622,10 +4622,12 @@ function doRenderDiceModes(animate) {
                     '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
                     '<span class="dice-mode-coef">(до ' + diceCoefText(max) + ')</span></button>';
             }
-            const hasIcon = (k === "center" && cubes === 1);   // иконка modecube34.tgs (грани 3 и 4)
+            // Центр → modecube34.tgs (грани 3 и 4), Края → modecube16.tgs (грани 1 и 6)
+            const modeIcon = cubes === 1 ? (k === "center" ? "modecube34" : (k === "edges" ? "modecube16" : "")) : "";
+            const hasIcon = !!modeIcon;
             return '<button class="dice-tile dice-mode' + (hasIcon ? " dice-has-icon" : "") + enter + '" style="--i:' + i + '" data-mode="' + k +
                 '" onclick="selectDiceMode(\'' + k + '\', this)">' +
-                (hasIcon ? '<span class="dice-num-icon" data-icon="modecube34"></span>' : '') +
+                (hasIcon ? '<span class="dice-num-icon" data-icon="' + modeIcon + '"></span>' : '') +
                 '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
                 '<span class="dice-mode-coef">(' + diceCoefText(diceCoefFor(k, cubes)) + ')</span></button>';
         }).join("");
@@ -4888,13 +4890,21 @@ async function handleDicePlay() {
                 const isFinal = i === rolls.length - 1;
                 const pass = passes[i];
                 const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
+                // Несколько кубов: пока не брошены все, выигрыш ещё не определён —
+                // удачный промежуточный бросок «зачтён» (зелёная галочка), «зашла» — только итог.
+                // «Одинаковые» / «Дубль»: первый бросок сам по себе ничего не решает — вердикта на нём нет,
+                // зачёт показываем только в режимах, где первый бросок важен (чёт, больше, число и т.д.)
+                const firstIrrelevant = (mode === "same" || mode === "double") && pass && !isFinal;
+                const counted = cubes > 1 && pass && !isFinal && !firstIrrelevant;
                 const title = cubes > 1
-                    ? (pass ? "Ставка зашла" : "Ставка не зашла") + " (" + (i + 1) + "/" + cubes + ")"
+                    ? (counted ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла")) + " (" + (i + 1) + "/" + cubes + ")"
                     : undefined;
 
                 await window.DiceStage.play({
                     roll: rolls[i],
                     win: pass,
+                    counted,
+                    skipResult: firstIrrelevant,
                     title,
                     amountText: isFinal ? amountText : "",
                     nextRoll
@@ -9380,7 +9390,7 @@ function playRoll(anim, totalMs) {
         showPreview();
     }
 
-    async function play({ roll, win, amountText, title, nextRoll }) {
+    async function play({ roll, win, counted, skipResult, amountText, title, nextRoll }) {
         const prev = $('dicePreview'), rollEl = $('diceRoll'), res = $('diceResult');
         if (!prev || !rollEl || !res) return;
 
@@ -9404,10 +9414,21 @@ function playRoll(anim, totalMs) {
 
         // 3) кубик плавно уходит, появляется галочка / крестик
         rollEl.classList.add('away');
+        if (skipResult) {
+            // бросок без вердикта: просто даём кубику уйти и переходим к следующему
+            await wait(350);
+            if (box && box.parentNode === rollEl) rollEl.removeChild(box);
+            rollEl.className = 'dice-layer dice-roll';
+            prepared = null;
+            if (nextRoll) await prepare(nextRoll);
+            await wait(200);
+            return;
+        }
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
         res.innerHTML = resultHtml(win, amountText, title);
-        res.classList.toggle('win', win);
+        res.classList.toggle('win', win && !counted);
+        res.classList.toggle('counted', !!counted);   // зелёная галочка «Ставка зачтена»
         res.classList.toggle('lose', !win);
         reflow(res);
         res.style.transition = '';
