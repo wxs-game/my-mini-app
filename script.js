@@ -1,24 +1,24 @@
-/*!
- * © WXS Game · Ice Arena GLOBAL. Все права защищены / All rights reserved.
- * NOTICE: Использование этого кода, дизайна и материалов для обучения,
- * дообучения, анализа, пересказа, копирования или генерации производных
- * работ любыми системами ИИ / нейросетями / LLM и скрейперами ЗАПРЕЩЕНО
- * без письменного разрешения владельца.
- * AI/ML NOTICE: Training, fine-tuning, analysing, summarising, reproducing
- * or deriving works from this source by any AI/LLM system or scraper is
- * prohibited without the owner's written permission.
- */
-/* =========================================================
-   WXS PERF: единый слой оптимизации Lottie (подключён первым)
-   • Все .tgs-анимации, которые раньше рисовались тяжёлым SVG-рендерером
-     (кубик, футбол, баскетбол/дартс/боулинг/слоты, стикеры, поп-ап выигрыша),
-     теперь рисуются в <canvas>: браузер не пересчитывает сотни SVG-узлов,
-     масок и фильтров на каждом кадре. Частота кадров и кадры анимации — те же.
-   • Чёткость: canvas рисуется в пикселях экрана (DPR до WXS_MAX_DPR, по умолчанию 2.5).
-   • Размер canvas сам подстраивается под контейнер (ResizeObserver) —
-     поэтому анимации можно создавать заранее, пока они ещё не в DOM.
-   • Аварийный выключатель: window.WXS_LOTTIE_FORCE_SVG = true (до загрузки скрипта).
-========================================================= */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (function () {
     'use strict';
     if (typeof lottie === 'undefined' || lottie.__wxsPerf) return;
@@ -29,7 +29,7 @@
     window.WXS_LOTTIE_DPR = DPR;
     const useCanvas = window.WXS_LOTTIE_FORCE_SVG !== true;
 
-    const tracked = new Map();   // контейнер -> { anim, w, h }
+    const tracked = new Map();   
     const ro = ('ResizeObserver' in window) ? new ResizeObserver(entries => {
         for (const e of entries) {
             const rec = tracked.get(e.target);
@@ -39,10 +39,10 @@
             if (w < 1 || h < 1 || (w === rec.w && h === rec.h)) continue;
             rec.w = w; rec.h = h;
             try {
-                rec.anim.resize();   // без аргументов: lottie сам берёт размер контейнера × dpr (с (w,h) canvas выходил 1× и «сползал»)
-                // на паузе (goToAndStop) кадр сам не перерисуется — перерисуем
+                rec.anim.resize();   
+                
                 if (rec.anim.isPaused) rec.anim.goToAndStop(rec.anim.currentFrame, true);
-            } catch (err) { /* анимацию уже уничтожили */ }
+            } catch (err) {  }
         }
     }) : null;
 
@@ -74,18 +74,18 @@
             }
         });
         let anim;
-        try { anim = origLoad(o); } catch (err) { return origLoad(opts); }   // не вышло — старый SVG
+        try { anim = origLoad(o); } catch (err) { return origLoad(opts); }   
         return track(opts.container, anim);
     };
 })();
 
 (function () {
-// ==========================================
-// 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
-// ==========================================
+
+
+
 const tg = window.Telegram?.WebApp;
     
-// (экран "Доступ только через Telegram"), который не зависит от этого файла.
+
 const isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
 if (!isRealTelegramLaunch) {
     console.warn('Приложение открыто не из Telegram — инициализация остановлена.');
@@ -95,12 +95,12 @@ if (!isRealTelegramLaunch) {
 tg.ready();
 tg.expand();
 
-// ==========================================
-// ЗАЩИТА ИНТЕРФЕЙСА: без боковых свайпов, без "оттягивания",
-// без выделения текста
-// ==========================================
+
+
+
+
 (function setupTouchGuards() {
-    // Telegram: запрет закрытия приложения свайпом вниз
+    
     try { if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes(); } catch (e) {}
 
     const asElement = (n) => (n && n.nodeType === 1) ? n : (n && n.parentElement) || null;
@@ -109,7 +109,7 @@ tg.expand();
         return !!(el && el.closest && el.closest('input, textarea, [contenteditable="true"]'));
     };
 
-    // --- Запрет выделения текста (кроме полей ввода) ---
+    
     document.addEventListener('selectstart', (e) => {
         if (!isEditable(e.target)) e.preventDefault();
     }, true);
@@ -121,7 +121,7 @@ tg.expand();
         if (sel && !sel.isCollapsed) sel.removeAllRanges();
     });
 
-    // --- Страница никогда не должна быть сдвинута по горизонтали ---
+    
     const resetHScroll = () => {
         if (window.scrollX !== 0) {
             window.scrollTo({ left: 0, top: window.scrollY, behavior: 'instant' });
@@ -130,7 +130,7 @@ tg.expand();
     window.addEventListener('scroll', resetHScroll, { passive: true });
     document.addEventListener('focusout', () => setTimeout(resetHScroll, 60));
 
-    // --- Блок боковых свайпов и "резинки" сверху/снизу ---
+    
     let sx = 0, sy = 0;
     document.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
@@ -148,8 +148,8 @@ tg.expand();
 
         const horizontal = Math.abs(dx) > Math.abs(dy);
 
-        // Если палец на внутреннем прокручиваемом блоке (лента, список, модалка),
-        // и он ещё может ехать в эту сторону — не мешаем.
+        
+        
         let el = asElement(e.target);
         while (el && el !== document.body && el !== document.documentElement) {
             const cs = getComputedStyle(el);
@@ -176,8 +176,8 @@ tg.expand();
             return;
         }
 
-        // Вертикально: блокируем только когда страница уже у верха/низа (нет "оттягивания")
-        const se = document.body;   // страница прокручивается body (окно не скроллится)
+        
+        const se = document.body;   
         const pageAtTop = se.scrollTop <= 0;
         const pageAtBottom = se.scrollTop + se.clientHeight >= se.scrollHeight - 1;
         if ((dy > 0 && pageAtTop) || (dy < 0 && pageAtBottom)) {
@@ -186,17 +186,17 @@ tg.expand();
     }, { passive: false });
 })();
 
-// ==========================================
-// 2. ВИБРАЦИЯ (Telegram HapticFeedback)
-// ==========================================
+
+
+
 window.tg = tg;
 
 (function setupHaptics() {
     const hf = tg && tg.HapticFeedback;
 
-    // Защита от "двойной" вибрации: если два impact-вызова приходят
-    // почти одновременно (глобальный клик + вибрация самой игры),
-    // второй отбрасывается.
+    
+    
+    
     if (hf && typeof hf.impactOccurred === 'function' && !hf.__wrapped) {
         try {
             const origImpact = hf.impactOccurred.bind(hf);
@@ -212,7 +212,7 @@ window.tg = tg;
         } catch (e) {}
     }
 
-    // type: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'select' | 'success' | 'error' | 'warning'
+    
     window.haptic = function (type) {
         type = type || 'light';
         try {
@@ -226,9 +226,9 @@ window.tg = tg;
         } catch (e) {}
     };
 
-    // Вибрация на КАЖДЫЙ тап по кнопкам, плиткам игр, мин, 
-    // нижнему меню и любым элементам с onclick. Слушатель один, на уровне
-    // документа, поэтому работает и для элементов, которые создаются позже.
+    
+    
+    
     const CLICKABLE = 'button, a, [onclick], .game, .nav-item, .mines-tile, .mine-tile, .pct-btn, .action, label, select, input[type="checkbox"], input[type="radio"]';
     document.addEventListener('click', function (e) {
         const el = e.target && e.target.closest ? e.target.closest(CLICKABLE) : null;
@@ -243,7 +243,7 @@ const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Переменные состояния пользователя
+
 let currentBalance = 0.00;
 let currentTurnover = 0.00;
 let currentMaxWin = 0.00;
@@ -253,9 +253,9 @@ let currentWinsCount = 0;
 let currentDeposits = 0.00;
 let currentWithdrawals = 0.00;
 
-// ==========================================
-// СИСТЕМА УРОВНЕЙ (на основе очков)
-// ==========================================
+
+
+
 const LEVELS = [
     { level: 1, points: 0,     title: "Новичок" },
     { level: 2, points: 5000,  title: "Гой" },
@@ -320,11 +320,11 @@ function updateLevelUI() {
     if (profileLevelFill) profileLevelFill.style.width = percentRounded + "%";
 }
 
-// ==========================================
-// ЛОГИКА PROVABLY FAIR (SHA-256) ДЛЯ ИГРЫ CRASH
-// ==========================================
 
-// 1. Генерация SHA-256 хеша (Web Crypto API)
+
+
+
+
 async function generateSHA256(message) {
     const msgUint8 = new TextEncoder().encode(message);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
@@ -332,7 +332,7 @@ async function generateSHA256(message) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 2. Случайная генерация соли (Secret Key)
+
 function generateRandomSeed(length = 32) {
     const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -344,58 +344,58 @@ function generateRandomSeed(length = 32) {
     return result;
 }
 
-// ============================================================
-// RTP игры (Return To Player) — доля от каждой ставки, которая в среднем
-// (по всем раундам и любой стратегии кэшаута) возвращается игрокам.
-// House edge заведения = 1 - CRASH_RTP. Меняйте ТОЛЬКО эту константу —
-// и вероятность мгновенного краха на 1.00x, и скорость роста коэффициента
-// в calculateCrashPoint() ниже автоматически подстроятся под новое
-// значение, ничего больше трогать не нужно.
-const CRASH_RTP = 0.95;
-// ============================================================
 
-// 3. Расчет коэффициента на базе соли и хеша.
-//
-// Математика (стандартная provably-fair формула crash-игр): пусть X —
-// равномерно случайное число в [0, 1), полученное из хеша раунда.
-// Коэффициент считается как crash = CRASH_RTP / (1 - X).
-//
-// Тогда для любого m >= 1 верно: P(crash > m) = CRASH_RTP / m, а значит
-// матожидание выплаты игроку, кэшаутнувшемуся на любом фиксированном m,
-// равно m * P(crash >= m) = CRASH_RTP — ровно заявленный RTP, для КАЖДОГО
-// m, а не только "в среднем по больнице". Мгновенный крах на 1.00x
-// получается из этой же формулы сам по себе (когда X настолько мало, что
-// crash < 1.00 и округляется вверх до 1.00) — его частота автоматически
-// равна ровно (1 - CRASH_RTP), без отдельной "магической" ветки.
-// ВАЖНО: расчёт делает ТОЛЬКО сервер (crash_secure.sql): seed = SHA-256(ключ + ":crash"),
-// а публичный хеш раунда = SHA-256(ключ). Клиент точку краша заранее не знает.
-// Эта функция осталась лишь для самопроверки раунда после краша.
-// — тот же расчёт делает сервер в crash_tick() (crash_server.sql) —
-// если меняешь формулу тут, меняй и там.
-//
-// Новое распределение: P(crash >= m) = m^(-CRASH_TAIL_ALPHA).
-// При alpha = 1.5 крах на 4.00x и выше выпадает примерно раз в 8 игр
-// (12.5%), на 3.00x и выше — ~19%, на 2.00x и выше — ~35%.
+
+
+
+
+
+
+const CRASH_RTP = 0.95;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const CRASH_TAIL_ALPHA = 1.5;
 function calculateCrashPoint(seed, salt) {
     let hash = seed + salt;
     let hex = hash.substring(0, 8);
     let intVal = parseInt(hex, 16);
-    const maxVal = 4294967296; // 2^32 — диапазон intVal (8 hex-символов)
+    const maxVal = 4294967296; 
 
-    const u = (intVal + 1) / maxVal;                 // (0, 1]
-    const raw = Math.pow(u, -1 / CRASH_TAIL_ALPHA);  // >= 1
+    const u = (intVal + 1) / maxVal;                 
+    const raw = Math.pow(u, -1 / CRASH_TAIL_ALPHA);  
     let crash = Math.floor(raw * 100) / 100;
 
     crash = Math.max(1.00, crash);
     return Math.min(crash, 1000.00);
 }
 
-// Переменные состояния раунда — теперь это просто зеркало того, что лежит
-// в общей строке раунда (crashLobby.round), см. applyCrashRound() ниже.
-// Раунд один на ВСЕХ игроков сразу, поэтому ничего не генерируется на
-// каждом клиенте отдельно — только тем клиентом, который реально создаёт
-// новую строку в public.crash_rounds (см. generateCrashRoundSecrets()).
+
+
+
+
+
 let currentCrashState = {
     salt: '',
     hash: '',
@@ -403,9 +403,9 @@ let currentCrashState = {
     isFinished: false
 };
 
-// Генерирует hash/salt/crashPoint для НОВОГО раунда — вызывается только
-// тем клиентом, который в этот момент реально создаёт строку раунда в
-// Supabase (см. getOrCreateCrashRound() / maybeAdvanceCrash()).
+
+
+
 async function generateCrashRoundSecrets() {
     const salt = generateRandomSeed(32);
     const hash = await generateSHA256(salt);
@@ -413,16 +413,16 @@ async function generateCrashRoundSecrets() {
     return { salt, hash, crashPoint };
 }
 
-// Вызывать при выходе со страницы краша — прячет раскрытый ключ обратно,
-// чтобы при следующем заходе он снова появился только после нового краша.
+
+
 function hideCrashRoundKey() {
     const keyInput = document.getElementById('crashRoundKeyInput');
     if (keyInput) keyInput.value = '';
 }
 
-// ==========================================
-// ОБРАБОТЧИКИ СОБЫТИЙ ОКНА И КОПИРОВАНИЯ
-// ==========================================
+
+
+
 function openCrashFairnessModal() {
     document.getElementById('crashFairnessModal')?.classList.remove('hidden');
     document.body.classList.add('fairness-modal-open');
@@ -439,15 +439,15 @@ function closeCrashFairnessModal() {
     }
 }
 
-// ==========================================
-// ПЕРЕТЯГИВАНИЕ ВНИЗ ДЛЯ ЗАКРЫТИЯ ДОК ЧЕСТНОСТИ
-// ==========================================
+
+
+
 (function initCrashFairnessDrag() {
     const handle = document.getElementById('crashFairnessDragHandle');
     const content = document.getElementById('crashFairnessContent');
     if (!handle || !content) return;
 
-    const CLOSE_THRESHOLD = 80; // px, после которых плашка закрывается при отпускании
+    const CLOSE_THRESHOLD = 80; 
     let startY = 0;
     let currentY = 0;
     let dragging = false;
@@ -469,7 +469,7 @@ function closeCrashFairnessModal() {
         if (!dragging) return;
         const y = (e.touches ? e.touches[0].clientY : e.clientY);
         const delta = y - startY;
-        currentY = Math.max(0, delta); // тянуть можно только вниз
+        currentY = Math.max(0, delta); 
         if (currentY > 4) moved = true;
         content.style.transform = `translateY(${currentY}px)`;
         if (e.cancelable) e.preventDefault();
@@ -495,7 +495,7 @@ function closeCrashFairnessModal() {
     handle.addEventListener('touchstart', onPointerDown, { passive: true });
     handle.addEventListener('mousedown', onPointerDown);
 
-    // Просто тап по полоске-хэндлу без перетягивания — закрывает меню
+    
     handle.addEventListener('click', () => {
         if (!moved) {
             closeCrashFairnessModal();
@@ -524,9 +524,9 @@ window.closeCrashFairnessModal = closeCrashFairnessModal;
 window.copyCrashHash = copyCrashHash;
 window.copyCrashKey = copyCrashKey;
 
-// ==========================================
-// 2. ЗАГРУЗКА И СОХРАНЕНИЕ ДАННЫХ В SUPABASE
-// ==========================================
+
+
+
 
 function updateProfileUI(data) {
     const name = data.nickname || data.username || "Игрок";
@@ -552,12 +552,12 @@ function updateProfileUI(data) {
     setUIBalance(data.balance);
 }
 
-// Создание/обновление профиля идёт через Edge Function ensure-player:
-// сервер сам берёт id, ник и аватар из ПОДПИСАННОГО initData, поэтому
-// подменить чужой профиль (отправив чужой telegram_id) больше нельзя.
+
+
+
 async function ensurePlayerSecure() {
-    // Мобильная сеть бывает нестабильной: при сетевой ошибке или битом ответе
-    // пробуем ещё до 2 раз с паузой (ошибки сервера вроде INVALID_INIT_DATA не повторяем).
+    
+    
     let last = { data: null, error: 'NETWORK' };
     for (let attempt = 0; attempt < 3; attempt++) {
         if (attempt) await new Promise(r => setTimeout(r, attempt * 900));
@@ -574,7 +574,7 @@ async function ensurePlayerSecure() {
             const j = await res.json().catch(() => null);
             if (j && j.ok && j.player) return { data: j.player, error: null };
             last = { data: null, error: j?.error || ('HTTP_' + res.status) };
-            if (j && j.error) return last;          // сервер ответил осмысленной ошибкой
+            if (j && j.error) return last;          
         } catch (e) {
             last = { data: null, error: 'NETWORK' };
         }
@@ -626,10 +626,10 @@ async function loadUserData() {
     }
 
     if (!data) {
-        // Создание нового игрока (и обновление ника/аватара для существующего)
-        // теперь идёт через защищённую RPC-функцию ensure_player: стартовый
-        // баланс 100.00 $ задаётся на сервере, а не тем, что пришлёт клиент —
-        // прямой INSERT/UPDATE в wxs_game с браузера запрещён на уровне БД.
+        
+        
+        
+        
         const { data: newUser, error: createError } = await ensurePlayerSecure();
 
         if (createError) {
@@ -654,86 +654,86 @@ async function loadUserData() {
     updateProfileUI(data);
 }
 
-/* =========================
-   БЕГУЩАЯ СТРОКА СО СТАВКАМИ ИГРОКОВ (LIVE WINS)
-   Ставки хранятся в таблице public.live_bets в Supabase — поэтому лента
-   переживает перезаход в приложение (последние 10 ставок подгружаются
-   при старте) и видна ВСЕМ игрокам: новые строки/обновления в таблице
-   ловятся через Supabase Realtime (postgres_changes на INSERT и UPDATE),
-   так что у каждого открытого приложения лента обновляется вживую,
-   включая чужие ставки и их выигрыши.
 
-   Когда игрок делает ставку — сразу пишется строка с суммой ставки.
-   Если позже он выигрывает с множителем от 1.3x — та же строка
-   обновляется (UPDATE) и в ленте вместо "просто ставки" появляется
-   "ставка → выигрыш". Проигрыши и выигрыши меньше 1.3x строку не меняют.
 
-   Требуется один раз выполнить в Supabase (SQL Editor):
 
-   create table if not exists public.live_bets (
-       id bigint generated always as identity primary key,
-       telegram_id bigint,
-       name text not null,
-       amount numeric not null,
-       game text not null,
-       win_amount numeric,
-       multiplier numeric,
-       result text,
-       resolved_at timestamptz,
-       created_at timestamptz not null default now()
-   );
-   alter table public.live_bets enable row level security;
-   create policy "live_bets_select_all" on public.live_bets for select using (true);
-   create policy "live_bets_insert_all" on public.live_bets for insert with check (true);
-   create policy "live_bets_update_all" on public.live_bets for update using (true) with check (true);
-   alter publication supabase_realtime add table public.live_bets;
 
-   (И включить Realtime для таблицы live_bets в Database → Replication,
-   если ALTER PUBLICATION выше почему-то не сработает автоматически.)
 
-   Если таблица live_bets уже существует (создана до полей result/resolved_at
-   для вкладки "Действия" — начало и конец каждой ставки), докатить миграцией:
 
-   alter table public.live_bets add column if not exists result text;
-   alter table public.live_bets add column if not exists resolved_at timestamptz;
-========================= */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const LIVE_BETS_TABLE = 'live_bets';
 const LIVE_BETS_MAX = 10;
-// Сколько последних выигрышей держим в ленте Live Wins (листается пальцем)
+
 const LIVE_WINS_MAX = 10;
-// Сколько завершённых ставок забираем из БД, чтобы среди них набралось
-// LIVE_WINS_MAX заметных выигрышей (проигрыши и мелкие ставки отсеиваются)
+
+
 const LIVE_BETS_FETCH = 100;
-// Лента LIVE WINS обновляется опросом (реалтайм снят из-за нагрузки на базу)
+
 const LIVE_BETS_POLL_MS = 10000;
 let liveBetsPollTimer = null;
 const ICE_ARENA_LIVE_GAME = 'Айс Арена';
-// От какого множителя выигрыш вообще показываем в ленте как "ставка → выигрыш"
+
 const LIVE_BET_WIN_THRESHOLD = 1.3;
-// Минимум записей в одном "круге" ленты — если реальных ставок мало,
-// контент дублируется до этого числа, чтобы бегущая строка не обрывалась
-// пустым просветом посреди экрана при зацикливании анимации.
+
+
+
 const LIVE_BETS_MIN_LOOP_ITEMS = 8;
 let liveBetsQueue = [];
 
-// DOM-элементы уже отрисованных карточек в свайпаемой ленте, по id ставки.
-// Благодаря этой карте renderLiveBetsTicker не пересоздаёт всю ленту с нуля
-// при каждом обновлении, а точечно добавляет/убирает карточки — это и
-// позволяет анимировать только новые карточки и не сбрасывать скролл.
+
+
+
+
 let liveWinCardEls = new Map();
 let lastPinnedLiveWinId = null;
 
-// Задержка между появлением карточек при самой первой отрисовке ленты
-// (когда пользователь только что открыл/вернулся в приложение) — чтобы
-// карточки "подтягивались" одна за другой, а не выскакивали все разом.
+
+
+
 const LIVE_WINS_STAGGER_MS = 90;
 
-// Инжектим CSS анимации один раз — плавное появление новой карточки
-// (fade + лёгкий сдвиг вверх) вместо мгновенной подмены содержимого.
-// animation-fill-mode: backwards держит карточку в "исходном" (невидимом)
-// состоянии на всё время animation-delay, иначе при пакетном появлении
-// (see LIVE_WINS_STAGGER_MS) все карточки на миг мелькнули бы полностью
-// видимыми ещё до начала своей анимации.
+
+
+
+
+
+
 (function injectLiveWinsAnimationStyles() {
     if (document.getElementById('liveWinsAnimStyles')) return;
     const style = document.createElement('style');
@@ -754,9 +754,9 @@ async function initLiveBetsFeed() {
 
     await loadLiveBetsHistory();
 
-    // Реалтайм на live_bets снят намеренно: Supabase рассылал КАЖДУЮ ставку
-    // и каждый выигрыш всем подключённым клиентам, а на Free/Nano это заметная
-    // доля CPU. Лента декоративная — ей достаточно опроса раз в 10 секунд.
+    
+    
+    
     if (!liveBetsPollTimer) {
         liveBetsPollTimer = setInterval(() => {
             if (!document.hidden) loadLiveBetsHistory();
@@ -764,7 +764,7 @@ async function initLiveBetsFeed() {
     }
 }
 
-// Подгружает последние 10 ставок (своих и чужих) из БД при открытии приложения
+
 async function loadLiveBetsHistory() {
     try {
         const { data, error } = await supabase
@@ -780,7 +780,7 @@ async function loadLiveBetsHistory() {
             return;
         }
 
-        // data — от новых к старым; оставляем только заметные выигрыши, последние LIVE_WINS_MAX
+        
         liveBetsQueue = (data || [])
             .filter(isLiveTickerItem)
             .slice(0, LIVE_WINS_MAX)
@@ -792,10 +792,10 @@ async function loadLiveBetsHistory() {
     }
 }
 
-// Вызывается сразу после успешного списания ставки в каждой игре
-// (Мины, Краш, Колесо) — сохраняет ставку в Supabase, откуда её
-// через Realtime увидят все игроки (включая нас самих). Возвращает id
-// созданной строки — он нужен, чтобы потом дописать в неё выигрыш.
+
+
+
+
 async function broadcastLiveBet(amount, gameLabel) {
     const tgUser = tg?.initDataUnsafe?.user;
     const nameFromUI = document.getElementById('username')?.textContent?.trim();
@@ -817,16 +817,16 @@ async function broadcastLiveBet(amount, gameLabel) {
         console.error('Не удалось сохранить ставку в live_bets:', e);
         return null;
     }
-    // Realtime-подписка добавит эту запись в ленту сама (и себе, и всем
-    // остальным) — локально ничего не дублируем.
+    
+    
 }
 
-// Вызывается по завершении КАЖДОЙ ставки (Мины/Краш — на "Забрать" или при
-// проигрыше, Колесо — по итогу раунда, каким бы он ни был). Всегда
-// дописывает время окончания (resolved_at) и результат — это и есть данные
-// для глобальной вкладки "Действия" (начало ставки → её конец). Бегущая
-// строка LIVE WINS по-прежнему показывает только заметные выигрыши — это
-// решается отдельно, через isLiveTickerWin(), а не здесь.
+
+
+
+
+
+
 async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
     if (!liveBetId) return;
 
@@ -841,9 +841,9 @@ async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
         resolved_at: new Date().toISOString()
     };
 
-    // Показываем стрелку "ставка → выигрыш" у автора ставки сразу же, не
-    // дожидаясь ответа сервера — так это гарантированно видно на своём
-    // экране, даже если запись в БД по какой-то причине задержится.
+    
+    
+    
     patchLiveBetLocally(liveBetId, patch);
 
     try {
@@ -855,11 +855,11 @@ async function resolveLiveBetWin(liveBetId, betAmount, winAmount) {
     } catch (e) {
         console.error('Не удалось обновить live_bets:', e);
     }
-    // Остальным игрокам обновление принесёт Realtime-подписка (UPDATE) —
-    // при условии, что запись успешно сохранилась в БД.
+    
+    
 }
 
-// Точечно обновляет уже показанную запись в ленте по id, не трогая остальные
+
 function patchLiveBetLocally(id, patch) {
     const idx = liveBetsQueue.findIndex(b => String(b.id) === String(id));
     if (idx === -1) return;
@@ -876,11 +876,11 @@ function addLiveBetToTicker(bet) {
 }
 
 function updateLiveBetInTicker(updatedBet) {
-    // Supabase иногда отдаёт bigint id как строку в Realtime-payload (в
-    // отличие от обычного select через REST) — сравниваем как строки,
-    // чтобы обновление всегда находило нужную запись независимо от типа.
+    
+    
+    
     const idx = liveBetsQueue.findIndex(b => String(b.id) === String(updatedBet.id));
-    if (idx === -1) return; // запись уже выпала из последних 10 — не показываем задним числом
+    if (idx === -1) return; 
     liveBetsQueue[idx] = updatedBet;
     renderLiveBetsTicker();
 }
@@ -905,14 +905,14 @@ function renderLiveBetsTicker() {
     const scroll = document.getElementById('liveWinsScroll');
     if (!pinned || !scroll) return;
 
-    // В этой секции (в отличие от старой бегущей строки) показываем не
-    // все подряд ставки, а только те, что доросли до выигрыша от
-    // LIVE_BET_WIN_THRESHOLD — именно так подписан пустой стейт
-    // ("Пока нет крупных выигрышей").
+    
+    
+    
+    
     const tickerItems = liveBetsQueue.filter(isLiveTickerItem);
     const bigWins = liveBetsQueue.filter(isLiveTickerWin);
 
-    // --- Закреплённая карточка "Выигрыш дня" — крупнейший из загруженных ---
+    
     if (bigWins.length === 0) {
         pinned.innerHTML =
             '<span class="live-win-pinned-label">🏆 Выигрыш дня</span>' +
@@ -936,22 +936,22 @@ function renderLiveBetsTicker() {
                 '<img class="live-wins-item-icon" src="images/crypto/tether.png" alt="USDT" draggable="false">' +
             '</span>';
 
-        // Перезапускаем анимацию появления только когда реально сменился
-        // лидер (иначе при каждом ре-рендере пиновая карточка бы моргала).
+        
+        
         if (isNewPin) {
             pinned.classList.remove('live-win-card--enter');
-            void pinned.offsetWidth; // форсируем reflow, чтобы анимация точно перезапустилась
+            void pinned.offsetWidth; 
             pinned.classList.add('live-win-card--enter');
         }
     }
 
-    // --- Свайпаемый список последних крупных выигрышей ---
-    // Самые новые выигрыши — в начало списка.
+    
+    
     const ordered = bigWins.slice().reverse();
     renderLiveWinsScrollList(scroll, ordered);
 }
 
-// Создаёт DOM-карточку одного выигрыша в свайпаемой ленте.
+
 function createLiveWinCardEl(bet, animateEnter) {
     const el = document.createElement('div');
     el.className = 'live-win-card' + (animateEnter ? ' live-win-card--enter' : '');
@@ -966,13 +966,13 @@ function createLiveWinCardEl(bet, animateEnter) {
     return el;
 }
 
-// Точечно обновляет свайпаемую ленту выигрышей вместо полной пересборки
-// innerHTML — так лента не "телепортирует" пользователя к началу, если он
-// в этот момент пролистал её куда-то ещё (например, смотрит самую старую,
-// десятую, карточку). Новая карточка вставляется на своё место с анимацией
-// появления, устаревшая — просто убирается из DOM, а позиция скролла
-// компенсируется на ширину добавленного, чтобы видимое содержимое не
-// прыгало у пользователя перед глазами.
+
+
+
+
+
+
+
 function renderLiveWinsScrollList(scroll, ordered) {
     if (ordered.length === 0) {
         scroll.innerHTML = '<span class="live-wins-empty">Пока нет крупных выигрышей</span>';
@@ -980,9 +980,9 @@ function renderLiveWinsScrollList(scroll, ordered) {
         return;
     }
 
-    // Первая отрисовка (например, пользователь только что открыл или
-    // вернулся в приложение) — рисуем карточки с анимацией появления
-    // по очереди, с нарастающей задержкой, а не все разом.
+    
+    
+    
     if (liveWinCardEls.size === 0 || scroll.querySelector('.live-wins-empty')) {
         scroll.innerHTML = '';
         ordered.forEach((bet, idx) => {
@@ -996,10 +996,10 @@ function renderLiveWinsScrollList(scroll, ordered) {
 
     const desiredIds = ordered.map((bet) => String(bet.id));
 
-    // 1) Убираем карточки, которых больше нет в списке (выпали из очереди
-    //    последних ставок). Если пользователь как раз смотрел именно эту
-    //    карточку в самом конце ленты — браузер сам аккуратно подожмёт
-    //    scrollLeft до нового максимума, и она просто "уедет" за край.
+    
+    
+    
+    
     Array.from(liveWinCardEls.keys()).forEach((id) => {
         if (!desiredIds.includes(id)) {
             const el = liveWinCardEls.get(id);
@@ -1008,12 +1008,12 @@ function renderLiveWinsScrollList(scroll, ordered) {
         }
     });
 
-    // 2) Запоминаем позицию и ширину ленты ДО вставки новых карточек.
+    
     const scrollLeftBefore = scroll.scrollLeft;
     const scrollWidthBefore = scroll.scrollWidth;
 
-    // 3) Расставляем карточки в нужном порядке: существующие — переставляем
-    //    без анимации, новые — создаём с анимацией появления.
+    
+    
     let prevEl = null;
     ordered.forEach((bet) => {
         const id = String(bet.id);
@@ -1030,21 +1030,21 @@ function renderLiveWinsScrollList(scroll, ordered) {
         prevEl = el;
     });
 
-    // 4) Компенсируем добавленную ширину: если пользователь был не в самом
-    //    начале ленты, сдвигаем scrollLeft ровно на столько же, на сколько
-    //    выросла лента слева от него — визуально для него ничего не
-    //    прыгает, просто где-то за пределами экрана появилась новая
-    //    карточка. Если же он и так был в начале — ничего не трогаем,
-    //    и он увидит, как новая карточка красиво появляется на его глазах.
+    
+    
+    
+    
+    
+    
     const addedWidth = scroll.scrollWidth - scrollWidthBefore;
     if (addedWidth > 0 && scrollLeftBefore > 0.5) {
         scroll.scrollLeft = scrollLeftBefore + addedWidth;
     }
 }
 
-/* =========================
-   БЕЗОПАСНАЯ РАБОТА С ДЕНЬГАМИ
-========================= */
+
+
+
 
 function roundMoney(value) {
     const n = Number(value);
@@ -1052,18 +1052,18 @@ function roundMoney(value) {
     return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-/* =========================
-   ЕДИНАЯ ЛОГИКА ПОЛЯ СТАВКИ (Мины / Краш)
-   Кнопки ½ / x2 / MAX и защита поля от некорректных чисел
-   работают одинаково во всех трёх играх.
-========================= */
+
+
+
+
+
 
 const MIN_BET = 0.10;
 
-// Применяет множитель (½ или x2) к текущему значению поля ставки.
-// Пустое/некорректное значение → минимальная ставка.
-// Итог всегда зажат в диапазон [MIN_BET; currentBalance] — выше баланса
-// сумма никогда не выставляется, даже кнопкой x2.
+
+
+
+
 function applyBetFactor(input, factor) {
     if (!input) return;
     let current = parseFloat(input.value);
@@ -1082,15 +1082,15 @@ function applyBetFactor(input, factor) {
     input.value = current.toFixed(2);
 }
 
-// Кнопка MAX — ставит в поле весь доступный баланс.
+
 function applyBetMax(input) {
     if (!input) return;
     input.value = roundMoney(Math.max(0, currentBalance)).toFixed(2);
 }
 
-// При потере фокуса поля ставки (после ручного ввода с клавиатуры)
-// значение проверяется и зажимается тем же диапазоном [MIN_BET; currentBalance],
-// чтобы вручную нельзя было вписать сумму выше баланса или отрицательное число.
+
+
+
 function clampBetInputOnBlur(e) {
     const input = e.target;
     if (!input || input.value.trim() === '') return;
@@ -1106,8 +1106,8 @@ function clampBetInputOnBlur(e) {
     input.value = v.toFixed(2);
 }
 
-// Блокирует символы, которые ломают number-поле на некоторых мобильных
-// клавиатурах (научная запись "e", повторные "+"/"-").
+
+
 function blockInvalidBetKeys(e) {
     if (e.key === 'e' || e.key === 'E' || e.key === '+' || e.key === '-') {
         e.preventDefault();
@@ -1153,28 +1153,28 @@ function restoreBalanceState(snap) {
 
 let saveQueue = Promise.resolve();
 
-/* =========================
-   ЗАЩИЩЁННЫЕ ДЕНЕЖНЫЕ ОПЕРАЦИИ (через Supabase RPC)
-   Баланс больше НИКОГДА не отправляется с клиента готовым числом —
-   раньше saveUserData() делал обычный .update({ balance: currentBalance,
-   ... }), а currentBalance можно было переписать прямо в консоли
-   браузера перед вызовом. Теперь клиент может только ПОПРОСИТЬ
-   сервер списать ставку / начислить выигрыш / списать на вывод —
-   place_bet/resolve_win/request_withdrawal сами атомарно проверяют
-   баланс и сами меняют цифру в Supabase (см. supabase_security_v2.sql).
-   Прямой UPDATE в wxs_game с клиентским ключом запрещён на уровне БД,
-   поэтому даже полностью переписанный script.js не даст списать
-   больше, чем реально есть на счету, или начислить себе выигрыш
-   без сервера.
-========================= */
 
 
-/* =========================
-   КРАШ: ставка / очередь / кэшаут делает СЕРВЕР (crash_bet, crash_queue_bet,
-   crash_promote, crash_cashout). Клиент больше не пишет в crash_bets /
-   crash_queue / crash_rounds и не присылает сумму выигрыша: сервер сам берёт
-   ставку из своей таблицы и считает множитель по своему времени.
-========================= */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function crashRpc(fn, args) {
     try {
         const p = Promise.resolve(supabase.rpc(fn, Object.assign({ p_init: tg?.initData || '' }, args || {})));
@@ -1189,7 +1189,7 @@ async function crashRpc(fn, args) {
 
 async function placeBetServer(amount, gameLabel) {
     const tgUser = tg?.initDataUnsafe?.user;
-    if (!tgUser) return { ok: true, balance: currentBalance }; // запуск вне Telegram — локальный демо-режим
+    if (!tgUser) return { ok: true, balance: currentBalance }; 
 
     const runCall = () => supabase.rpc('place_bet', {
         p_telegram_id: tgUser.id,
@@ -1241,9 +1241,9 @@ async function resolveWinServer(winAmount, multiplier) {
     }
 }
 
-// Ретраит начисление выигрыша (как раньше saveUserDataWithRetry) —
-// используется там, где деньги уже "выиграны" и повторная попытка
-// важнее, чем быстрый отказ.
+
+
+
 async function resolveWinServerWithRetry(winAmount, multiplier, attempts = 2) {
     let last = { ok: false };
     for (let i = 0; i < attempts; i++) {
@@ -1253,9 +1253,9 @@ async function resolveWinServerWithRetry(winAmount, multiplier, attempts = 2) {
     return last;
 }
 
-/* =========================
-   СОСТОЯНИЕ ПРИЛОЖЕНИЯ
-========================= */
+
+
+
 
 let balanceMode = "deposit";
 let selectedMethod = "CryptoBot";
@@ -1283,9 +1283,9 @@ let transactions = [];
 
 let isBetProcessing = false;
 
-/* =========================
-   ИГРОВОЕ СОСТОЯНИЕ МИН
-========================= */
+
+
+
 
 let minesGame = {
     active: false,
@@ -1297,22 +1297,22 @@ let minesGame = {
     isProcessing: false
 };
 
-// Изменение количества мин кнопками "-" и "+" в капсуле
+
 function changeMinesBy(delta) {
-    if (minesGame.active) return; // нельзя менять во время раунда
+    if (minesGame.active) return; 
     const input = document.getElementById('customMinesInput');
     if (!input) return;
 
     let val = (parseInt(input.value) || minesGame.minesCount) + delta;
 
-    // Ограничиваем диапазон от 3 до 24 мин
+    
     val = Math.max(3, Math.min(24, val));
 
     input.value = val;
     onCustomMinesInputChange(val);
 }
 
-// Обработка ручного ввода числа в капсуле
+
 function onCustomMinesInputChange(val) {
     if (minesGame.active) return;
 
@@ -1321,23 +1321,23 @@ function onCustomMinesInputChange(val) {
 
     if (isNaN(num)) return;
 
-    // Ограничения от 3 до 24
+    
     num = Math.max(3, Math.min(24, num));
 
-    // Пишем в реальное игровое состояние
+    
     minesGame.minesCount = num;
 
-    // Клэмпим визуальное значение поля, если пользователь вышел за диапазон
+    
     if (input && parseInt(input.value) !== num) {
         input.value = num;
     }
 
-    // Подсвечиваем кнопку пресета, если число совпадает, иначе снимаем подсветку со всех
+    
     document.querySelectorAll('.mines-count-btn').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.innerText) === num);
     });
 
-    // Пересчитываем полосу коэффициентов под новое количество мин
+    
     renderMinesCoefBar();
 }
 
@@ -1345,7 +1345,7 @@ function selectMinesCount(count, btn) {
     if (minesGame.active) return;
     minesGame.minesCount = count;
 
-    // Синхронизируем капсулу ручного ввода с выбранным пресетом
+    
     const input = document.getElementById('customMinesInput');
     if (input) input.value = count;
 
@@ -1422,7 +1422,7 @@ function handleMinesAction() {
     }
 }
 
-// Мины считает Supabase (SQL-функции mines_*), поле с минами клиенту не отдаётся
+
 async function minesApi(path, body) {
     const fn = { '/api/mines/start': 'mines_start', '/api/mines/reveal': 'mines_reveal',
                  '/api/mines/cashout': 'mines_cashout', '/api/mines/state': 'mines_state' }[path];
@@ -1474,7 +1474,7 @@ async function startMinesGame() {
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    // Ставку списывает и поле генерирует сервер — клиент поле не получает до конца игры
+    
     const res = await minesApi('/api/mines/start', { bet, mines: minesGame.minesCount });
     if (!res.ok) {
         restoreBalanceState(snapshot);
@@ -1585,7 +1585,7 @@ async function cashoutMines() {
     unlockEconomy();
 }
 
-// Если приложение закрыли посреди раунда — сервер хранит игру, возвращаем её на экран
+
 async function resumeMinesGame() {
     if (!tg?.initData) return;
     const res = await minesApi('/api/mines/state');
@@ -1621,9 +1621,9 @@ async function resumeMinesGame() {
 function endMinesGame(isWin) {
     minesGame.active = false;
 
-    // Проигрыш (взорвалась бомба) тоже фиксируем как завершённое действие —
-    // с временем окончания, для вкладки "Действия". При выигрыше это уже
-    // делает resolveLiveBetWin() из cashoutMines().
+    
+    
+    
     if (!isWin) {
         resolveLiveBetWin(minesGame.liveBetId, minesGame.bet, 0);
     }
@@ -1652,136 +1652,136 @@ function endMinesGame(isWin) {
     minesGame.isProcessing = false;
 }
 
-/* =========================
-    КРАШ (РАКЕТА)
-========================= */
 
-// Пауза между раундами (в это же время принимаются ставки на следующий раунд)
+
+
+
+
 const CRASH_WAIT_MS = 5000;
 
-// Хранение ленты прошлых коэффициентов — переживает перезаход в приложение.
-/* ================================================================
-   КРАШ — общий глобальный раунд (как Айс Арена)
-   Раунд один на ВСЕХ игроков: момент старта полёта, коэффициент
-   краша и таймер ожидания хранятся в Supabase, поэтому у всех
-   открытых приложений одновременно летит ОДНА И ТА ЖЕ ракета с
-   одинаковым исходом. Ниже поля ставки виден список игроков этого
-   раунда — кто сейчас летит, кто уже забрал (и на сколько x), а кто
-   проиграл — обновляется вживую через Supabase Realtime.
 
-   Один раз выполнить в Supabase → SQL Editor:
 
-   create table if not exists public.crash_rounds (
-       id uuid primary key default gen_random_uuid(),
-       game_number bigint generated always as identity,
-       status text not null default 'waiting',   -- waiting | flying | crashed
-       hash text not null,
-       salt text not null,
-       crash_point numeric not null,
-       waiting_ends_at timestamptz,
-       starts_at timestamptz,
-       crashed_at timestamptz,
-       created_at timestamptz not null default now()
-   );
-   create table if not exists public.crash_bets (
-       id bigint generated always as identity primary key,
-       round_id uuid not null references public.crash_rounds(id) on delete cascade,
-       telegram_id bigint not null,
-       name text not null,
-       avatar text,
-       amount numeric not null,
-       status text not null default 'active',     -- active | cashed_out | lost
-       cashout_mult numeric,
-       win_amount numeric,
-       created_at timestamptz not null default now(),
-       unique (round_id, telegram_id)
-   );
 
-   create unique index if not exists crash_one_active_round
-       on public.crash_rounds ((true))
-       where status in ('waiting', 'flying');
 
-   alter table public.crash_rounds enable row level security;
-   alter table public.crash_bets enable row level security;
-   create policy "crash_rounds_select" on public.crash_rounds for select using (true);
-   create policy "crash_rounds_insert" on public.crash_rounds for insert with check (true);
-   create policy "crash_rounds_update" on public.crash_rounds for update using (true) with check (true);
-   create policy "crash_bets_select" on public.crash_bets for select using (true);
-   create policy "crash_bets_insert" on public.crash_bets for insert with check (true);
-   create policy "crash_bets_update" on public.crash_bets for update using (true) with check (true);
-   alter publication supabase_realtime add table public.crash_rounds;
-   alter publication supabase_realtime add table public.crash_bets;
 
-   ВАЖНО про честность: salt и crash_point лежат в строке раунда с
-   момента её создания, а select-политика открыта всем (как и у Айс
-   Арены) — значит, теоретически их можно прочитать напрямую через
-   Supabase API до краша. Это тот же уровень доверия, что и у
-   остальных игр в этом файле (честность подтверждается постфактум
-   через SHA-256, а не прячется настоящим сервером). Если нужна
-   крипто-надёжная защита коэффициента до краша — понадобится
-   Postgres RPC / Edge Function, которая отдаёт crash_point только
-   после того, как раунд реально закрашился.
-================================================================ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const CRASH_ROUNDS_TABLE = 'crash_rounds';
 const CRASH_BETS_TABLE = 'crash_bets';
-// Очередь ставок на следующий раунд (SQL для таблицы — в crash_queue.sql)
-const CRASH_QUEUE_TABLE = 'crash_queue';
-const CRASH_QUEUE_MIN_AGE_MS = 2000;   // не переносим ставку в раунд раньше, чем закончилось её списание
-const CRASH_HISTORY_MAX = 25;       // сколько прошедших раундов видно в ленте
-const CRASH_RESULT_HOLD_MS = 3000;  // пауза с картинкой взрыва перед новым раундом
 
-// КРИВАЯ РОСТА (одна и та же у коэффициента, следа и цифр; сервер считает так же):
-//  1) до 1.45x — очень медленно, скорость плавно нарастает (степень POW);
-//  2) с 1.45x рост продолжается с ТОЙ ЖЕ скоростью, на которой закончился
-//     этап 1 (без скачка), и дальше непрерывно ускоряется до самого краша.
+const CRASH_QUEUE_TABLE = 'crash_queue';
+const CRASH_QUEUE_MIN_AGE_MS = 2000;   
+const CRASH_HISTORY_MAX = 25;       
+const CRASH_RESULT_HOLD_MS = 3000;  
+
+
+
+
+
 const CRASH_SLOW_START_TARGET = 1.45;
-const CRASH_SLOW_START_MS = 7000;          // за сколько мс дорастаем до 1.45x
-const CRASH_SLOW_POW = 2.5;                // «мягкость» разгона на этапе 1
-// скорость роста (в долях/мс) в точке 1.45x — продолжение скорости этапа 1
+const CRASH_SLOW_START_MS = 7000;          
+const CRASH_SLOW_POW = 2.5;                
+
 const CRASH_GROWTH_PER_MS =
     ((CRASH_SLOW_START_TARGET - 1) * CRASH_SLOW_POW) / (CRASH_SLOW_START_MS * CRASH_SLOW_START_TARGET);
-// дальнейшее ускорение: скорость роста удваивается примерно каждые 30 сек
+
 const CRASH_GROWTH_ACCEL = CRASH_GROWTH_PER_MS / 30000;
 
-/* ================================================================
-   СИНХРОНИЗАЦИЯ ВРЕМЕНИ (почему раньше «скипались» пауза и взрыв)
 
-   Раньше момент старта полёта, момент краша и конец паузы после
-   взрыва считались по Date.now() КАЖДОГО телефона и сравнивались
-   с отметками времени, которые записал другой телефон. Если часы
-   у кого-то уходят вперёд хотя бы на пару секунд — он видел «пауза
-   уже закончилась», сам создавал новый раунд, и у всех взрыв
-   обрезался, а пауза пропадала.
 
-   Теперь все считают по ВРЕМЕНИ СЕРВЕРА: при старте и раз в 90 сек
-   клиент замеряет разницу между своими часами и серверными.
-   Лучший способ — RPC server_now (SQL ниже). Если функции в БД
-   нет, берём заголовок Date из ответа Supabase (точность ±0.5 с),
-   а если и его нет — работаем по локальным часам, но со
-   страховками от «кривых» отметок.
 
-   Один раз выполнить в Supabase → SQL Editor:
 
-   create or replace function public.server_now()
-   returns timestamptz language sql as $$ select clock_timestamp() $$;
-   grant execute on function public.server_now() to anon, authenticated;
-================================================================ */
-const CRASH_TIME_TOLERANCE_MS = 1500;   // допуск «отметка из будущего»
-const CRASH_STALE_START_MS = 4000;      // старт просрочен дольше — не «задним числом»
-const CRASH_TICK_MS = 250;              // страховочный тик (точные переходы — по таймерам)
-const CRASH_ADVANCE_RETRY_MS = 500;     // не чаще — повтор записи перехода фазы в БД
-// Минимальный интервал между вызовами crash_tick с одного клиента. Раньше
-// было 1 с, и КАЖДЫЙ открытый мини-апп бил в базу раз в секунду (см. лог:
-// "canceling statement due to statement timeout", "cron job startup timeout").
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const CRASH_TIME_TOLERANCE_MS = 1500;   
+const CRASH_STALE_START_MS = 4000;      
+const CRASH_TICK_MS = 250;              
+const CRASH_ADVANCE_RETRY_MS = 500;     
+
+
+
 const CRASH_TICK_CALL_MS = 2000;
-const CRASH_FLIGHT_POKE_MS = 400;     // в полёте: сервер сам знает момент краша, клиент лишь торопит его
-// При ошибке тик не повторяем вплотную: пауза удваивается до этого потолка.
+const CRASH_FLIGHT_POKE_MS = 400;     
+
 const CRASH_TICK_BACKOFF_MAX_MS = 30000;
 const CRASH_CLOCK_RESYNC_MS = 90000;
-const CRASH_EXPLOSION_REPLAY_WINDOW_MS = 1800; // открыл страницу сразу после краша — доигрываем взрыв
+const CRASH_EXPLOSION_REPLAY_WINDOW_MS = 1800; 
 
-let crashClockOffset = 0;   // serverMs - localMs
+let crashClockOffset = 0;   
 
 function crashNow() { return Date.now() + crashClockOffset; }
 
@@ -1814,7 +1814,7 @@ async function syncCrashClockViaHttpDate() {
         if (!h) return null;
         const d = new Date(h).getTime();
         if (!isFinite(d)) return null;
-        // Date в заголовке — с точностью до секунды, берём середину секунды
+        
         return { rtt: t1 - t0, off: d + 500 - (t0 + t1) / 2 };
     } catch (e) {
         return null;
@@ -1828,9 +1828,9 @@ async function syncCrashClock() {
     if (best) crashClockOffset = best.off;
 }
 
-// Математика полёта: за сколько мс коэффициент дорастает до crashPoint.
-// Обратная функция к computeCrashMultAt() — по ней момент краша известен
-// ЗАРАНЕЕ и одинаков у всех: старт полёта + эта длительность.
+
+
+
 function computeCrashDurationMs(crashPoint) {
     const cp = Number(crashPoint) || 1;
     if (cp <= 1) return 0;
@@ -1838,7 +1838,7 @@ function computeCrashDurationMs(crashPoint) {
         const x = (cp - 1) / (CRASH_SLOW_START_TARGET - 1);
         return CRASH_SLOW_START_MS * Math.pow(x, 1 / CRASH_SLOW_POW);
     }
-    // ln(m/1.45) = k*s + a*s^2/2  →  s = (-k + sqrt(k^2 + 2*a*L)) / a
+    
     const L = Math.log(cp / CRASH_SLOW_START_TARGET);
     const k = CRASH_GROWTH_PER_MS, a = CRASH_GROWTH_ACCEL;
     const s = (-k + Math.sqrt(k * k + 2 * a * L)) / a;
@@ -1850,8 +1850,8 @@ function crashParseTime(iso) {
     return isFinite(t) ? t : null;
 }
 
-// Отметки времени раунда неизменны, поэтому считаем их ОДИН раз при первом
-// взгляде на раунд — так «кривая» отметка не может раз за разом сдвигать фазы.
+
+
 const crashTimeCache = Object.create(null);
 
 function crashStableTime(round, kind) {
@@ -1866,13 +1866,13 @@ function crashStableTime(round, kind) {
             const c = crashParseTime(round.created_at);
             ms = (c != null ? c : now) + CRASH_WAIT_MS;
         }
-        // создатель раунда с «убежавшими» часами — не ждём лишнего
+        
         if (ms - now > CRASH_WAIT_MS + CRASH_TIME_TOLERANCE_MS) ms = now + CRASH_WAIT_MS;
     } else if (kind === 'plan') {
-        // полёт стартует ровно в момент, когда отсчёт дошёл до нуля
+        
         const ends = crashStableTime(round, 'waitEnds');
         ms = (now - ends > CRASH_STALE_START_MS) ? now : ends;
-    } else { // 'start'
+    } else { 
         ms = crashParseTime(round.starts_at);
         if (ms == null || ms - now > CRASH_TIME_TOLERANCE_MS) ms = now;
     }
@@ -1883,52 +1883,52 @@ function crashStableTime(round, kind) {
     return ms;
 }
 
-/* ================================================================
-   СОСТОЯНИЕ
-================================================================ */
+
+
+
 let crashGame = {
-    phase: 'pending',   // 'pending' — раунд ещё не показан, 'waiting' — приём ставок, 'flying' — полёт, 'crashed' — пауза с итогом
+    phase: 'pending',   
     roundId: null,
     crashPoint: 0,
     currentMult: 1.00,
     bet: 0,
     betPlaced: false,
     cashedOut: false,
-    cashoutMult: null,   // локально запомненный кэшаут (чтобы список игроков не «откатывался»)
+    cashoutMult: null,   
     cashoutWin: null,
     cashoutRoundId: null,
-    liveBetId: null,     // id строки в live_bets (общая лента всех игр)
+    liveBetId: null,     
     liveBetResolved: false,
-    myBetRowId: null,    // id своей строки в crash_bets (для апдейта при кэшауте)
-    queued: null,        // моя ставка в очереди на следующий раунд: {id, amount}
-    queuedGraceUntil: 0, // пока не прошло это время — не сбрасываем queued, даже если опрос ещё не увидел строку
-    queuedLive: null,    // запись в общей ленте для ставки из очереди: {id, amount, fromRoundId}
-    startTime: 0,        // момент старта полёта (время сервера, общий для всех)
-    waitEndsAt: 0,       // конец обратного отсчёта
+    myBetRowId: null,    
+    queued: null,        
+    queuedGraceUntil: 0, 
+    queuedLive: null,    
+    startTime: 0,        
+    waitEndsAt: 0,       
     phaseEndsAt: 0,
-    crashAt: 0,          // момент краша = startTime + длительность полёта до crashPoint
+    crashAt: 0,          
     explosionPlayed: false,
     isProcessing: false
 };
 
-// Общее состояние синхронизированного лобби краша — аналог iceArena.
+
 let crashLobby = {
-    round: null,        // последняя известная строка раунда из БД
-    bets: [],           // мапленные ставки текущего раунда (для списка игроков)
-    queue: [],          // ставки, ждущие следующий раунд
-    queueMissing: false,// таблицы crash_queue ещё нет в БД
+    round: null,        
+    bets: [],           
+    queue: [],          
+    queueMissing: false,
     promoting: false,
     channel: null,
     pollInterval: null,
     clockInterval: null,
-    phaseTimer: null,   // точный таймер на ближайшую смену фазы
+    phaseTimer: null,   
     countdownTimer: null,
     reloadTimer: null,
     advancing: false,
     lastAdvanceTry: 0,
-    tickBackoffMs: 0,       // текущая пауза после ошибки crash_tick
-    tickBackoffUntil: 0,    // до какого момента (crashNow) сервер не трогаем
-    fetchSeq: 0,        // нумерация запросов — устаревший ответ не перетирает свежий
+    tickBackoffMs: 0,       
+    tickBackoffUntil: 0,    
+    fetchSeq: 0,        
     appliedSeq: 0,
     lastCountdownDigit: null,
     lastPlayersHtml: null,
@@ -1940,33 +1940,33 @@ const CRASH_PHASE_ORDER = { pending: -1, waiting: 0, flying: 1, crashed: 2 };
 
 let crashAnimHandle = null;
 let crashLoopStarted = false;
-let crashHistory = [];      // последние коэффициенты, самый новый — первый
+let crashHistory = [];      
 let crashHistoryIds = new Set();
-let lastCrashPoint = null;  // коэффициент прошлого раунда (для отображения в паузе)
-let crashTrailPoints = [];  // точки следа ракеты за текущий полёт
+let lastCrashPoint = null;  
+let crashTrailPoints = [];  
 let crashTrailTimers = [];
-let crashRocketAnim = null; // экземпляр Lottie-анимации ракеты
-let crashExplosionAnim = null; // экземпляр Lottie-анимации взрыва
-let crashExplosionTotalFrames = 0; // общее число кадров анимации взрыва (берётся из её JSON)
-let crashExplosionHideTimeout = null; // таймер плавного скрытия взрыва после проигрывания нужной части
+let crashRocketAnim = null; 
+let crashExplosionAnim = null; 
+let crashExplosionTotalFrames = 0; 
+let crashExplosionHideTimeout = null; 
 
-// "Тяжёлые" визуальные обновления (SVG-след со стековыми drop-shadow,
-// текст с text-shadow) обновляем не чаще ~30 раз/сек вместо 60 — глазом
-// разница незаметна, а нагрузка на рендер падает почти вдвое. Ракета и
-// тряска экрана (дешёвые transform) продолжают обновляться каждый кадр.
+
+
+
+
 let crashLastHeavyUpdate = 0;
-const CRASH_HEAVY_UPDATE_INTERVAL_MS = 50;   // след/текст ~20 раз/сек — на глаз то же, а нагрузка ниже
+const CRASH_HEAVY_UPDATE_INTERVAL_MS = 50;   
 
-// Доля анимации взрыва, которая реально проигрывается при краше — по ТЗ
-// нужна только самая первая часть (меньше половины), дальше идёт "хвост"
-// анимации, который не нужен. Меняйте это число, чтобы точнее подогнать
-// момент остановки под нужный кадр.
+
+
+
+
 const EXPLOSION_PLAY_FRACTION = 0.34;
-// Длительность плавного исчезновения взрыва после того, как проигранная
-// часть анимации закончилась (совпадает с transition opacity в HTML).
+
+
 const EXPLOSION_FADE_MS = 300;
 
-// Кэш DOM-элементов для исключения лишних поисков при каждом кадре (60 FPS)
+
 let crashDomCache = null;
 
 function getCrashDom() {
@@ -1995,7 +1995,7 @@ function getCrashDom() {
     return crashDomCache;
 }
 
-// ---- Хелперы следа: линия+свечение и точка+свечение всегда меняются вместе ----
+
 function setTrailD(dom, d) {
     if (dom.trailLine) dom.trailLine.setAttribute('d', d);
     if (dom.trailGlow) dom.trailGlow.setAttribute('d', d);
@@ -2025,7 +2025,7 @@ function isCrashPageVisible() {
     return !!(page && !page.classList.contains('hidden'));
 }
 
-// Загружает анимацию ракеты
+
 function initCrashRocketAnim() {
     const dom = getCrashDom();
     if (!dom.rocketEl || crashRocketAnim) return;
@@ -2051,7 +2051,7 @@ function initCrashRocketAnim() {
     });
 }
 
-// Загружает анимацию взрыва (проигрывается один раз в момент краша, без цикла)
+
 function initCrashExplosionAnim() {
     const dom = getCrashDom();
     if (!dom.explosionEl || crashExplosionAnim) return;
@@ -2077,9 +2077,9 @@ function initCrashExplosionAnim() {
     });
     crashExplosionTotalFrames = animationData.op || 0;
 
-    // Как только проигранный отрезок (0 → EXPLOSION_PLAY_FRACTION) доигрывает
-    // до конца, сразу плавно прячем взрыв — а не держим его "замороженным"
-    // на последнем кадре до самого начала следующего раунда.
+    
+    
+    
     crashExplosionAnim.addEventListener('complete', hideExplosionSmoothly);
 }
 
@@ -2100,11 +2100,11 @@ function openCrash() {
     initCrashPage();
 }
 
-// Кэш размеров сцены — чтения clientWidth/clientHeight на каждом кадре
-// requestAnimationFrame вызывают принудительный синхронный reflow, что и было
-// основной причиной лагов/фризов даже на мощных телефонах. Меряем размеры
-// только когда они реально могут измениться (открытие страницы, начало
-// раунда, поворот экрана/ресайз), а не 60 раз в секунду.
+
+
+
+
+
 let crashStageW = 300;
 let crashStageH = 340;
 
@@ -2118,7 +2118,7 @@ function syncCrashStageDims() {
 window.addEventListener('resize', syncCrashStageDims);
 window.addEventListener('orientationchange', syncCrashStageDims);
 
-// Центр сцены, где стоит ракета (и где рисуется взрыв)
+
 function crashRocketCenter() {
     return {
         x: (crashStageW - 200) / 2 - 16,
@@ -2132,16 +2132,16 @@ function initCrashPage() {
     syncCrashStageDims();
     renderCrashHistory();
     renderCrashPlayersList();
-    // Страница могла быть закрыта в момент краша/старта — подтягиваем
-    // картинку под текущую фазу (и доигрываем взрыв, если пауза ещё идёт).
+    
+    
     resumeCrashVisualsOnOpen();
-    // Подстраховка: сразу после открытия страницы её CSS-переход может ещё
-    // не завершиться, поэтому один раз перемеряем на следующем кадре.
+    
+    
     requestAnimationFrame(syncCrashStageDims);
 }
 
-// Чистая математика роста коэффициента от прошедшего времени — вынесена
-// отдельно, чтобы использовать и в tickCrash() (анимация), и при кэшауте.
+
+
 function computeCrashMultAt(elapsedMs, crashPointCap) {
     const elapsed = Math.max(0, elapsedMs);
     let rawMult;
@@ -2158,14 +2158,14 @@ function computeCrashMultAt(elapsedMs, crashPointCap) {
     return crashPointCap != null ? Math.min(crashPointCap, floored) : floored;
 }
 
-/* =========================
-   СИНХРОНИЗАЦИЯ ОБЩЕГО РАУНДА (Supabase)
-========================= */
 
-// Запускается один раз при старте приложения (см. DOMContentLoaded ниже) —
-// раунды крутятся всё время, пока хотя бы у одного игрока открыто
-// приложение, независимо от того, на какой странице он сейчас находится
-// (ровно как уже сделано для Айс Арены).
+
+
+
+
+
+
+
 function makePagePoller(pageId, fn, offEvery) {
     let n = 0;
     return function () {
@@ -2183,12 +2183,12 @@ async function startCrashEngine() {
     if (crashLoopStarted) return;
     crashLoopStarted = true;
 
-    // Часы — ПЕРВЫМ делом (но не дольше 2.5 сек, чтобы не тормозить запуск)
+    
     await Promise.race([syncCrashClock(), new Promise(r => setTimeout(r, 2500))]);
     setInterval(syncCrashClock, CRASH_CLOCK_RESYNC_MS);
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) return;
-        // вернулись из фона — таймеры могли «проспать», сверяем всё заново
+        
         syncCrashClock().finally(() => { advanceLocalPhase(); });
         refreshCrashState();
     });
@@ -2206,17 +2206,17 @@ async function startCrashEngine() {
     try {
         crashLobby.channel = supabase
             .channel('crash_global')
-            // Только раунды. Подписку на crash_bets убрали: каждую ставку и
-            // каждый кэшаут база рассылала всем клиентам, и каждый клиент на
-            // это событие делал ещё 2-3 запроса. Список игроков и так
-            // обновляется опросом раз в 1.5 с — разница незаметна, а нагрузка
-            // падает в разы.
+            
+            
+            
+            
+            
             .on('postgres_changes', { event: '*', schema: 'public', table: CRASH_ROUNDS_TABLE }, () => scheduleCrashReload())
             .subscribe();
     } catch (e) {
         console.error('Crash realtime:', e);
     }
-    // Очередь — отдельным каналом: если таблицы ещё нет, это не ломает основной канал краша
+    
     try {
         supabase
             .channel('crash_queue_global')
@@ -2235,10 +2235,10 @@ function scheduleCrashReload() {
     }, 400);
 }
 
-// Страховочный тик. Основные переходы (старт полёта, краш, конец паузы)
-// происходят по ТОЧНЫМ таймерам (scheduleCrashPhaseTimer) и не зависят от
-// ответа сервера — тик лишь подстраховывает, если таймер «проспал» в фоне
-// или запись перехода в БД не прошла с первого раза.
+
+
+
+
 function startCrashClock() {
     if (crashLobby.clockInterval) return;
     crashLobby.clockInterval = setInterval(crashClockTick, CRASH_TICK_MS);
@@ -2277,22 +2277,22 @@ function mapCrashQueue(rows) {
     }));
 }
 
-// Своя ставка в очереди определяется по БД; короткая «льгота» после нажатия
-// нужна, чтобы опрос, пришедший раньше записи, не сбросил состояние.
+
+
 function syncMyCrashQueue() {
     const mine = crashLobby.queue.find(q => q.isUser);
     if (mine) crashGame.queued = { id: mine.id, amount: mine.amount };
     else if (Date.now() >= crashGame.queuedGraceUntil) crashGame.queued = null;
 }
 
-// Когда начался новый раунд (ожидание ставок) — переносим все ставки из очереди в него.
-// Делает КАЖДЫЙ открытый клиент: вставка идемпотентна (unique round_id+telegram_id,
-// дубликаты игнорируются), поэтому гонка между клиентами безвредна.
+
+
+
 async function promoteCrashQueue() {
     const round = crashLobby.round;
     if (crashLobby.promoting || crashLobby.queueMissing || !crashLobby.queue.length) return;
     if (!round || round.id !== crashGame.roundId || round.status !== 'waiting' || crashGame.phase !== 'waiting') return;
-    if (crashNow() >= crashGame.waitEndsAt - 300) return;   // поздно — ставка уйдёт в следующий раунд
+    if (crashNow() >= crashGame.waitEndsAt - 300) return;   
 
     const now = crashNow();
     const ready = crashLobby.queue.filter(q => q.createdMs == null || now - q.createdMs >= CRASH_QUEUE_MIN_AGE_MS);
@@ -2310,7 +2310,7 @@ async function promoteCrashQueue() {
     scheduleCrashReload();
 }
 
-// Можно ли сейчас поставить «на следующий раунд» (идёт полёт или пауза после краша).
+
 function crashCanQueue() {
     if (crashGame.queued) return false;
     if (crashGame.phase === 'crashed') return true;
@@ -2353,7 +2353,7 @@ async function queueCrashBet() {
     const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
     const myAvatar = getMyIceArenaAvatar();
 
-    // Сервер сам ставит в очередь и списывает ставку одной транзакцией
+    
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
@@ -2374,7 +2374,7 @@ async function queueCrashBet() {
 
     crashGame.queued = { id: row.id, amount: bet };
     crashGame.queuedGraceUntil = Date.now() + 5000;
-    // сразу показываем себя в «Ожидании», не дожидаясь опроса
+    
     crashLobby.queue = crashLobby.queue.filter(q => !q.isUser).concat([{
         id: row.id, telegramId: Number(myId), name: myName, avatar: myAvatar,
         amount: bet, createdMs: crashParseTime(row.created_at), isUser: true
@@ -2395,11 +2395,11 @@ function mapCrashBetsToPlayers(bets) {
     const myId = myCrashTelegramId();
     return (bets || []).map(b => {
         const isUser = myId != null && Number(b.telegram_id) === Number(myId);
-        let status = b.status || 'active';   // active | cashed_out | lost
+        let status = b.status || 'active';   
         let cashoutMult = b.cashout_mult != null ? Number(b.cashout_mult) : null;
         let winAmount = b.win_amount != null ? Number(b.win_amount) : null;
 
-        // Свой кэшаут показываем сразу, не дожидаясь, пока он долетит до БД
+        
         if (isUser && crashGame.cashedOut && crashGame.cashoutRoundId === b.round_id && status !== 'cashed_out') {
             status = 'cashed_out';
             cashoutMult = crashGame.cashoutMult;
@@ -2425,7 +2425,7 @@ let lastCrashBetsRaw = [];
 async function refreshCrashState() {
     const seq = ++crashLobby.fetchSeq;
     try {
-        // 1. Сначала ищем АКТИВНЫЙ раунд (waiting/flying), а не просто самый свежий
+        
         let round = null;
         const { data: active, error } = await supabase
             .from(CRASH_ROUNDS_TABLE)
@@ -2446,7 +2446,7 @@ async function refreshCrashState() {
         }
         round = active && active[0];
 
-        // 2. Активного нет — берём последний завершённый (для паузы после краша)
+        
         if (!round) {
             const { data: last } = await supabase
                 .from(CRASH_ROUNDS_TABLE)
@@ -2456,13 +2456,13 @@ async function refreshCrashState() {
             round = last && last[0];
         }
 
-        // 3. Раундов вообще нет — создаём первый
+        
         if (!round) {
             round = await getOrCreateCrashRound();
             if (!round) return;
         }
 
-        // 4. Ставки: если запрос упал, игра всё равно идёт со старым списком
+        
         let bets = lastCrashBetsRaw;
         const { data: betsData, error: betsErr } = await supabase
             .from(CRASH_BETS_TABLE)
@@ -2477,7 +2477,7 @@ async function refreshCrashState() {
             lastCrashBetsRaw = bets;
         }
 
-        // 5. Очередь ставок на следующий раунд (если таблицы нет — просто пропускаем)
+        
         let queueRaw = null;
         if (!crashLobby.queueMissing) {
             const { data: qd, error: qe } = await supabase
@@ -2496,7 +2496,7 @@ async function refreshCrashState() {
             }
         }
 
-        // Ответ устарел — пока он летел, уже применился более свежий запрос
+        
         if (seq < crashLobby.appliedSeq) return;
         crashLobby.appliedSeq = seq;
 
@@ -2522,7 +2522,7 @@ async function getOrCreateCrashRound() {
 
     if (active && active[0]) return active[0];
 
-    // Новый раунд создаёт только сервер (crash_tick_safe), клиент в таблицу не пишет
+    
     await supabase.rpc('crash_tick_safe');
     const { data: retry } = await supabase
         .from(CRASH_ROUNDS_TABLE)
@@ -2534,7 +2534,7 @@ async function getOrCreateCrashRound() {
     return retry && retry[0] ? retry[0] : null;
 }
 
-// Раскладывает отметки времени раунда по локальному состоянию.
+
 function setCrashRoundTimes(round) {
     if (round.status === 'waiting') {
         crashGame.waitEndsAt = crashStableTime(round, 'waitEnds');
@@ -2543,43 +2543,43 @@ function setCrashRoundTimes(round) {
     } else {
         crashGame.startTime = crashStableTime(round, 'start');
     }
-    // Раунд закрашен, а starts_at в БД нет (ручная запись) — не ждём «полёта»
+    
     const noStamp = round.status === 'crashed' && !round.starts_at;
-    // момент краша известен только после краша; до него — «бесконечность»
+    
     crashGame.crashAt = crashGame.crashPoint == null
         ? Infinity
         : crashGame.startTime + (noStamp ? 0 : computeCrashDurationMs(crashGame.crashPoint));
 }
 
-// Применяет строку раунда из БД к локальному состоянию экрана — вызывается
-// у КАЖДОГО открытого клиента при каждом опросе/realtime-событии. БД даёт
-// только «опорные точки» (кто выиграл/проиграл, когда стартовал полёт), а
-// сами фазы и их визуал идут по локальному таймлайну — поэтому взрыв и
-// конец паузы не зависят от того, как быстро долетел ответ сервера.
+
+
+
+
+
 function applyCrashRound(round, bets) {
     const cur = crashLobby.round;
     const sameRound = !!(cur && cur.id === round.id);
 
-    // Устаревший снимок того же раунда (например, опрос с «flying» пришёл
-    // позже, чем realtime-событие «crashed») — статус назад не откатываем.
+    
+    
     if (sameRound && (CRASH_STATUS_RANK[round.status] ?? 0) < (CRASH_STATUS_RANK[cur.status] ?? 0)) {
         crashLobby.bets = mapCrashBetsToPlayers(bets);
         renderCrashPlayersList();
         return;
     }
-    // Ответ про раунд старее того, что уже на экране — игнорируем
+    
     if (cur && !sameRound && round.created_at && cur.created_at &&
         new Date(round.created_at).getTime() < new Date(cur.created_at).getTime()) {
         return;
     }
 
-    // ЗАЩИТА ПАУЗЫ: новый раунд мог быть создан в БД раньше времени (чьи-то
-    // «убежавшие» часы, гонка клиентов). Пока у НАС идёт пауза после краша
-    // предыдущего раунда — не переключаемся, а применяем новый раунд ровно
-    // в конце паузы. Так пауза со взрывом не пропадает ни у кого.
-    // Опираемся на ЛОКАЛЬНУЮ фазу, а не на статус из БД: при медленной сети
-    // клиент может так и не получить 'flying'/'crashed', хотя по времени
-    // раунд уже взорвался (в этом случае cur.status застревает на 'waiting').
+    
+    
+    
+    
+    
+    
+    
     if (cur && !sameRound && crashGame.roundId === cur.id &&
         (crashGame.phase === 'flying' || crashGame.phase === 'crashed')) {
         const holdEnd = crashGame.crashAt + CRASH_RESULT_HOLD_MS;
@@ -2601,7 +2601,7 @@ function applyCrashRound(round, bets) {
 
     if (!sameRound) {
         if (crashGame.roundId) {
-            // Начался НОВЫЙ раунд — сбрасываем локальный след своей ставки.
+            
             crashGame.bet = 0;
             crashGame.betPlaced = false;
             crashGame.cashedOut = false;
@@ -2617,15 +2617,15 @@ function applyCrashRound(round, bets) {
         crashGame.currentMult = 1.00;
         crashGame.explosionPlayed = false;
     }
-    // До краша сервер точку НЕ отдаёт (crash_point = null) — клиент крутит множитель,
-    // пока сервер не пришлёт status='crashed' вместе с раскрытой точкой и ключом.
+    
+    
     crashGame.crashPoint = round.crash_point != null ? (Number(round.crash_point) || 1) : null;
     setCrashRoundTimes(round);
 
     crashLobby.bets = mapCrashBetsToPlayers(bets);
 
-    // Блок "доказуемой честности" — хеш виден всегда, ключ (salt) только
-    // после краша этого раунда.
+    
+    
     currentCrashState = {
         salt: round.status === 'crashed' ? (round.salt || '') : '',
         hash: round.hash || '',
@@ -2637,11 +2637,11 @@ function applyCrashRound(round, bets) {
     const keyInput = document.getElementById('crashRoundKeyInput');
     if (keyInput) keyInput.value = currentCrashState.salt;
 
-    // Подхватываем свою уже сделанную в этом раунде ставку — например,
-    // если игрок перезашёл в приложение посреди ожидания/полёта.
-    // ВАЖНО: cashedOut только поднимаем в true и никогда не сбрасываем назад —
-    // иначе опрос, пришедший раньше, чем кэшаут записался в БД, на секунду
-    // возвращал кнопку «Забрать» (и можно было нажать второй раз).
+    
+    
+    
+    
+    
     updateCrashTopbar();
     const mine = crashLobby.bets.find(b => b.isUser);
     if (mine) {
@@ -2649,7 +2649,7 @@ function applyCrashRound(round, bets) {
         crashGame.betPlaced = true;
         if (mine.status === 'cashed_out') crashGame.cashedOut = true;
         crashGame.myBetRowId = mine.id;
-        // ставка переехала из очереди в этот раунд — подхватываем её запись в ленте
+        
         const ql = crashGame.queuedLive;
         if (ql && round.id !== ql.fromRoundId && Math.abs(ql.amount - mine.amount) < 0.005) {
             crashGame.liveBetId = ql.id;
@@ -2664,9 +2664,9 @@ function applyCrashRound(round, bets) {
     scheduleCrashPhaseTimer();
 }
 
-// Двигает ЛОКАЛЬНУЮ фазу вперёд: waiting → flying → crashed. Фаза определяется
-// и БД (если там статус уже ушёл вперёд), и серверными часами — что раньше.
-// Назад фаза никогда не идёт.
+
+
+
 function advanceLocalPhase() {
     const round = crashLobby.round;
     if (!round || round.id !== crashGame.roundId) return;
@@ -2690,29 +2690,29 @@ function advanceLocalPhase() {
     } else if (want === 'flying') {
         beginFlyingPhaseVisual();
     } else {
-        // Взрыв играем всегда, пока идёт пауза после краша (даже если пришли
-        // с запозданием); если пауза давно прошла — просто итоговая картинка.
+        
+        
         endCrashRoundVisual(now - crashGame.crashAt < CRASH_RESULT_HOLD_MS);
     }
     renderCrashPlayersList();
     scheduleCrashPhaseTimer();
 }
 
-// Записывает переход фазы в БД (чтобы остальные клиенты и новые игроки видели
-// то же самое). Вызывается у КАЖДОГО открытого клиента — реально применится
-// у того, кто первым успеет с условным UPDATE (условие "eq status" защищает
-// от гонки, как и в Айс Арене). Отметки времени пишем ДЕТЕРМИНИРОВАННЫЕ
-// (конец отсчёта / расчётный момент краша), а не «когда мы успели» — поэтому
-// задержка сети или медленный клиент ничего не сдвигают.
-// Серверная версия: переходы фаз делает Postgres-функция crash_tick()
-// (см. crash_server.sql) по ВРЕМЕНИ СЕРВЕРА. Клиент лишь «подталкивает» её,
-// когда по его расчётам фаза должна смениться, — результат при этом от
-// клиента не зависит. Если SQL ещё не установлен — работает прежняя логика.
+
+
+
+
+
+
+
+
+
+
 let crashTickMissing = false;
-// Есть ли в БД «безопасная» версия тика (см. sql/fix_crash_timeouts.sql).
-// Она берёт advisory-лок и мгновенно выходит, если тик уже выполняет кто-то
-// другой, — благодаря этому сотни одновременных вызовов больше не встают
-// в очередь за локом строки раунда.
+
+
+
+
 let crashTickSafeMissing = false;
 
 function isMissingRpcError(error) {
@@ -2726,11 +2726,11 @@ async function maybeAdvanceCrash() {
     const round = crashLobby.round;
     if (!round || crashLobby.advancing) return;
     if (round.id !== crashGame.roundId) return;
-    // Свёрнутый мини-апп не должен грузить базу
+    
     if (document.hidden) return;
 
     const now = crashNow();
-    // После ошибки не долбим сервер: пауза удваивается до 30 с
+    
     if (now < crashLobby.tickBackoffUntil) return;
     const flightPoke = round.status === 'flying' && !isFinite(crashGame.crashAt);
     if (now - crashLobby.lastAdvanceTry < (flightPoke ? CRASH_FLIGHT_POKE_MS : CRASH_TICK_CALL_MS)) return;
@@ -2739,9 +2739,9 @@ async function maybeAdvanceCrash() {
     const due = flightPoke ||
         (round.status === 'waiting' && now >= crashGame.waitEndsAt) ||
         ((round.status === 'flying' || round.status === 'waiting') && now >= crashGame.crashAt) ||
-        // Пауза после краша: ждём, пока сервер создаст следующий раунд.
-        // Раньше это условие было истинным ВЕЧНО — и каждый клиент тикал
-        // раз в секунду даже когда тикать было нечего, забивая базу.
+        
+        
+        
         (round.status === 'crashed' && now >= holdEnd && now < holdEnd + 5000);
     if (!due) return;
 
@@ -2787,7 +2787,7 @@ async function maybeAdvanceCrash() {
 }
 
 async function maybeAdvanceCrashLegacy() {
-    return; // отключено: клиент больше не пишет в crash_rounds/crash_bets
+    return; 
     const round = crashLobby.round;
     if (!round || crashLobby.advancing) return;
     if (round.id !== crashGame.roundId) return;
@@ -2824,9 +2824,9 @@ async function maybeAdvanceCrashLegacy() {
                 .select('id');
             if (error) throw error;
 
-            // Раунд закрашили именно мы — заодно помечаем всех, кто не успел
-            // забрать выигрыш, как проигравших (для списка игроков у ВСЕХ,
-            // даже если их приложение к этому моменту уже закрыто).
+            
+            
+            
             if (data && data.length) {
                 if (crashLobby.round && crashLobby.round.id === round.id && crashLobby.round.status === 'flying') {
                     crashLobby.round = { ...crashLobby.round, status: 'crashed', crashed_at: crashedIso };
@@ -2845,8 +2845,8 @@ async function maybeAdvanceCrashLegacy() {
                 crash_point: secrets.crashPoint,
                 waiting_ends_at: new Date(Math.max(crashNow(), crashGame.crashAt + CRASH_RESULT_HOLD_MS) + CRASH_WAIT_MS).toISOString()
             });
-            // 23505 — гонка: кто-то другой уже успел создать новый раунд,
-            // это нормально и не является ошибкой.
+            
+            
             if (error && error.code !== '23505') console.error('Crash next round:', error);
         }
     } catch (e) {
@@ -2857,9 +2857,9 @@ async function maybeAdvanceCrashLegacy() {
     scheduleCrashReload();
 }
 
-/* =========================
-   ИСТОРИЯ ПРОШЕДШИХ РАУНДОВ (общая, из Supabase)
-========================= */
+
+
+
 
 async function loadCrashHistoryFromServer() {
     try {
@@ -2886,9 +2886,9 @@ function pushCrashHistoryPoint(point) {
     if (crashHistory.length > CRASH_HISTORY_MAX) crashHistory.length = CRASH_HISTORY_MAX;
 }
 
-/* =========================
-   ВИЗУАЛЬНЫЕ ФАЗЫ: ОЖИДАНИЕ / ПОЛЁТ / КРАШ
-========================= */
+
+
+
 
 function clearCrashTrailTimers() {
     crashTrailTimers.forEach(clearTimeout);
@@ -2907,8 +2907,8 @@ function resetCrashTrail() {
     setDotOpacity(dom, '0');
 }
 
-// Вход в фазу ожидания: ЕДИНОРАЗОВАЯ подготовка сцены (раньше она повторялась
-// каждые 250 мс и заодно стирала взрыв и перезапускала ракету).
+
+
 function enterWaitingVisual() {
     const dom = getCrashDom();
     syncCrashStageDims();
@@ -2941,10 +2941,10 @@ function enterWaitingVisual() {
     renderCrashUI();
 }
 
-// Номер раунда для показа: +1 только за раунды, в которых была хотя бы одна ставка.
-// game_number в БД — identity и растёт на каждый новый раунд (даже пустой), поэтому
-// считаем сами: сколько раундов ДО текущего имели ставки, плюс 1. Пустые раунды
-// подряд показывают один и тот же номер, пока кто-то не поставит.
+
+
+
+
 const crashNumCache = { roundId: null, base: null, loading: false };
 function crashDisplayNumber(round) {
     if (!round || !round.game_number) return null;
@@ -2963,12 +2963,12 @@ function crashDisplayNumber(round) {
                 updateCrashTopbar();
             });
     }
-    // пока считаем — показываем прошлое значение для того же раунда, иначе прочерк
+    
     return crashNumCache.base !== null && crashNumCache.roundId === round.id ? crashNumCache.base + 1 : null;
 }
 
-// Верхняя панель краша: БАНК (все ставки раунда), ИГРА (#номер раунда
-// с сервера), СТАРТ ЧЕРЕЗ (цифры отсчёта только во время ожидания).
+
+
 let crashTopbarLastTimer = '';
 function updateCrashTopbar() {
     const bankEl = document.getElementById('crashBankValue');
@@ -3000,8 +3000,8 @@ function updateCrashTopbar() {
     }
 }
 
-// Обратный отсчёт: меняем DOM только когда цифра реально сменилась, а
-// следующую смену ставим на ТОЧНУЮ границу секунды.
+
+
 function renderCrashCountdown(force) {
     updateCrashTopbar();
     if (crashGame.phase !== 'waiting') return;
@@ -3014,7 +3014,7 @@ function renderCrashCountdown(force) {
         crashLobby.countdownTimer = setTimeout(() => renderCrashCountdown(false), (msLeft % 1000 || 1000) + 3);
     }
 
-    if (secLeft < 1) return;                      // старт полёта — за него отвечает таймер фазы
+    if (secLeft < 1) return;                      
     if (!force && secLeft === crashLobby.lastCountdownDigit) return;
     crashLobby.lastCountdownDigit = secLeft;
 
@@ -3039,8 +3039,8 @@ function renderCrashCountdown(force) {
     }
 }
 
-// Общая «обвязка» экрана для фазы полёта (используется и при старте, и
-// когда игрок открывает страницу посреди полёта).
+
+
 function showFlyingChrome() {
     const dom = getCrashDom();
     if (dom.countdownEl) dom.countdownEl.style.display = 'none';
@@ -3079,7 +3079,7 @@ function beginFlyingPhaseVisual() {
     startCrashRaf();
 }
 
-// Резкая тряска экрана с затуханием на GPU
+
 function explosionShake(el, duration = 500, magnitude = 20) {
     if (!el) return;
     const start = performance.now();
@@ -3101,13 +3101,13 @@ function explosionShake(el, duration = 500, magnitude = 20) {
 function tickCrash() {
     crashAnimHandle = null;
     if (crashGame.phase !== 'flying') return;
-    if (!isCrashPageVisible()) return;   // страницу открыли/закрыли — цикл перезапустится в initCrashPage()
+    if (!isCrashPageVisible()) return;   
 
     const now = crashNow();
 
-    // Время краша пришло — взрыв стартует МГНОВЕННО, по локальному таймлайну,
-    // не дожидаясь ответа сервера (раньше ждали realtime/опрос и иногда
-    // терялись). Запись в БД делает maybeAdvanceCrash() параллельно.
+    
+    
+    
     if (now >= crashGame.crashAt) {
         advanceLocalPhase();
         maybeAdvanceCrash();
@@ -3129,8 +3129,8 @@ function tickCrash() {
     crashAnimHandle = requestAnimationFrame(tickCrash);
 }
 
-// Итоговая «статичная» картинка краша (без анимаций): ракеты нет, множитель
-// красным, кнопка заблокирована.
+
+
 function showCrashedStatic() {
     const dom = getCrashDom();
     const crashPoint = crashGame.crashPoint;
@@ -3165,17 +3165,17 @@ function playCrashExplosion() {
     dom.explosionEl.style.display = 'block';
 
     if (!crashExplosionAnim) {
-        // нет Lottie — показываем запасной спиннер и сами убираем
+        
         crashExplosionHideTimeout = setTimeout(hideExplosionSmoothly, 900);
         return;
     }
 
-    // Страховка: если событие 'complete' у Lottie не придёт — всё равно уберём
-    // взрыв до конца паузы.
+    
+    
     crashExplosionHideTimeout = setTimeout(hideExplosionSmoothly, Math.max(600, CRASH_RESULT_HOLD_MS - 300));
 
-    // Контейнер только что стал видимым — resize() читает layout (синхронный
-    // reflow), поэтому анимацию можно запускать СРАЗУ, без ожидания кадра.
+    
+    
     crashExplosionAnim.resize();
     if (crashExplosionTotalFrames > 0) {
         const endFrame = Math.max(1, Math.round(crashExplosionTotalFrames * EXPLOSION_PLAY_FRACTION));
@@ -3186,8 +3186,8 @@ function playCrashExplosion() {
     requestAnimationFrame(() => { if (crashExplosionAnim) crashExplosionAnim.resize(); });
 }
 
-// animate = true  → полный краш: след, взрыв, тряска, вибрация
-// animate = false → пауза уже прошла (поздний вход): только итоговая картинка
+
+
 function endCrashRoundVisual(animate) {
     const dom = getCrashDom();
     const crashPoint = crashGame.crashPoint;
@@ -3196,9 +3196,9 @@ function endCrashRoundVisual(animate) {
     crashAnimHandle = null;
     crashGame.currentMult = crashPoint;
 
-    // Если ставка была сделана этим игроком и он не успел забрать —
-    // дописываем результат в общую ленту "Действия"/LIVE WINS (только
-    // свою запись — её liveBetId знает только этот клиент).
+    
+    
+    
     if (crashGame.betPlaced && !crashGame.cashedOut && !crashGame.liveBetResolved && crashGame.liveBetId) {
         crashGame.liveBetResolved = true;
         resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, 0);
@@ -3213,8 +3213,8 @@ function endCrashRoundVisual(animate) {
 
     const visible = isCrashPageVisible();
 
-    // Вибрация краха — только если игрок прямо сейчас находится в игре
-    // «Ракетка» (страница краша открыта). В других разделах — без вибрации.
+    
+    
     if (animate && visible && window.tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred((crashGame.betPlaced && crashGame.cashedOut) ? "success" : "error");
     }
@@ -3252,7 +3252,7 @@ function endCrashRoundVisual(animate) {
     renderCrashUI();
 }
 
-// Игрок открыл страницу краша — подтягиваем картинку под текущую фазу.
+
 function resumeCrashVisualsOnOpen() {
     advanceLocalPhase();
 
@@ -3264,8 +3264,8 @@ function resumeCrashVisualsOnOpen() {
         startCrashRaf();
     } else if (crashGame.phase === 'crashed') {
         showCrashedStatic();
-        // Краш произошёл, пока страница была закрыта, а пауза ещё идёт —
-        // доигрываем взрыв, чтобы игрок его всё-таки увидел.
+        
+        
         const ago = crashNow() - crashGame.crashAt;
         if (!crashGame.explosionPlayed && ago < CRASH_EXPLOSION_REPLAY_WINDOW_MS) {
             crashGame.explosionPlayed = true;
@@ -3276,9 +3276,9 @@ function resumeCrashVisualsOnOpen() {
     renderCrashUI();
 }
 
-/* =========================
-   СТАВКА / КЭШАУТ
-========================= */
+
+
+
 
 async function placeCrashBet() {
     const round = crashLobby.round;
@@ -3342,8 +3342,8 @@ async function cashOutCrash() {
     crashGame.isProcessing = true;
     const snapshot = snapshotBalanceState();
 
-    // Сервер сам находит ставку, считает множитель по своему времени и платит.
-    // Клиент шлёт лишь «на каком иксе нажал» — сервер возьмёт минимум из него и своего.
+    
+    
     const seenMult = computeCrashMultAt(crashNow() - crashGame.startTime, crashGame.crashPoint);
     const srv = await crashRpc('crash_cashout', { p_mult: seenMult });
     if (!srv.ok) {
@@ -3374,7 +3374,7 @@ async function cashOutCrash() {
     window.showWinPopup?.(winAmount, mult);
     resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
 
-    // Сразу показываем свой кэшаут в списке игроков
+    
     crashLobby.bets = crashLobby.bets.map(b => b.isUser
         ? { ...b, status: 'cashed_out', cashoutMult: mult, winAmount }
         : b);
@@ -3392,7 +3392,7 @@ function handleCrashAction() {
     } else if (crashGame.phase === 'flying' && crashGame.betPlaced && !crashGame.cashedOut) {
         cashOutCrash();
     } else if (crashCanQueue()) {
-        queueCrashBet();   // полёт / пауза после краша — ставка уйдёт в следующий раунд
+        queueCrashBet();   
     }
 }
 
@@ -3406,17 +3406,17 @@ function setCrashMaxBet() {
     applyBetMax(getCrashDom().betInput);
 }
 
-/* =========================
-   ОТРИСОВКА
-========================= */
 
-// Цвет коэффициента в истории по диапазонам
+
+
+
+
 function crashMultColor(m) {
-    if (m <= 1.25) return '#ff3b3b';   // 1.00–1.25  красный
-    if (m <= 1.85) return '#ffd21f';   // 1.26–1.85  жёлтый
-    if (m <= 3.00) return '#2ecc71';   // 1.86–3.00  зелёный
-    if (m <= 5.00) return '#3da5ff';   // 3.01–5.00  синий
-    return '#ffc400';                  // 5.01+      ярко-золотой
+    if (m <= 1.25) return '#ff3b3b';   
+    if (m <= 1.85) return '#ffd21f';   
+    if (m <= 3.00) return '#2ecc71';   
+    if (m <= 5.00) return '#3da5ff';   
+    return '#ffc400';                  
 }
 
 function renderCrashHistory() {
@@ -3431,8 +3431,8 @@ function renderCrashHistory() {
     }).join('');
 }
 
-// Эффективный статус игрока: после краша все, кто не забрал, — проиграли
-// (показываем сразу, не дожидаясь, пока это запишется в БД).
+
+
 function crashEffectiveStatus(p) {
     if (p.status === 'active' && crashGame.phase === 'crashed') return 'lost';
     return p.status;
@@ -3460,8 +3460,8 @@ function renderCrashPlayersList() {
     if (!crashLobby.bets.length) {
         html = '<div class="crash-players-empty">Пока никто не поставил в этом раунде</div>';
     } else {
-        // Сортировка: сначала те, кто ещё летит, потом забравшие, потом
-        // проигравшие; внутри группы — по размеру ставки.
+        
+        
         const rank = { active: 0, cashed_out: 1, lost: 2 };
         const sorted = [...crashLobby.bets].sort((a, b) => {
             return (rank[crashEffectiveStatus(a)] ?? 3) - (rank[crashEffectiveStatus(b)] ?? 3) || b.amount - a.amount;
@@ -3494,7 +3494,7 @@ function renderCrashPlayersList() {
         }).join('');
     }
 
-    // Ставки, ждущие следующий раунд: подпись слева и тонкая линия под активными игроками
+    
     if (crashLobby.queue.length) {
         const waitStatus =
             '<div class="crash-player-status crash-player-status-wait">' +
@@ -3504,15 +3504,15 @@ function renderCrashPlayersList() {
             crashLobby.queue.map(q => rowHtml(q, waitStatus)).join('');
     }
 
-    // Не трогаем DOM, если ничего не изменилось — список не мигает
+    
     if (html === crashLobby.lastPlayersHtml) return;
     crashLobby.lastPlayersHtml = html;
     dom.playersList.innerHTML = html;
 }
 
-// Путь следа + точка на его конце для коэффициента m (без смены классов/прозрачности)
-// Прогресс следа 0..1. Раньше пик достигался на 3.00x; теперь след идёт
-// на 10% медленнее — пик на ~3.22x.
+
+
+
 const CRASH_TRAIL_SPEED = 0.9;
 function crashTrailProgress(m) {
     return Math.min(1, Math.max(0, CRASH_TRAIL_SPEED * (m - 1) / 2));
@@ -3530,10 +3530,10 @@ function drawCrashTrail(m) {
     const trailEndX = stageW * 0.95;
     const trailEndY = stageH * 0.05;
 
-    // След — это начало ФИКСИРОВАННОЙ кривой (квадратичная Безье от старта
-    // к верхнему углу с изгибом). Голова ползёт по этой кривой, а сам след —
-    // её кусочек от старта до головы (алгоритм де Кастельжо). Форма не
-    // «плывёт», а именно вытягивается — как график, который дорисовывают.
+    
+    
+    
+    
     const fullDx = trailEndX - trailStartX;
     const fullDy = trailEndY - trailStartY;
     const fullLen = Math.hypot(fullDx, fullDy) || 1;
@@ -3577,8 +3577,8 @@ function renderCrashUI(heavy = true) {
     }
 
     if (crashGame.phase === 'waiting') {
-        // Тяжёлая подготовка сцены — в enterWaitingVisual() (один раз),
-        // цифры отсчёта — в renderCrashCountdown(). Здесь только кнопка.
+        
+        
         const hold = crashGame.betPlaced || !!crashGame.queued;
         if (dom.betInput) dom.betInput.disabled = hold;
         dom.actionBtn.textContent = crashGame.betPlaced ? 'Ставка принята' : (crashGame.queued ? 'Ставка в очереди ✓' : 'Сделать ставку');
@@ -3586,14 +3586,14 @@ function renderCrashUI(heavy = true) {
         return;
     }
 
-    // phase === 'flying'
-    // Расчёт позиции ракеты и точки следа — дешёвая математика, считаем
-    // каждый кадр, чтобы ракета двигалась идеально плавно.
+    
+    
+    
     const currentM = crashGame.currentMult;
 
     const trailProgress = crashTrailProgress(currentM);
 
-    // Поворот ракеты адаптирован под траекторию до 3.00x
+    
     const angle = 45 - (90 * trailProgress);
 
     if (dom.rocketEl) {
@@ -3601,9 +3601,9 @@ function renderCrashUI(heavy = true) {
         dom.rocketEl.style.transform = `translate3d(${c.x}px, ${c.y}px, 0px) rotate(${angle}deg)`;
     }
 
-    // "Тяжёлые" обновления — текст с text-shadow и SVG-след с несколькими
-    // drop-shadow — троттлим до ~30 раз/сек (см. CRASH_HEAVY_UPDATE_INTERVAL_MS
-    // в tickCrash), чтобы не грузить рендер на каждый из 60 кадров.
+    
+    
+    
     if (heavy) {
         if (dom.topLeftMult) {
             dom.topLeftMult.textContent = currentM.toFixed(2) + 'x';
@@ -3627,8 +3627,8 @@ function renderCrashUI(heavy = true) {
         if (dom.betInput) dom.betInput.disabled = !!crashGame.queued || (crashGame.betPlaced && !crashGame.cashedOut);
     }
 
-    // Тряска экрана — дешёвый compositor-only transform, оставляем на каждый
-    // кадр ради плавности вибрации.
+    
+    
     if (dom.stageEl) {
         const shakeStrength = Math.min(8, (crashGame.currentMult - 1) * 1.2);
         const dx = (Math.random() - 0.5) * shakeStrength;
@@ -3637,20 +3637,20 @@ function renderCrashUI(heavy = true) {
     }
 }
 
-/* =========================
-   ИГРА «АПГРЕЙДЕР»
-   Колесо, формула и тайминг анимации — как в версии для Telegram-бота:
-   payout = ставка * (1 - 5%) / (шанс / 100). Фон колеса прозрачный —
-   страница остаётся с фоном приложения.
-========================= */
+
+
+
+
+
+
 
 const UPG_HOUSE_EDGE = 0.05;
 const UPG_MIN_CHANCE = 1;
 const UPG_MAX_CHANCE = 90;
 const UPG_STEP = 5;
-const UPG_START = -40;       // где стрелка стоит до запуска
-const UPG_WINDUP = 12;       // замах назад, градусы
-const UPG_T = { pause: 400, windup: 600, spin: 6000, land: 390 };   // мс, как в боте
+const UPG_START = -40;       
+const UPG_WINDUP = 12;       
+const UPG_T = { pause: 400, windup: 600, spin: 6000, land: 390 };   
 const UPG_FONT = '"Carlito","Helvetica Neue",Arial,sans-serif';
 const UPG_ARROW = [[0, 0], [29, 15], [21, 4.6], [56, 4.6], [71, 12], [64, 0], [71, -12], [56, -4.6], [21, -4.6], [29, -15]];
 
@@ -3668,7 +3668,7 @@ function upgMinBet(chance) {
     return MIN_BET;
 }
 
-// Исход броска считает сервер (SQL-функция upgrader_play) — в браузере его нет.
+
 
 function upgBet() {
     const v = parseFloat(document.getElementById('upgBetInput')?.value);
@@ -3678,14 +3678,14 @@ function upgBet() {
 const upgSmooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const upgPt = (r, deg) => { const a = deg * Math.PI / 180; return [360 + r * Math.sin(a), 315 - r * Math.cos(a)]; };
 
-/* ---------- статичные слои колеса (кэшируются по шансу) ----------
-   Раньше каждый кадр перерисовывал ВСЁ: 2 полноразмерные картинки с альфой,
-   ~10 текстов (с measureText в цикле) и 120 рисок. Теперь слои раздельные:
-     1. base  — колесо, плашка (рисуется только при смене шанса)
-     2. hot   — красное свечение сектора (двигаем ТОЛЬКО css-opacity, без перерисовки)
-     3. text  — тексты (перерисовываются только когда реально поменялись)
-     4. fx    — золотой хвост + стрелка (единственное, что рисуется каждый кадр) */
-// Колесо БЕЗ красного сектора — от шанса не зависит, строится один раз.
+
+
+
+
+
+
+
+
 function upgWheel() {
     if (upg.wheel && upg.wheel.width === upg.size) return upg.wheel;
     const S = upg.size / 720;
@@ -3710,7 +3710,7 @@ function upgWheel() {
     disc(250.5, '#2c2c32', '#161618');
     disc(180, '#1f1f24', '#121216');
 
-    // плашка «ставка / выигрыш»
+    
     x.fillStyle = '#161618';
     x.beginPath();
     const [px0, py0, px1, py1, rr] = [62, 619, 658, 695, 18];
@@ -3721,7 +3721,7 @@ function upgWheel() {
     return (upg.wheel = c);
 }
 
-// Путь сектора для ЛЮБОГО (в т.ч. дробного) шанса — нужен для плавной анимации.
+
 function upgSectorPath(x, chance) {
     const half = chance * 1.8, k = Math.PI / 180;
     x.beginPath();
@@ -3730,7 +3730,7 @@ function upgSectorPath(x, chance) {
     x.closePath();
 }
 
-// Красный сектор + тонкое кольцо по внутреннему краю (рисуется поверх колеса)
+
 function upgPaintSector(x, chance) {
     const g = x.createLinearGradient(0, 495, 0, 569); g.addColorStop(0, '#f04854'); g.addColorStop(1, '#c01c2e');
     upgSectorPath(x, chance);
@@ -3738,7 +3738,7 @@ function upgPaintSector(x, chance) {
     x.beginPath(); x.arc(360, 315, 180, 0, Math.PI * 2); x.strokeStyle = '#34343c'; x.lineWidth = 1.6; x.stroke();
 }
 
-// Слой свечения. Центр (r < 180) вырезан, чтобы ореол не залезал на центральный диск.
+
 function upgPaintHot(x, S, chance) {
     x.setTransform(S, 0, 0, S, 0, 0);
     x.save();
@@ -3750,7 +3750,7 @@ function upgPaintHot(x, S, chance) {
     x.restore();
 }
 
-// Готовое свечение для «устоявшегося» шанса (кэш) — чтобы во время вращения ничего не строить.
+
 function upgHotSprite(chance) {
     const key = chance + ':' + upg.size;
     if (!upg.scenes[key]) {
@@ -3763,7 +3763,7 @@ function upgHotSprite(chance) {
     return upg.scenes[key];
 }
 
-// Плавный «рост/убывание» сектора к новому шансу (по времени, не по кадрам)
+
 function upgChanceAnim() {
     if (upg.chRaf) return;
     let last = performance.now();
@@ -3774,7 +3774,7 @@ function upgChanceAnim() {
         const diff = upg.chance - upg.shown;
         if (Math.abs(diff) < 0.04) {
             upg.shown = upg.chance; upgDraw();
-            setTimeout(() => { if (!upg.busy && upg.ctx) upgHotSprite(upg.chance); }, 80);   // заранее готовим свечение
+            setTimeout(() => { if (!upg.busy && upg.ctx) upgHotSprite(upg.chance); }, 80);   
             return;
         }
         upg.shown += diff * (1 - Math.exp(-dt / 70));
@@ -3784,7 +3784,7 @@ function upgChanceAnim() {
     upg.chRaf = requestAnimationFrame(step);
 }
 
-/* ---------- текст (ширины кэшируются — measureText в кадре был очень дорогим) ---------- */
+
 const upgWCache = new Map();
 function upgMeasure(x, font, text) {
     const key = font + '|' + text;
@@ -3836,8 +3836,8 @@ function upgCenterText(x, kind, alpha, chance, payout) {
     x.restore();
 }
 
-/* ---------- кадр ---------- */
-// Геометрия рисок считается один раз
+
+
 const UPG_TICKS = (() => {
     const t = [];
     for (let i = 0; i < 120; i++) {
@@ -3853,11 +3853,11 @@ function upgDraw() {
     if (!base) return;
     const S = upg.size / 720, chance = upg.chance;
 
-    // во время вращения ставку из DOM не читаем (она заблокирована)
+    
     if (!upg.busy || upg.betC == null) upg.betC = upgBet() || MIN_BET;
     const bet = upg.betC;
 
-    // 1) колесо + сектор (перерисовка только пока сектор реально меняется)
+    
     const shown = upg.shown;
     const sKey = shown.toFixed(2) + ':' + upg.size;
     if (upg.sceneKey !== sKey) {
@@ -3869,7 +3869,7 @@ function upgDraw() {
         upg.sceneKey = sKey;
     }
 
-    // 2) свечение — прозрачность слоя (GPU); сам слой перерисовываем лишь если оно видно
+    
     const g = Math.max(0, Math.min(1, upg.glow));
     const gv = g < 0.01 ? 0 : Math.round(g * 1000) / 1000;
     if (gv > 0 && upg.hotKey !== sKey) {
@@ -3882,7 +3882,7 @@ function upgDraw() {
     }
     if (upg.glowVal !== gv) { upg.hotCv.style.opacity = gv; upg.glowVal = gv; }
 
-    // 3) тексты — только если что-то изменилось
+    
     const disp = Math.round(shown);
     const tKey = disp + '|' + chance + '|' + bet + '|' + (upg.result || '') + '|' + (upg.result ? Math.round(upg.fade * 200) : 0) + '|' + upg.size;
     if (upg.textKey !== tKey) {
@@ -3904,7 +3904,7 @@ function upgDraw() {
         upgFit(x, `${payout.toFixed(2)} $`, 509, 667, 28, 258, '#ffd61e');
     }
 
-    // 4) хвост + стрелка — каждый кадр, но это ~20 линий и один многоугольник
+    
     const x = upg.fxCtx;
     x.setTransform(1, 0, 0, 1, 0, 0);
     x.clearRect(0, 0, upg.size, upg.size);
@@ -3936,7 +3936,7 @@ function upgDraw() {
     x.fillStyle = '#ffd000'; x.fill();
 }
 
-/* ---------- анимация вращения ---------- */
+
 function upgPickTarget(lo, hi) {
     const len = hi - lo, m = Math.min(4, len * 0.35);
     let t;
@@ -3953,7 +3953,7 @@ function upgAnimate(win, chance) {
     cancelAnimationFrame(upg.fadeRaf);
     const half = chance * 1.8;
     const [lo, hi] = win ? [180 - half, 180 + half] : [180 + half, 180 - half + 360];
-    // Стартуем оттуда, куда стрелка упала в прошлом раунде (а не из исходной точки)
+    
     const startTh = ((upg.theta % 360) + 360) % 360;
     const origin = startTh - UPG_WINDUP;
     const target = upgPickTarget(lo, hi);
@@ -3962,9 +3962,9 @@ function upgAnimate(win, chance) {
     const { pause, windup, spin, land } = UPG_T;
     const total = pause + windup + spin + land;
     const spinStart = pause + windup;
-    cancelAnimationFrame(upg.chRaf); upg.chRaf = 0; upg.shown = upg.chance;   // сектор на месте до начала вращения
-    upg.betC = null;                           // перечитаем ставку один раз и закэшируем
-    const g0 = upg.glow, f0 = upg.fade;      // свечение и итог прошлого раунда — гасим плавно
+    cancelAnimationFrame(upg.chRaf); upg.chRaf = 0; upg.shown = upg.chance;   
+    upg.betC = null;                           
+    const g0 = upg.glow, f0 = upg.fade;      
 
     return new Promise(resolve => {
         let done = false, prev = startTh, prevT = 0, lastK = null, lastTick = 0;
@@ -3990,9 +3990,9 @@ function upgAnimate(win, chance) {
             } else if (t < spinStart + spin) {
                 const u = (t - spinStart) / spin;
                 theta = origin + (final - origin) * (1 - Math.pow(1 - u, 3)) * upgSmooth(u / 0.05);
-                const speed = Math.abs(theta - prev) * 30 / Math.max(8, t - prevT);   // °/кадр при 30 мс
+                const speed = Math.abs(theta - prev) * 30 / Math.max(8, t - prevT);   
                 calm = upgSmooth(1 - speed / 8);
-                const k = Math.floor(theta / 3);                                      // «тик» на каждой риске
+                const k = Math.floor(theta / 3);                                      
                 if (lastK !== null && k !== lastK && now - lastTick > 75) { setTimeout(() => window.haptic('select'), 0); lastTick = now; }
                 lastK = k;
             } else {
@@ -4000,11 +4000,11 @@ function upgAnimate(win, chance) {
             }
 
             const gap = Math.abs((((theta % 360) + 360) % 360) - 180);
-            const ramp = upgSmooth((t - spinStart) / 600);       // свечение зажигается заново только в полёте
+            const ramp = upgSmooth((t - spinStart) / 600);       
             let glow = upgSmooth(1 - gap / (half + 24)) * 0.85 * calm * ramp;
 
             if (t < spinStart) {
-                // замах: прошлое свечение плавно гаснет
+                
                 glow = g0 * (1 - upgSmooth(t / spinStart));
                 if (upg.result) {
                     const k = upgSmooth(Math.min(1, t / 500));
@@ -4023,11 +4023,11 @@ function upgAnimate(win, chance) {
             if (t >= total) finish(); else upg.raf = requestAnimationFrame(step);
         };
         upg.raf = requestAnimationFrame(step);
-        setTimeout(finish, total + 400);     // страховка, если rAF «заснул» в фоне
+        setTimeout(finish, total + 400);     
     });
 }
 
-/* ---------- интерфейс ---------- */
+
 function upgInit() {
     if (upg.cv) return;
     const cv = document.getElementById('upgCanvas');
@@ -4037,11 +4037,11 @@ function upgInit() {
     cv.width = cv.height = upg.size;
     upg.ctx = cv.getContext('2d');
 
-    // обёртка + 3 слоя поверх базового канваса
-    // Позиционирование слоёв задаём инлайн-стилями: без них (если CSS
-    // .upg-stack/.upg-layer не подхватился) 4 канваса идут друг под другом,
-    // текст/стрелка уезжают за экран, а кнопки ставки оказываются на несколько
-    // экранов ниже — со стороны выглядит как «апгрейдер не работает».
+    
+    
+    
+    
+    
     const stack = document.createElement('div');
     stack.className = 'upg-stack';
     stack.style.position = 'relative';
@@ -4081,7 +4081,7 @@ function upgInit() {
 }
 
 function upgRefresh(resetResult = true) {
-    if (resetResult) upgFadeOut();     // стрелка остаётся где упала, свечение гаснет плавно
+    if (resetResult) upgFadeOut();     
     document.querySelectorAll('.upg-chance-row .pct-btn').forEach(b =>
         b.classList.toggle('active', Number(b.dataset.chance) === upg.chance));
     const chanceInput = document.getElementById('upgChanceInput');
@@ -4097,10 +4097,10 @@ function upgRefresh(resetResult = true) {
     }
     if (resetResult) upgHideResultText();
     upgDraw();
-    if (upg.shown !== upg.chance) upgChanceAnim();      // сектор плавно догоняет новый шанс
+    if (upg.shown !== upg.chance) upgChanceAnim();      
 }
 
-// Плавно гасит свечение кольца и итог прошлого раунда (без резкого сброса)
+
 function upgFadeOut(ms = 450) {
     cancelAnimationFrame(upg.fadeRaf);
     if (upg.busy) return;
@@ -4183,11 +4183,11 @@ function upgRelease() {
     document.body.classList.remove('upg-spinning');
 }
 
-// Ставку, бросок и выплату делает Supabase (upgrader_play), клиент только показывает итог
+
 async function upgApi(bet, chance) {
     try {
-        // rpc() возвращает «ленивый» thenable: КАЖДЫЙ .then() шлёт отдельный запрос.
-        // Оборачиваем в настоящий Promise, иначе netBar.track + await = два списания ставки.
+        
+        
         const _upgP = Promise.resolve(supabase.rpc('upgrader_play', {
             p_init: tg?.initData || '', p_bet: bet, p_chance: chance
         }));
@@ -4231,8 +4231,8 @@ async function playUpgrader() {
         const win = !!srv.win;
         const credited = win ? roundMoney(srv.payout) : 0;
         const srvCoef = Number(srv.coef);
-        // на экране сначала показываем баланс после списания ставки,
-        // а выигрыш раскрываем, когда колесо остановилось
+        
+        
         setUIBalance(roundMoney(Number(srv.balance) - credited));
 
         const liveBetId = await broadcastLiveBet(bet, 'Апгрейдер');
@@ -4244,7 +4244,7 @@ async function playUpgrader() {
         }
 
         const res = document.getElementById('upgResult');
-        upgHideResultText();      // старый итог плавно гаснет, кольцо и стрелка — внутри upgAnimate
+        upgHideResultText();      
         await upgAnimate(win, chance);
 
         setUIBalance(Number(srv.balance));
@@ -4262,9 +4262,9 @@ async function playUpgrader() {
     }
 }
 
-/* =========================
-   БАЛАНС И UI
-========================= */
+
+
+
 
 function setUIBalance(newBalance) {
     currentBalance = parseFloat(newBalance) || 0.00;
@@ -4301,9 +4301,9 @@ function setUIBalance(newBalance) {
     updateLevelUI();
 }
 
-/* =========================
-   НАВИГАЦИЯ
-========================= */
+
+
+
 
 function hideAllPages() {
     const pages = ["homePage", "balancePage", "profilePage", "bonusPage", "topPage", "minesPage", "crashPage", "upgraderPage", "iceArenaPage", "tgEmojiPage", "diceGamePage", "footballGamePage", "emojiGamePage", "vipPage", "tasksPage"];
@@ -4315,21 +4315,21 @@ function hideAllPages() {
 }
 
 function showPage(id) {
-    // Если игрок уходит со страницы краша на любую другую — прячем
-    // раскрытый SHA-256 ключ обратно. При новом заходе на краш он снова
-    // появится только после того, как раунд закрашится.
+    
+    
+    
     const crashPageEl = document.getElementById("crashPage");
     if (id !== "crashPage" && crashPageEl && !crashPageEl.classList.contains("hidden")) {
         hideCrashRoundKey();
     }
 
     const page = document.getElementById(id);
-    // Тап по вкладке/играми, где уже находимся, — анимацию появления не повторяем
+    
     const alreadyOpen = !!page && !page.classList.contains("hidden");
     hideAllPages();
     if (page) page.classList.remove("hidden");
-    // На страницах с Lottie-анимациями отключаем размытие фона у нижнего меню
-    // и ставим на паузу фоновые анимации неактивных экранов, чтобы держать стабильные 60 FPS.
+    
+    
     const isAnimPage = id === "tgEmojiPage" || id === "diceGamePage" || id === "footballGamePage" || id === "emojiGamePage";
     document.body.classList.toggle("anim-page", isAnimPage);
     if (typeof window.syncTgEmojiPageState === "function") window.syncTgEmojiPageState(id);
@@ -4339,15 +4339,15 @@ function showPage(id) {
     if (!alreadyOpen) playPageEnter(page);
 }
 
-// Появление страницы/игры: блоки по очереди «вылетают» снизу (как во вкладке «Топ»).
-// Только opacity + translateY — размеры и раскладка не меняются, поэтому игры
-// (canvas, Lottie, замеры сцены) работают как раньше. У «Топ» своя анимация.
+
+
+
 function playPageEnter(page) {
     if (!page || page.id === 'topPage' || page.id === 'tgEmojiPage' || page.id === 'diceGamePage' || page.id === 'footballGamePage' || page.id === 'emojiGamePage') return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const kids = Array.from(page.children).filter(el => el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE');
     kids.forEach(el => el.classList.remove('page-enter'));
-    void page.offsetWidth;   // один перезапуск анимации сразу для всех блоков
+    void page.offsetWidth;   
     kids.forEach((el, i) => {
         el.style.setProperty('--pi', Math.min(i, 8));
         el.classList.add('page-enter');
@@ -4388,49 +4388,49 @@ function openTgEmojiMode(mode) {
     openEmojiGame(mode);
 }
 
-/* ---------- HOUSE EDGE ДЛЯ TELEGRAM EMOJI ---------- */
-// Маржа заведения 2.5%: коэффициент = 0.975 / вероятность выигрыша,
-// округлённый ВНИЗ до сотых (в пользу заведения). Считаем в целых числах,
-// чтобы не ловить ошибки дробной арифметики: ×2.50 → ×2.43, ×6.00 → ×5.85, ×1.66 → ×1.62.
-// wins/total — вероятность одного броска, n — сколько бросков подряд должны зайти.
+
+
+
+
+
 const EMOJI_HOUSE_EDGE_PERCENT = 2.5;
 function houseCoef(wins, total, n) {
     const k = Math.max(1, n | 0);
     const num = Math.pow(total, k);
     const den = Math.pow(wins, k);
-    const keep = 1000 - EMOJI_HOUSE_EDGE_PERCENT * 10;          // 975
+    const keep = 1000 - EMOJI_HOUSE_EDGE_PERCENT * 10;          
     return Math.floor((keep * num) / (den * 10)) / 100;
 }
 
-/* ---------- КУБ ---------- */
+
 const diceGame = { cubes: 1, mode: null, busy: false, view: "main", numbers: [] };
-// Сцена кубика объявлена отдельным IIFE ниже, поэтому текущее число
-// кубиков нужно отдавать ей через window (иначе initDicePreview падает).
+
+
 window.getDiceCubes = () => diceGame.cubes || 1;
-// Вероятность одного куба [выигрышных граней, всего граней].
-// Режимы 2/3 куба — компаунд: каждый куб должен попасть в выбранный исход.
-const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [2, 6], edges: [2, 6] };   // Центр = грани 3 и 4 (×2.92), Края = 1 и 6 (×2.92)
+
+
+const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [2, 6], edges: [2, 6] };   
 const DICE_MODE_ORDER = ["low", "high", "even", "odd", "center", "edges", "number"];
-// 2 куба: Меньше/Больше, Чёт/Нечёт, Одинаковые (любой дубль) и Дубль (конкретные числа)
+
 const DICE_MODE_ORDER_2 = ["low", "high", "even", "odd", "same", "double"];
 function diceModeOrder(cubes) { return cubes === 2 ? DICE_MODE_ORDER_2 : DICE_MODE_ORDER; }
-// Режим, который включается выбором граней в подменю: «Число» (1/3 куба) или «Дубль» (2 куба)
+
 function diceNumbersMode(cubes) { return (cubes || 1) === 2 ? "double" : "number"; }
-// Префикс иконок граней: modecubeN (1/3 куба) или mode2cubeN (2 куба)
+
 function diceNumIconPrefix(cubes) { return (cubes || 1) === 2 ? "mode2cube" : "modecube"; }
 const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", center: "Центр", edges: "Края", number: "Число", same: "Одинаковые", double: "Дубль" };
-const DICE_MAX_NUMBERS = 5;                          // «Число»: можно выбрать от 1 до 5 граней
-const DICE_NUM_IMG_DIR = "images/dice/";             // запасные modecube1.png … modecube6.png, back.png
-const DICE_NUM_TGS_DIR = "animations/dice/";         // modecube1.tgs … modecube6.tgs (если нет — берём png)
-const DICE_BACK_PNG = "images/back.png";                // запасная иконка «Назад», если нет back.tgs
-const DICE_BACK_TGS = "images/ui/back.tgs";          // анимированная иконка «Назад»
+const DICE_MAX_NUMBERS = 5;                          
+const DICE_NUM_IMG_DIR = "images/dice/";             
+const DICE_NUM_TGS_DIR = "animations/dice/";         
+const DICE_BACK_PNG = "images/back.png";                
+const DICE_BACK_TGS = "images/ui/back.tgs";          
 
-// Коэффициент режима: 0.975 / вероятность, округление вниз до сотых.
-// «Число»: k выбранных граней из 6 → вероятность k/6 (на каждый куб).
+
+
 function diceCoefFor(mode, cubes, numCount) {
     const n = cubes || 1;
-    if (mode === "same") return houseCoef(1, 6, 1);          // оба куба одинаковые: 1/6 → ×5.85
-    if (mode === "double") {                                 // конкретный дубль: k/36 → ×35.10 при k=1
+    if (mode === "same") return houseCoef(1, 6, 1);          
+    if (mode === "double") {                                 
         const k = Math.max(1, Math.min(DICE_MAX_NUMBERS, numCount || 1));
         return houseCoef(k, 36, 1);
     }
@@ -4451,8 +4451,8 @@ function diceCurrentCoef() {
     return diceGame.mode ? diceCoefFor(diceGame.mode, diceGame.cubes, diceGame.numbers.length) : null;
 }
 
-// Общий загрузчик .tgs-иконок куба (modecube1…6, back). Текст Lottie-JSON кэшируется,
-// а для каждой иконки парсится заново — lottie мутирует данные.
+
+
 const _diceTgsText = {};
 function loadDiceTgsText(urls) {
     const key = urls.join("|");
@@ -4460,7 +4460,7 @@ function loadDiceTgsText(urls) {
     const pr = (_diceTgsText[key] = (async () => {
         for (const url of urls) {
             try {
-                const res = await fetch(url, { cache: "no-cache" });   // no-cache: не липнет старый 404 из кэша WebView
+                const res = await fetch(url, { cache: "no-cache" });   
                 if (!res.ok) continue;
                 const buf = new Uint8Array(await res.arrayBuffer());
                 if (buf[0] === 0x1f && buf[1] === 0x8b) {
@@ -4471,17 +4471,17 @@ function loadDiceTgsText(urls) {
                     if (window.pako) return window.pako.ungzip(buf, { to: "string" });
                     continue;
                 }
-                return new TextDecoder().decode(buf);   // обычный Lottie .json
-            } catch (e) { /* пробуем следующий url */ }
+                return new TextDecoder().decode(buf);   
+            } catch (e) {  }
         }
         return null;
     })());
-    // неудачную загрузку не кэшируем — при следующей отрисовке попробуем снова
+    
     pr.then(t => { if (!t && _diceTgsText[key] === pr) delete _diceTgsText[key]; });
     return pr;
 }
 
-// Монтирует .tgs в контейнер; если файла нет или Lottie недоступен — ставит png.
+
 async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
     if (!el) return;
     const fallback = () => {
@@ -4491,7 +4491,7 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
         el.innerHTML = '<img' + (imgClass ? ' class="' + imgClass + '"' : '') + ' src="' + fallbackPng +
             '" alt="" draggable="false" onerror="var p=this.parentNode;this.remove();if(p)p.classList.add(\'is-empty\')">';
     };
-    // пока .tgs грузится — аккуратный жёлтый спиннер
+    
     el.innerHTML = '<span class="tge-spinner mini"></span>';
     try {
         if (typeof lottie === "undefined") throw new Error("no lottie");
@@ -4499,8 +4499,8 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
         if (!text) throw new Error("not found");
         if (!el.isConnected) return;
         const data = JSON.parse(text);
-        const holder = document.createElement("span");          // анимацию строим в отдельном слое,
-        holder.className = "dice-tgs-holder";                   // спиннер убираем, когда она готова
+        const holder = document.createElement("span");          
+        holder.className = "dice-tgs-holder";                   
         holder.style.opacity = "0";
         el.appendChild(holder);
         const anim = lottie.loadAnimation({
@@ -4517,19 +4517,19 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
         };
         anim.addEventListener("DOMLoaded", show);
         anim.addEventListener("data_ready", show);
-        setTimeout(show, 400);   // страховка, если событие не придёт
+        setTimeout(show, 400);   
         if (fallbackHtml) {
-            // если анимация нарисовалась пустой (прозрачный canvas) — показываем запасную иконку
+            
             setTimeout(() => {
                 try {
                     const cv = holder.querySelector("canvas");
                     if (!cv || !el.isConnected) return;
                     const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
-                    for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return;   // есть видимые пиксели
+                    for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return;   
                     console.warn("[dice] tgs нарисовался пустым:", urls[0]);
                     try { anim.destroy(); } catch (e2) {}
                     fallback();
-                } catch (e3) { /* canvas недоступен — оставляем как есть */ }
+                } catch (e3) {  }
             }, 900);
         }
     } catch (e) {
@@ -4538,32 +4538,32 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
     }
 }
 
-// Иконка «Назад» — back.tgs (Lottie); если файла нет, берём images/dice/back.png.
+
 function mountDiceBackIcon(el) {
     return mountDiceTgsIcon(el, [DICE_BACK_TGS], null, null, '<span class="dice-back-chevron"></span>');
 }
 
-// Иконка грани «Число» / «Дубль» — modecubeN.tgs (1/3 куба) или mode2cubeN.tgs (2 куба); запасной png — modecubeN.png.
+
 function mountDiceNumIcon(el, n, prefix) {
     const p = prefix || "modecube";
     return mountDiceTgsIcon(
         el,
         [DICE_NUM_TGS_DIR + p + n + ".tgs", DICE_NUM_IMG_DIR + p + n + ".tgs"],
-        DICE_NUM_IMG_DIR + "modecube" + n + ".png",      // запасной png — обычные грани
+        DICE_NUM_IMG_DIR + "modecube" + n + ".png",      
         "dice-num-img"
     );
 }
 
-// Плитки строятся из состояния diceGame:
-//   view "main"   — Больше / Меньше / Чёт / Нечёт / Число (до ×N)
-//   view "number" — 6 граней (до 5 можно выбрать) + «Назад»
-// animate=true — плавная смена набора плиток.
+
+
+
+
 function renderDiceModes(animate) {
     const box = document.getElementById("diceModes");
     if (!box) return;
-    const tok = (box._renderTok = (box._renderTok || 0) + 1);   // только последний вызов рисует
+    const tok = (box._renderTok = (box._renderTok || 0) + 1);   
     if (animate && box.children.length) {
-        // 1) старые плитки быстро гаснут, 2) набор меняется, 3) высота блока плавно подгоняется
+        
         box.classList.add("leaving");
         setTimeout(() => {
             if (box._renderTok !== tok) return;
@@ -4604,7 +4604,7 @@ function doRenderDiceModes(animate) {
                     '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
                     '<span class="dice-mode-coef">(до ' + diceCoefText(max) + ')</span></button>';
             }
-            // Центр → modecube34.tgs (грани 3 и 4), Края → modecube16.tgs (грани 1 и 6)
+            
             const modeIcon = cubes === 1 ? (k === "center" ? "modecube34" : (k === "edges" ? "modecube16" : "")) : "";
             const hasIcon = !!modeIcon;
             return '<button class="dice-tile dice-mode' + (hasIcon ? " dice-has-icon" : "") + enter + '" style="--i:' + i + '" data-mode="' + k +
@@ -4621,7 +4621,7 @@ function doRenderDiceModes(animate) {
     });
     box.innerHTML = html;
     box.querySelectorAll(".dice-num-icon[data-icon]").forEach(el => {
-        const nm = el.dataset.icon;   // modecube34 → animations/dice/modecube34.tgs (запасной png)
+        const nm = el.dataset.icon;   
         mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + nm + ".tgs", DICE_NUM_IMG_DIR + nm + ".tgs"], DICE_NUM_IMG_DIR + nm + ".png", "dice-num-img");
     });
     if (inNumbers) {
@@ -4630,7 +4630,7 @@ function doRenderDiceModes(animate) {
         box.querySelectorAll(".dice-num-icon").forEach(el => mountDiceNumIcon(el, +el.dataset.n, iconPrefix));
     }
 
-    // плавное изменение высоты блока, чтобы нижняя часть не прыгала
+    
     if (animate && oldH) {
         box.style.height = "auto";
         const newH = box.offsetHeight;
@@ -4642,7 +4642,7 @@ function doRenderDiceModes(animate) {
     }
 }
 
-// Сброс выбора «Число»: возврат на основной набор плиток
+
 function resetDiceNumbers() {
     diceGame.view = "main";
     diceGame.numbers = [];
@@ -4652,7 +4652,7 @@ function openDiceNumbers() {
     if (diceGame.busy) return;
     diceGame.view = "number";
     diceGame.numbers = [];
-    diceGame.mode = null;               // режим «Число» активен, когда выбрана хотя бы одна грань
+    diceGame.mode = null;               
     renderDiceModes(true);
     updateDicePlayLabel();
 }
@@ -4660,7 +4660,7 @@ function openDiceNumbers() {
 function diceNumbersBack() {
     if (diceGame.busy) return;
     resetDiceNumbers();
-    diceGame.mode = null;               // «Назад» сбрасывает выбор
+    diceGame.mode = null;               
     renderDiceModes(true);
     updateDicePlayLabel();
 }
@@ -4684,7 +4684,7 @@ function toggleDiceNumber(n, btn) {
         const ic = btn.querySelector(".dice-num-icon");
         try { ic && ic._anim && ic._anim.goToAndPlay(0, true); } catch (e) {}
     }
-    // у всех граней показываем коэффициент при текущем количестве выбранных
+    
     const txt = "(" + diceCoefText(diceCoefFor(diceNumbersMode(diceGame.cubes), diceGame.cubes, diceGame.numbers.length)) + ")";
     document.querySelectorAll("#diceModes .dice-num .dice-mode-coef").forEach(el => { el.textContent = txt; });
     updateDicePlayLabel();
@@ -4701,7 +4701,7 @@ function openDiceGame() {
     showPage("diceGamePage");
     updateNav("games");
     if (typeof window.initDicePreview === "function") window.initDicePreview();
-    // Возврат в «Куб» — снова превью, без галочки/крестика прошлой партии.
+    
     if (window.DiceStage) window.DiceStage.reset();
 }
 
@@ -4713,25 +4713,25 @@ function updateDicePlayLabel() {
 }
 
 function selectDiceMode(mode, btn) {
-    resetDiceNumbers();                         // другой режим — выбор чисел сбрасывается
+    resetDiceNumbers();                         
     diceGame.mode = mode;
     document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
     if (btn) btn.classList.add("selected");
     updateDicePlayLabel();
-    // результат (галочка/крестик) остаётся на экране до начала новой игры
+    
 }
 
 function selectDiceCubes(n, btn) {
     if (n !== 1 && n !== 2 && n !== 3) { showMessage("Скоро появится"); return; }
     if (diceGame.busy || n === diceGame.cubes) return;
     diceGame.cubes = n;
-    diceGame.mode = null;                       // набор режимов другой — выбор сбрасываем
+    diceGame.mode = null;                       
     resetDiceNumbers();
     document.querySelectorAll("#diceGamePage .dice-count-btn").forEach(b => b.classList.remove("active"));
     if (btn) btn.classList.add("active");
     renderDiceModes(true);
     updateDicePlayLabel();
-    if (window.DiceStage) window.DiceStage.setCubes(n);   // раздвоение / склейка кубиков
+    if (window.DiceStage) window.DiceStage.setCubes(n);   
 }
 
 function adjustDiceBet(factor) {
@@ -4749,16 +4749,16 @@ function setDiceBusy(on) {
 }
 
 
-/* =========================
-   EMOJI-ИГРЫ: ВСЁ СЧИТАЕТ СЕРВЕР (Supabase RPC emoji_play)
-   Клиент отправляет только «что выбрал» (игра, режим, число бросков, ставка).
-   Ставку, броски, проверку выигрыша, коэффициент и выплату делает база
-   атомарно в одной транзакции и возвращает готовые rolls/passes/win/balance.
-   Подменить результат через F12 нельзя: клиент лишь проигрывает анимацию.
-========================= */
+
+
+
+
+
+
+
 async function emojiPlayApi(game, mode, count, bet, nums) {
     try {
-        // rpc() — «ленивый» thenable: оборачиваем в Promise, чтобы не было двойного запроса
+        
         const p = Promise.resolve(supabase.rpc('emoji_play', {
             p_init: tg?.initData || '',
             p_game: game,
@@ -4776,9 +4776,9 @@ async function emojiPlayApi(game, mode, count, bet, nums) {
     }
 }
 
-// Выигрыш = ставка × коэффициент, округлённый ВНИЗ до цента (не в пользу игрока).
-// Считаем в целых центах, чтобы не ловить ошибки дробных чисел
-// (например 1.2 × 1.95 в обычной арифметике даёт 2.3399999… и терял бы цент).
+
+
+
 function calcDiceWin(bet, coef) {
     const cents = Math.round(bet * 100);
     const coefHundredths = Math.round(coef * 100);
@@ -4809,10 +4809,10 @@ async function handleDicePlay() {
     setDiceBusy(true);
     const mode = diceGame.mode;
     const cubes = diceGame.cubes;
-    const nums = diceGame.numbers.slice();      // выбранные грани для «Число»
+    const nums = diceGame.numbers.slice();      
     const coef = diceCoefFor(mode, cubes, nums.length);
 
-    // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
+    
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
@@ -4832,11 +4832,11 @@ async function handleDicePlay() {
     const winAmount = win ? roundMoney(srv.payout) : 0;
     const coefSrv = Number(srv.coef) || coef;
     const finalBalance = Number(srv.balance);
-    // до конца анимации показываем баланс без выигрыша
+    
     currentBalance = finalBalance;
     setUIBalance(roundMoney(finalBalance - winAmount));
     const liveBetId = await broadcastLiveBet(bet, "Куб");
-    if (window.DiceStage) window.DiceStage.prepare(rolls[0]);   // заранее собираем анимацию выпавшей грани
+    if (window.DiceStage) window.DiceStage.prepare(rolls[0]);   
 
     if (win) {
         currentTotalWin = roundMoney(currentTotalWin + winAmount);
@@ -4845,7 +4845,7 @@ async function handleDicePlay() {
     }
     unlockEconomy();
 
-    // --- 3. анимация ---
+    
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.DiceStage) {
@@ -4853,12 +4853,12 @@ async function handleDicePlay() {
                 const isFinal = i === rolls.length - 1;
                 const pass = passes[i];
                 const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
-                // Несколько кубов, промежуточный удачный бросок:
-                //  • «Одинаковые» / «Дубль» — первый куб вердикта не выносит → жёлтая галочка «Ставка зачтена»;
-                //  • остальные режимы (чёт, больше, число…) — в первом кубе вердикт есть → зелёная галочка «Ставка зашла».
-                // Выигрыш (включая итоговый бросок и режим на 1 куб) — зелёная галочка; проигрыш — красный крест.
+                
+                
+                
+                
                 const noVerdict = (mode === "same" || mode === "double") && pass && !isFinal;
-                const greenPass = pass && !noVerdict;   // вердикт есть → зелёная галочка; нет (только «Одинаковые»/«Дубль», 1-й куб) → жёлтая
+                const greenPass = pass && !noVerdict;   
                 const word = noVerdict ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла");
                 const title = cubes > 1 ? word + " (" + (i + 1) + "/" + cubes + ")" : undefined;
 
@@ -4876,7 +4876,7 @@ async function handleDicePlay() {
         console.error("Dice animation error:", e);
     }
 
-    // --- 4. итог: баланс на экране, вибрация, лента ставок ---
+    
     setUIBalance(finalBalance);
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
@@ -4884,10 +4884,10 @@ async function handleDicePlay() {
     if (win) window.showWinPopup?.(winAmount, coefSrv);
 }
 
-/* ---------- ФУТБОЛ ---------- */
+
 const footballGame = { kicks: 1, mode: null, busy: false };
-// Вероятность одного удара [выигрышных исходов, всего исходов 1..5]:
-// гол = 3,4,5; промах = 1,2; штанга = 2,4. Режимы 2/3 ударов — компаунд.
+
+
 const FOOTBALL_MODE_PROB = { goal: [3, 5], miss: [2, 5], bar: [2, 5] };
 const FOOTBALL_MODE_COEFS = {};
 Object.keys(FOOTBALL_MODE_PROB).forEach(base => {
@@ -4895,7 +4895,7 @@ Object.keys(FOOTBALL_MODE_PROB).forEach(base => {
     for (let n = 1; n <= 3; n++) FOOTBALL_MODE_COEFS[base + (n > 1 ? n : "")] = houseCoef(w, t, n);
 });
 
-// Какие плитки показываем при разном количестве ударов
+
 const FOOTBALL_MODE_SETS = {
     1: ["goal", "miss", "bar"],
     2: ["goal2", "miss2", "bar2"],
@@ -4945,7 +4945,7 @@ function openFootballGame() {
     });
     showPage("footballGamePage");
     updateNav("games");
-    // При перезаходе — всегда превью (1/2/3 удара), без результата прошлой партии.
+    
     if (window.FootballStage) {
         window.FootballStage.setKicks(footballGame.kicks || 1);
         window.FootballStage.reset();
@@ -4953,7 +4953,7 @@ function openFootballGame() {
     if (typeof window.initFootballPreview === "function") window.initFootballPreview();
 }
 
-// Сколько ударов выбрано — сцена футбола спрашивает это при инициализации превью.
+
 window.getFootballKicks = function () {
     return footballGame.kicks || 1;
 };
@@ -4981,7 +4981,7 @@ function selectFootballKicks(n, btn) {
     if (btn) btn.classList.add("active");
     renderFootballModes(true);
     updateFootballPlayLabel();
-    // Превью делится на 1 / 2 / 3 ячейки, прошлый результат убираем.
+    
     if (window.FootballStage) {
         window.FootballStage.setKicks(n);
         window.FootballStage.reset();
@@ -5031,7 +5031,7 @@ async function handleFootballPlay() {
     const kicks = footballGame.kicks;
     const coef = FOOTBALL_MODE_COEFS[mode];
 
-    // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
+    
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
@@ -5051,7 +5051,7 @@ async function handleFootballPlay() {
     const winAmount = win ? roundMoney(srv.payout) : 0;
     const coefSrv = Number(srv.coef) || coef;
     const finalBalance = Number(srv.balance);
-    // до конца анимации показываем баланс без выигрыша
+    
     currentBalance = finalBalance;
     setUIBalance(roundMoney(finalBalance - winAmount));
     const liveBetId = await broadcastLiveBet(bet, "Футбол");
@@ -5064,7 +5064,7 @@ async function handleFootballPlay() {
     }
     unlockEconomy();
 
-    // --- 3. анимация ---
+    
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.FootballStage) {
@@ -5091,7 +5091,7 @@ async function handleFootballPlay() {
         console.error("Ошибка анимации футбола:", e);
     }
 
-    // --- 4. итог ---
+    
     setUIBalance(finalBalance);
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
@@ -5099,7 +5099,7 @@ async function handleFootballPlay() {
     if (win) window.showWinPopup?.(winAmount, coefSrv);
 }
 
-/* ---------- EMOJI-ИГРЫ: БАСКЕТБОЛ, ДАРТС, БОУЛИНГ, СЛОТЫ ---------- */
+
 const EMOJI_SLOT_SYMBOLS = {
     bar: '🍒',
     grape: '🍇',
@@ -5107,11 +5107,11 @@ const EMOJI_SLOT_SYMBOLS = {
     seven: '7️⃣'
 };
 
-// Раскладка бросков по номерам — та же, что у Куба и Футбола: сначала
-// выпадает номер броска (darts1…darts6, basketball1…basketball5,
-// bowling1…bowling6), по нему проигрывается соответствующая .tgs-анимация,
-// и уже по номеру решается, зашла ставка или нет. Поле wins — это номера
-// бросков, на которых выбранный режим считается выигрышным.
+
+
+
+
+
 const EMOJI_GAME_CONFIGS = {
     basketball: {
         title: 'Баскетбол',
@@ -5122,13 +5122,13 @@ const EMOJI_GAME_CONFIGS = {
         rolls: 5,
         attemptLabels: ['1 БРОСОК', '2 БРОСКА', '3 БРОСКА'],
         modes: [
-            // 1 — отскок, 2 — близко, 3 — застрял, 4 — попал с краем, 5 — чистый гол
+            
             { key: 'bounce', name: 'Отскок', wins: [1] },
             { key: 'close', name: 'Близко', wins: [2] },
             { key: 'stuck', name: 'Застрял', wins: [3] },
             { key: 'edge', name: 'Попал с краем', wins: [4] },
             { key: 'clean', name: 'Чистый гол', wins: [5] },
-            // Прокрут — мяч крутится по кольцу: либо мимо (2), либо всё же в кольцо (4).
+            
             { key: 'spin', name: 'Прокрут', wins: [2, 4] },
             { key: 'anyGoal', name: 'Любой гол', wins: [4, 5] },
             { key: 'miss', name: 'Промах', wins: [1, 2, 3] }
@@ -5143,21 +5143,21 @@ const EMOJI_GAME_CONFIGS = {
         rolls: 6,
         attemptLabels: ['1 ДРОТИК', '2 ДРОТИКА', '3 ДРОТИКА'],
         modes: [
-            // Исходы: 1 — отскок, 2/4 — красные сектора, 3/5 — белые, 6 — центр.
-            { key: 'redSector', name: 'Сектор', icon: 'red', attempts: 1, p: [2, 6] },
-            { key: 'bounce', name: 'Отскок', icon: 'bounce', attempts: 1, p: [1, 6] },
-            { key: 'whiteSector', name: 'Сектор', icon: 'white', attempts: 1, p: [2, 6] },
-            { key: 'center', name: 'Центр', icon: 'center', attempts: 1, p: [1, 6] },
+            
+            { key: 'redSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 1, p: [2, 6] },
+            { key: 'bounce', name: 'Отскок', icon: 'dartsoff.tgs', attempts: 1, p: [1, 6] },
+            { key: 'whiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 1, p: [2, 6] },
+            { key: 'center', name: 'Центр', icon: 'dartscenter.tgs', attempts: 1, p: [1, 6] },
             { key: 'anySector', name: 'Любой сектор', attempts: 1, p: [4, 6], full: true },
-            { key: 'redCenter', name: 'Сектор или центр', icon: 'red', attempts: 1, p: [3, 6], full: true },
-            { key: 'whiteBounce', name: 'Сектор или отскок', icon: 'white', attempts: 1, p: [3, 6], full: true },
+            { key: 'redCenter', name: 'Сектор или центр', icon: 'dartsred2.tgs', attempts: 1, p: [3, 6], full: true },
+            { key: 'whiteBounce', name: 'Сектор или отскок', icon: 'dartswhite2.tgs', attempts: 1, p: [3, 6], full: true },
 
-            { key: 'bothBounce', name: 'Отскок', icon: 'bounce', attempts: 2, p: [1, 36] },
-            { key: 'bothRedSector', name: 'Сектор', icon: 'red', attempts: 2, p: [4, 36] },
-            { key: 'bothCenter', name: 'Центр', icon: 'center', attempts: 2, p: [1, 36] },
-            { key: 'bothWhiteSector', name: 'Сектор', icon: 'white', attempts: 2, p: [4, 36] },
-            { key: 'bothRed', name: 'Красное', icon: 'red', attempts: 2, p: [9, 36] },
-            { key: 'bothWhite', name: 'Белое/Мимо', icon: 'white', attempts: 2, p: [9, 36] },
+            { key: 'bothBounce', name: 'Отскок', icon: 'dartsoff.tgs', attempts: 2, p: [1, 36] },
+            { key: 'bothRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 2, p: [4, 36] },
+            { key: 'bothCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 2, p: [1, 36] },
+            { key: 'bothWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 2, p: [4, 36] },
+            { key: 'bothRed', name: 'Красное', icon: 'dartsred1.tgs', attempts: 2, p: [9, 36] },
+            { key: 'bothWhite', name: 'Белое/Мимо', icon: 'dartswhite1.tgs', attempts: 2, p: [9, 36] },
             { key: 'bothAnySector', name: 'Любой сектор', attempts: 2, p: [16, 36] },
             { key: 'noBounce', name: 'Без промахов', attempts: 2, p: [25, 36] },
             { key: 'adjacent', name: 'Рядом', attempts: 2, p: [8, 36] },
@@ -5167,12 +5167,12 @@ const EMOJI_GAME_CONFIGS = {
             { key: 'firstCloser', name: '1-й точнее', attempts: 2, p: [15, 36] },
             { key: 'secondCloser', name: '2-й точнее', attempts: 2, p: [15, 36] },
 
-            { key: 'threeBounce', name: 'Отскок', icon: 'bounce', attempts: 3, p: [1, 216] },
-            { key: 'threeRedSector', name: 'Сектор', icon: 'red', attempts: 3, p: [8, 216] },
-            { key: 'threeCenter', name: 'Центр', icon: 'center', attempts: 3, p: [1, 216] },
-            { key: 'threeWhiteSector', name: 'Сектор', icon: 'white', attempts: 3, p: [8, 216] },
-            { key: 'threeRed', name: 'Красное', icon: 'red', attempts: 3, p: [27, 216] },
-            { key: 'threeWhite', name: 'Белое/Мимо', icon: 'white', attempts: 3, p: [27, 216] },
+            { key: 'threeBounce', name: 'Отскок', icon: 'dartsoff.tgs', attempts: 3, p: [1, 216] },
+            { key: 'threeRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 3, p: [8, 216] },
+            { key: 'threeCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 3, p: [1, 216] },
+            { key: 'threeWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 3, p: [8, 216] },
+            { key: 'threeRed', name: 'Красное', icon: 'dartsred1.tgs', attempts: 3, p: [27, 216] },
+            { key: 'threeWhite', name: 'Белое/Мимо', icon: 'dartswhite1.tgs', attempts: 3, p: [27, 216] },
             { key: 'threeAnySector', name: 'Любой сектор', attempts: 3, p: [64, 216], full: true },
             { key: 'threeSame', name: 'Три одинаково', attempts: 3, p: [6, 216] },
             { key: 'trafficLight', name: 'Светофор', attempts: 3, p: [24, 216] },
@@ -5191,8 +5191,8 @@ const EMOJI_GAME_CONFIGS = {
         rolls: 6,
         attemptLabels: ['1 ШАР', '2 ШАРА', '3 ШАРА'],
         modes: [
-            // 1 — промах, 2 — сбито 1 из 6, 3 — сбито 3 из 6,
-            // 4 — сбито 4 из 6, 5 — сбито 5 из 6, 6 — страйк
+            
+            
             { key: 'miss', name: 'Промах', wins: [1] },
             { key: 'pin1', name: 'Сбито 1 / 6', wins: [2] },
             { key: 'pin3', name: 'Сбито 3 / 6', wins: [3] },
@@ -5210,20 +5210,20 @@ const EMOJI_GAME_CONFIGS = {
         slots: true,
         attemptLabels: ['1 РАУНД', '2 РАУНДА', '3 РАУНДА'],
         modes: [
-            // p: [выигрышных исходов, всего] из 64 комбинаций (4 символа × 3 барабана)
+            
             { key: 'seven', name: '3 Семёрки', p: [1, 64], symbol: 'seven' },
             { key: 'lemon', name: '3 Лимона', p: [1, 64], symbol: 'lemon' },
             { key: 'grape', name: '3 Винограда', p: [1, 64], symbol: 'grape' },
             { key: 'bar', name: '3 Бара', p: [1, 64], symbol: 'bar' },
-            { key: 'anyCombo', name: 'Любая комбинация', p: [4, 64] },          // три одинаковых
-            { key: 'unique', name: 'Уникальные символы', p: [24, 64] },        // три разных
-            { key: 'duel', name: 'Дуэль', p: [36, 64] }                        // ровно пара
+            { key: 'anyCombo', name: 'Любая комбинация', p: [4, 64] },          
+            { key: 'unique', name: 'Уникальные символы', p: [24, 64] },        
+            { key: 'duel', name: 'Дуэль', p: [36, 64] }                        
         ]
     }
 };
 
-// Сцена Emoji-игр объявлена в отдельном IIFE ниже, поэтому конфигурации
-// и символы слотов должны быть доступны ей через window.
+
+
 window.EMOJI_GAME_CONFIGS = EMOJI_GAME_CONFIGS;
 window.EMOJI_SLOT_SYMBOLS = EMOJI_SLOT_SYMBOLS;
 
@@ -5243,13 +5243,13 @@ function emojiModeCfg(key) {
     return cfg ? cfg.modes.find(m => m.key === key) || null : null;
 }
 
-// [выигрышных исходов, всего] одного броска выбранного режима
+
 function emojiModeProb(mode, cfg) {
     if (mode.p) return mode.p;
     return [mode.wins.length, (cfg || emojiGameCfg()).rolls];
 }
 
-// Итоговый коэффициент режима с маржой 2.5%, округление вниз до сотых
+
 function emojiCompoundCoef(mode, attempts, cfg) {
     const p = emojiModeProb(mode, cfg);
     return Math.min(9999.99, houseCoef(p[0], p[1], mode.attempts ? 1 : attempts));
@@ -5259,8 +5259,8 @@ function openEmojiGame(key) {
     const cfg = EMOJI_GAME_CONFIGS[key];
     if (!cfg) { showMessage("Режим скоро появится"); return; }
 
-    // Количество попыток запоминаем в рамках игры: зашли в дартс с 3
-    // дротиками — при возврате снова 3 превью. При смене игры — сброс на 1.
+    
+    
     if (emojiGame.key !== key) emojiGame.attempts = 1;
     emojiGame.key = key;
     emojiGame.attempts = Math.max(1, Math.min(cfg.maxAttempts || 1, emojiGame.attempts || 1));
@@ -5280,8 +5280,8 @@ function openEmojiGame(key) {
     renderEmojiGameModes(false);
     showPage("emojiGamePage");
     updateNav("games");
-    // init() сам сбрасывает прошлый результат и показывает превью —
-    // последняя партия при перезаходе больше не висит на экране.
+    
+    
     if (window.EmojiGameStage) window.EmojiGameStage.init(key, emojiGame.attempts);
 }
 
@@ -5305,8 +5305,8 @@ function renderEmojiGameModes(animate) {
     }).join("");
     box.querySelectorAll('.dart-mode-icon').forEach(el => {
         const icon = el.dataset.icon;
-        const fallback = icon === 'white' ? '⚪' : '🎯';
-        mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + 'modedarts' + icon + '.tgs'], null, null, '<span class="dart-icon-fallback">' + fallback + '</span>');
+        const fallback = icon.startsWith('dartswhite') ? '⚪' : '🎯';
+        mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + icon], null, null, '<span class="dart-icon-fallback">' + fallback + '</span>');
     });
 
     if (animate && oldH) {
@@ -5349,7 +5349,7 @@ function selectEmojiAttempts(n, btn) {
     if (btn) btn.classList.add("active");
     renderEmojiGameModes(true);
     updateEmojiGamePlayLabel();
-    // Пересобрать превью под новое количество: 1 → 2 → 3 анимации рядом
+    
     if (window.EmojiGameStage) {
         window.EmojiGameStage.reset();
         window.EmojiGameStage.setAttempts(emojiGame.attempts);
@@ -5401,7 +5401,7 @@ async function handleEmojiGamePlay() {
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
     const coef = emojiCompoundCoef(mode, attempts, cfg);
 
-    // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
+    
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
@@ -5421,7 +5421,7 @@ async function handleEmojiGamePlay() {
     const winAmount = win ? roundMoney(srv.payout) : 0;
     const coefSrv = Number(srv.coef) || coef;
     const finalBalance = Number(srv.balance);
-    // до конца анимации показываем баланс без выигрыша
+    
     currentBalance = finalBalance;
     setUIBalance(roundMoney(finalBalance - winAmount));
     const liveBetId = await broadcastLiveBet(bet, cfg.label);
@@ -5433,9 +5433,9 @@ async function handleEmojiGamePlay() {
     }
     unlockEconomy();
 
-    // --- 3. анимация ---
-    // Вместо цитат режима («Страйк!», «В центр!» и т.п.) всегда показываем
-    // типичный результат ставки: зашла или не зашла.
+    
+    
+    
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.EmojiGameStage) {
@@ -5444,10 +5444,12 @@ async function handleEmojiGamePlay() {
                 const pass = passes[i];
                 const roll = cfg.slots ? null : rolls[i];
                 const roundTag = attempts > 1 ? " (" + (i + 1) + "/" + attempts + ")" : "";
-                const title = (pass ? "Ставка зашла" : "Ставка не зашла") + roundTag;
+                const pending = emojiGame.key === 'darts' && !isFinal && attempts > 1;
+                const title = (pending ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла")) + roundTag;
                 await window.EmojiGameStage.playAttempt({
                     roll,
-                    win: pass,
+                    win: pending || pass,
+                    pending,
                     title,
                     amountText: isFinal ? amountText : "",
                     symbols: cfg.slots ? ((srv.symbols && srv.symbols[i]) || []).map(k => EMOJI_SLOT_SYMBOLS[k] || k) : null,
@@ -5461,7 +5463,7 @@ async function handleEmojiGamePlay() {
         console.error("Emoji game animation error:", e);
     }
 
-    // --- 4. итог ---
+    
     setUIBalance(finalBalance);
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
@@ -5482,7 +5484,7 @@ function openBalance(mode = "deposit") {
     updateNav("balance");
     updateWalletMethodNote(selectedMethod);
     renderTransactions();
-    loadWalletHistory(true);      // актуальные пополнения/выводы и баланс с сервера
+    loadWalletHistory(true);      
 }
 
 function openProfile() {
@@ -5509,9 +5511,9 @@ function updateNav(active) {
     if (typeof window.navSync === "function") window.navSync(active === "games" ? "home" : active);
 }
 
-/* =========================
-   ПОПОЛНЕНИЕ И ВЫВОД
-========================= */
+
+
+
 
 function renderTransactions() {
     const list = document.getElementById("historyList");
@@ -5650,16 +5652,16 @@ function handleBalanceAction() {
     }
 }
 
-// ==========================================
-// РЕАЛЬНЫЕ ПЛАТЕЖИ: CryptoBot (Crypto Pay API)
-// Клиент ничего не зачисляет сам: он только просит Edge Function создать счёт /
-// выплату. Деньги на баланс попадают на сервере — после подписанного вебхука
-// от CryptoBot (см. supabase/functions и CRYPTOBOT_SETUP.md).
-// ==========================================
 
-// ==========================================
-// ПЛАВНОСТЬ И ЗАГРУЗКА: спиннеры на кнопках, тонкая полоса сетевой активности
-// ==========================================
+
+
+
+
+
+
+
+
+
 function setBtnLoading(btn, on) {
     if (!btn) return;
     btn.classList.toggle('is-loading', !!on);
@@ -5680,7 +5682,7 @@ const netBar = (function () {
         count++;
         if (count === 1) {
             clearTimeout(showTimer);
-            // быстрые запросы (<150 мс) полосу не показывают — без мерцания
+            
             showTimer = setTimeout(() => { if (count > 0) el().classList.add('on'); }, 150);
         }
     }
@@ -5701,7 +5703,7 @@ const netBar = (function () {
     };
 })();
 
-// Анимированная смена чисел баланса (вместо резкой подмены текста)
+
 const _numTweens = new WeakMap();
 function tweenMoneyText(el, to, suffix, prefix) {
     prefix = prefix || '';
@@ -5729,7 +5731,7 @@ function tweenMoneyText(el, to, suffix, prefix) {
     state.raf = requestAnimationFrame(step);
 }
 
-// Плавное появление картинок: пока грузятся — спиннер, потом fade-in
+
 function enhanceImages(root) {
     (root || document).querySelectorAll('img.game-image, img.game-banner-img').forEach(img => {
         if (img.dataset.fx) return;
@@ -5806,7 +5808,7 @@ function formatTxDate(iso) {
     return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
-// Подтягивает баланс и историю операций с сервера
+
 let walletHistoryLoadedOnce = false;
 function renderHistorySkeleton() {
     const list = document.getElementById('historyList');
@@ -5839,7 +5841,7 @@ async function loadWalletHistory(silent) {
     }));
     renderTransactions();
 
-    // баланс не трогаем, пока идёт ставка (иначе раньше времени «спойлерим» исход игры)
+    
     const dice = (typeof diceGame !== 'undefined') ? diceGame : null;
     if (!isEconomyLocked && !(dice && dice.busy)) {
         currentDeposits = Number(r.deposits) || 0;
@@ -5849,7 +5851,7 @@ async function loadWalletHistory(silent) {
     return r;
 }
 
-// После открытия счёта ждём оплату: раз в 4 секунды спрашиваем статус (до 20 минут)
+
 function watchDeposit(depositId) {
     if (depositWatchTimer) clearInterval(depositWatchTimer);
     const started = Date.now();
@@ -5870,7 +5872,7 @@ function watchDeposit(depositId) {
     }, 4000);
 }
 
-// вернулись в приложение из CryptoBot — сразу обновляем баланс
+
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
     const onBalance = !document.getElementById('balancePage')?.classList.contains('hidden');
@@ -5883,8 +5885,8 @@ function readBalanceAmount() {
     return { input, amount };
 }
 
-// xRocket в клиенте пока не имеет защищённого серверного API.
-// Вместо тупика «скоро появится» честно переключаем на рабочий CryptoBot.
+
+
 function ensureCryptoBotMethod() {
     if (selectedMethod === 'CryptoBot') return true;
     selectMethod('CryptoBot', 'images/crypto/cryptobot.png', 'Криптовалюта');
@@ -5910,7 +5912,7 @@ async function handleDeposit() {
 
     if (!r.ok) { showMessage(walletErrorText(r)); return; }
 
-    // открываем счёт прямо в Telegram (мини-приложение CryptoBot)
+    
     const url = r.mini_app_url || r.url;
     if (tg?.openTelegramLink && /^https:\/\/t\.me\//.test(url)) tg.openTelegramLink(url);
     else if (tg?.openLink) tg.openLink(url);
@@ -5938,7 +5940,7 @@ async function handleWithdrawal() {
     walletBusy = false;
     setBalanceActionLoading(false);
 
-    if (typeof r.balance === 'number') setUIBalance(r.balance);   // сервер вернул актуальный баланс (в т.ч. после возврата)
+    if (typeof r.balance === 'number') setUIBalance(r.balance);   
     if (!r.ok) { showMessage(walletErrorText(r)); loadWalletHistory(true); return; }
 
     if (input) input.value = '';
@@ -5953,12 +5955,12 @@ async function handleWithdrawal() {
     loadWalletHistory(true);
 }
 
-/* =========================
-   ЕЖЕДНЕВНЫЕ БОНУСЫ, VIP, ЗАДАНИЯ И ПРОМОКОДЫ
-   Прогресс хранится локально (по Telegram ID и локальной дате),
-   а награды зачисляются на сервер через resolve_win — отдельного
-   RPC для бонусов в проекте нет.
-========================= */
+
+
+
+
+
+
 
 const DAILY_STORAGE_PREFIX = 'wxs_daily_v1_';
 const PROMO_STORAGE_PREFIX = 'wxs_promos_v1_';
@@ -6019,7 +6021,7 @@ function saveDailyState() {
     if (!dailyState) return;
     try {
         localStorage.setItem(dailyStorageKey(), JSON.stringify(dailyState));
-    } catch (e) { /* приватный режим / переполнение — просто не сохраняем */ }
+    } catch (e) {  }
 }
 
 function ensureDailyState() {
@@ -6040,7 +6042,7 @@ function ensureDailyState() {
         dailyState = createDailyState();
     }
 
-    // Если серверные счётчики сбросились, не показываем отрицательный прогресс
+    
     const bets = Number(currentBetsCount) || 0;
     const turnover = Number(currentTurnover) || 0;
     if (bets < (Number(dailyState.baseBets) || 0)) dailyState.baseBets = bets;
@@ -6076,7 +6078,7 @@ function dailyVisitedGames() {
     return DAILY_GAME_KEYS.reduce((count, key) => count + (state.visited[key] ? 1 : 0), 0);
 }
 
-// Вызывается из showPage(): отмечает, в какие игры игрок заходил сегодня
+
 function markGameVisitedForPage(pageId) {
     const pageMap = {
         homePage: 'home',
@@ -6359,9 +6361,9 @@ async function claimBonus() {
     updateDailyBonusStatus();
 }
     
-/* =========================
-   ЗАГОТОВЛЕННОЕ СООБЩЕНИЕ (savePreparedInlineMessage)
-========================= */
+
+
+
 const SHARE_TEST_CHROME_URL = 'https://www.google.com/chrome/';
 
 function openShareTestChrome() {
@@ -6453,12 +6455,12 @@ async function sharePreparedInvite() {
     }
 }
 
-/* =========================
-   ПРОМОКОД
-========================= */
 
-// Кнопка "Применить" активируется (ярко-жёлтая) только когда введено
-// не менее 5 символов, иначе остаётся неактивной.
+
+
+
+
+
 function updatePromoButtonState() {
     const input = document.getElementById('promoCodeInput');
     const btn = document.getElementById('promoApplyBtn');
@@ -6478,7 +6480,7 @@ function getPromoClaims() {
 function savePromoClaims(claims) {
     try {
         localStorage.setItem(PROMO_STORAGE_PREFIX + (getTelegramUserId() || 'guest'), JSON.stringify(claims));
-    } catch (e) { /* не критично */ }
+    } catch (e) {  }
 }
 
 async function applyPromoCode() {
@@ -6529,8 +6531,8 @@ async function applyPromoCode() {
     showMessage('Промокод ' + code + ' активирован: +' + promo.amount.toFixed(2) + ' $ (' + promo.title + ')');
 }
 
-// Экранирование текста перед вставкой в innerHTML (имя/username берутся из
-// внешних данных, поэтому на всякий случай не доверяем им напрямую)
+
+
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, '&amp;')
@@ -6547,9 +6549,9 @@ function showMessage(text) {
     alert(text);
 }
 
-/* =========================
-   ПРОФИЛЬ И КАСТОМИЗАЦИЯ ФОНА
-========================= */
+
+
+
 
 function applyDesign() {
     const cover = document.getElementById('profileCover');
@@ -6590,9 +6592,9 @@ function saveProfileCustomization() {
     showMessage("Настройки сохранены!");
 }
 
-/* =========================
-   ЗАПУСК ПРИ СТАРТЕ
-========================= */
+
+
+
 
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Mini App запущен!");
@@ -6607,21 +6609,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     console.log('[init] загрузка профиля из Supabase...');
-    // Если Supabase не отвечает — через 8 сек всё равно открываем приложение
+    
     await Promise.race([
         loadUserData().catch(e => console.error('[init] loadUserData упала:', e)),
         new Promise(r => setTimeout(() => { console.warn('[init] Supabase не ответил за 8 сек'); r(); }, 8000))
     ]);
     console.log('[init] профиль готов, открываем главную');
     updateLevelUI();
-    initDailyState();   // фиксируем базовый счётчик ставок/оборота на сегодня
+    initDailyState();   
     goHome();
     initLiveBetsFeed();
     iceArena.watching = true;
     startIceArenaLobby();
     applyDesign();
     startCrashEngine().finally(resolveCrashReady);
-    routeStartParam();   // deep link: t.me/бот?startapp=mines → сразу открыть нужную страницу
+    routeStartParam();   
 
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -6641,12 +6643,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }, { passive: false });
 
-    // ---- Косметические "затруднители" (НЕ настоящая защита!) ----
-    // Отсеивают случайных людей, которые захотят кликнуть правой кнопкой
-    // или дёрнуть DevTools по привычке. Любого, кто реально хочет залезть
-    // в код, это не остановит — открыть DevTools можно и через меню
-    // браузера. Настоящая защита баланса — на стороне Supabase (RLS),
-    // см. supabase_security.sql.
+    
+    
+    
+    
+    
+    
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('keydown', (e) => {
         const key = e.key ? e.key.toUpperCase() : '';
@@ -6660,13 +6662,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     hideAppLoader(assetsReady);
 });
 
-/* =========================
-   DEEP LINKS (startapp)
-   Ссылка вида  https://t.me/wxs_robot?startapp=mines
-   (или https://t.me/wxs_robot/НАЗВАНИЕ_ПРИЛОЖЕНИЯ?startapp=mines)
-   Значение после startapp= приходит в start_param и открывает нужную страницу.
-   В start_param можно только латиницу, цифры, _ и - (до 512 символов).
-========================= */
+
+
+
+
+
+
+
 const START_ROUTES = {
     mines:      () => openMines(),
     crash:      () => openCrash(),
@@ -6690,7 +6692,7 @@ const START_ROUTES = {
 function getStartParam() {
     let p = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
     if (!p) {
-        // запасной путь: Telegram кладёт параметр в адрес как tgWebAppStartParam
+        
         const m = (location.hash + '&' + location.search).match(/tgWebAppStartParam=([^&]+)/);
         if (m) { try { p = decodeURIComponent(m[1]); } catch (e) { p = m[1]; } }
     }
@@ -6705,12 +6707,12 @@ function routeStartParam() {
     try { route(); } catch (e) { console.error('[deeplink] не удалось открыть', param, e); }
 }
 
-/* =========================
-   ПРЕДЗАГРУЗКА РЕСУРСОВ ПРИ СТАРТЕ (во время экрана загрузки)
-========================= */
 
-// Все картинки, которые используются в приложении (и в HTML, и из JS).
-// Добавляете новую картинку в проект — допишите её сюда.
+
+
+
+
+
 const PRELOAD_IMAGES = [
     'images/mines/bomb.png',
     'images/mines/gem.png',
@@ -6726,9 +6728,9 @@ const PRELOAD_IMAGES = [
     'images/banners/upgrader_game.png'
 ];
 
-const PRELOAD_TASK_TIMEOUT_MS = 8000;   // один зависший файл не должен вешать загрузку
-let appLoadProgress = 0;                // 0..1, читает экран загрузки
-window.__preloadedImages = [];          // держим ссылки, чтобы браузер не выкинул из кэша
+const PRELOAD_TASK_TIMEOUT_MS = 8000;   
+let appLoadProgress = 0;                
+window.__preloadedImages = [];          
 
 function preloadImage(src) {
     return new Promise(resolve => {
@@ -6736,19 +6738,19 @@ function preloadImage(src) {
         let done = false;
         const finish = () => { if (!done) { done = true; resolve(); } };
         img.onload = () => {
-            // decode() заранее раскодирует картинку, чтобы не было мигания при первом показе
+            
             if (img.decode) img.decode().then(finish, finish); else finish();
         };
-        img.onerror = finish;               // нет файла — просто идём дальше
+        img.onerror = finish;               
         img.src = src;
         window.__preloadedImages.push(img);
         setTimeout(finish, PRELOAD_TASK_TIMEOUT_MS);
     });
 }
 
-// Lottie-данные ракеты/взрыва склеиваются из кусков и парсятся ОДИН раз —
-// это самая тяжёлая операция, поэтому делаем её на экране загрузки.
-function getLottieData(kind) {   // kind: 'ROCKET' | 'EXPLOSION'
+
+
+function getLottieData(kind) {   
     const cacheKey = '__LOTTIE_' + kind;
     if (window[cacheKey] !== undefined) return window[cacheKey];
     let data = null;
@@ -6760,7 +6762,7 @@ function getLottieData(kind) {   // kind: 'ROCKET' | 'EXPLOSION'
     return data;
 }
 
-// extraTasks — доп. промисы (например, первый запрос состояния краша).
+
 function preloadAppAssets(extraTasks = []) {
     const tasks = [
         ...PRELOAD_IMAGES.map(preloadImage),
@@ -6791,10 +6793,10 @@ function hideAppLoader(assetsReady) {
     if (!loader) return;
 
     const minVisibleMs = 900;
-    const maxVisibleMs = 15000;   // страховка: не держим экран загрузки вечно
+    const maxVisibleMs = 15000;   
     const startedAt = Date.now();
 
-    // Полоса теперь показывает РЕАЛЬНЫЙ прогресс предзагрузки (плавно догоняет)
+    
     let shown = 6;
     const progressTimer = setInterval(() => {
         const target = 6 + 90 * appLoadProgress;
@@ -6823,7 +6825,7 @@ function hideAppLoader(assetsReady) {
     });
 }
 
-// Экспорт функций в глобальную область для onclick-обработчиков в HTML
+
 window.adjustMinesBet = adjustMinesBet;
 window.adjustCrashBet = adjustCrashBet;
 window.autoPickMinesTile = autoPickMinesTile;
@@ -6842,7 +6844,7 @@ window.openBalance = openBalance;
 window.openBonus = openBonus;
 window.showPage = showPage;
 window.updateNav = updateNav;
-window.wxsSupabase = supabase;   // клиент Supabase (window.supabase — это сама библиотека CDN)
+window.wxsSupabase = supabase;   
 window.openCrash = openCrash;
 window.openGamesMenu = openGamesMenu;
 window.openMines = openMines;
@@ -6905,59 +6907,59 @@ window.copyCrashKey = copyCrashKey;
 
 
 
-/* ================================================================
-   АЙС АРЕНА (Ice Arena) — глобальное PvP-лобби
-   Все игроки мира играют в одном раунде: ставки пишутся в Supabase,
-   таймер общий, победитель считается одинаково у всех по seed раунда.
 
-   Один раз выполнить в Supabase → SQL Editor:
 
-   create table if not exists public.ice_arena_rounds (
-       id uuid primary key default gen_random_uuid(),
-       game_number bigint generated always as identity,
-       status text not null default 'betting',
-       betting_ends_at timestamptz,
-       seed text not null,
-       winner_telegram_id bigint,
-       winner_name text,
-       winner_avatar text,
-       winner_color text,
-       winner_bet numeric,
-       bank numeric,
-       payout numeric,
-       payout_done boolean not null default false,
-       resolved_at timestamptz,
-       created_at timestamptz not null default now()
-   );
-   create table if not exists public.ice_arena_bets (
-       id bigint generated always as identity primary key,
-       round_id uuid not null references public.ice_arena_rounds(id) on delete cascade,
-       telegram_id bigint not null,
-       name text not null,
-       avatar text,
-       color text,
-       amount numeric not null,
-       created_at timestamptz not null default now(),
-       unique (round_id, telegram_id)
-   );
-   -- Если таблица ice_arena_rounds уже существует (создана раньше без
-   -- этого столбца), выполните отдельно:
-   -- alter table public.ice_arena_rounds add column if not exists game_number bigint generated always as identity;
 
-   create unique index if not exists ice_arena_one_active_round
-       on public.ice_arena_rounds ((true))
-       where status in ('betting', 'spinning');
-   alter table public.ice_arena_rounds enable row level security;
-   alter table public.ice_arena_bets enable row level security;
-   create policy "ice_arena_rounds_select" on public.ice_arena_rounds for select using (true);
-   create policy "ice_arena_rounds_insert" on public.ice_arena_rounds for insert with check (true);
-   create policy "ice_arena_rounds_update" on public.ice_arena_rounds for update using (true) with check (true);
-   create policy "ice_arena_bets_select" on public.ice_arena_bets for select using (true);
-   create policy "ice_arena_bets_insert" on public.ice_arena_bets for insert with check (true);
-   create policy "ice_arena_bets_update" on public.ice_arena_bets for update using (true) with check (true);
-   alter publication supabase_realtime add table public.ice_arena_rounds;
-   alter publication supabase_realtime add table public.ice_arena_bets;
-================================================================ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const ICE_ARENA_COLORS = ['#ff5470', '#ffb703', '#3dff9a', '#4dd8ff', '#a463f2', '#ff8fab'];
 const ICE_ARENA_ROUND_SECONDS = 15;
@@ -6989,7 +6991,7 @@ function myIceTelegramId() {
 }
 
 function iceAvatarHtml(avatar) {
-    // Никакого сырого HTML: из чужого поля берём только https-ссылку на картинку или короткий эмодзи.
+    
     let raw = String(avatar || '🧑');
     if (raw.indexOf('<') !== -1) {
         const m = raw.match(/src\s*=\s*"([^"]+)"/i);
@@ -7024,7 +7026,7 @@ function isIceArenaVisible() {
 }
 
 function openIceArena() {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     showPage('iceArenaPage');
     updateNav('games');
     iceArena.watching = true;
@@ -7069,7 +7071,7 @@ function resetIceArenaVisuals(opts) {
 }
 
 function restartIceArena() {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     const overlay = document.getElementById('iceResultOverlay');
     if (overlay) overlay.classList.add('hidden');
     resetIceArenaVisuals({ hideOverlay: true, resetPuck: true });
@@ -7082,7 +7084,7 @@ function restartIceArena() {
 }
 
 async function startIceArenaLobby() {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     await refreshIceArenaState();
     startIceArenaClock();
     if (!iceArena.pollInterval) {
@@ -7092,8 +7094,8 @@ async function startIceArenaLobby() {
     try {
         iceArena.channel = supabase
             .channel('ice_arena_global')
-            // Ставки не подписываем: их видно по опросу (раз в 2 с), а рассылка
-            // каждого кэшаута всем клиентам стоила заметной части CPU.
+            
+            
             .on('postgres_changes', { event: '*', schema: 'public', table: ICE_ARENA_ROUNDS_TABLE }, () => scheduleIceArenaReload())
             .subscribe();
     } catch (e) {
@@ -7305,7 +7307,7 @@ function updateIceArenaBetControls() {
 }
 
 async function maybeAdvanceIceArena(round, bets) {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     if (!round || iceArena.advancing) return;
 
     if (round.status === 'betting') {
@@ -7414,7 +7416,7 @@ async function pickIceArenaWinnerFromSeed(players, seed) {
 }
 
 async function getOrCreateIceBettingRound() {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     const { data: active } = await supabase
         .from(ICE_ARENA_ROUNDS_TABLE)
         .select('*')
@@ -7443,7 +7445,7 @@ async function getOrCreateIceBettingRound() {
 }
 
 async function placeIceArenaBet() {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     if (iceArena.isProcessing) return;
     if (iceArena.phase === 'spinning') return;
     if (iceArena.round && iceArena.round.status !== 'betting') {
@@ -7850,7 +7852,7 @@ function zoomIceArenaField(targetXPct, winner) {
 }
 
 async function tryIceArenaPayout(round) {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     if (!round || iceArena.paying) return;
     if (round.payout_done) return;
     const myId = myIceTelegramId();
@@ -7897,7 +7899,7 @@ async function tryIceArenaPayout(round) {
 }
 
 async function finishIceArenaRound(winner) {
-    return; // Айс Арена отключена: заглушка, ничего не происходит
+    return; 
     iceArena.phase = 'result';
     iceArena.winner = winner;
 
@@ -7961,20 +7963,20 @@ async function finishIceArenaRound(winner) {
     }
 }
 
-// ==========================================
-// ИСТОРИЯ РАУНДОВ АЙС АРЕНЫ (× победителя, реплей шайбы)
-// Хранится глобально в Supabase (таблицы ice_arena_rounds / ice_arena_bets),
-// а не в localStorage — поэтому видна всем игрокам и не сбрасывается
-// при перезаходе или смене устройства.
-// ==========================================
+
+
+
+
+
+
 const ICE_ARENA_HISTORY_MAX = 30;
 let iceArenaHistory = [];
 let iceArenaHistoryDetailEntry = null;
 let iceArenaHistoryReplaying = false;
 let iceArenaHistoryLoading = null;
 
-// Подтягивает последние завершённые раунды и ставки всех игроков из
-// Supabase и собирает их в том же формате, что раньше хранился локально.
+
+
 async function loadIceArenaHistory() {
     if (iceArenaHistoryLoading) return iceArenaHistoryLoading;
 
@@ -8058,9 +8060,9 @@ async function loadIceArenaHistory() {
     return iceArenaHistoryLoading;
 }
 
-// Оптимистичное локальное добавление раунда, который этот клиент только
-// что досмотрел вживую — чтобы кэф появился в ленте сразу, не дожидаясь
-// следующей подгрузки из Supabase (сами данные там уже сохранены сервером).
+
+
+
 function pushIceArenaHistory(entry) {
     iceArenaHistory.unshift(entry);
     if (iceArenaHistory.length > ICE_ARENA_HISTORY_MAX) iceArenaHistory.length = ICE_ARENA_HISTORY_MAX;
@@ -8073,9 +8075,9 @@ function iceHistoryMultColor(mult) {
     return '#ffd700';
 }
 
-// Лента кэфов последних раундов под игровым полем. Каждый чип кликабелен
-// и сразу открывает экран реплея этого раунда (см. openIceArenaHistoryDirect),
-// минуя список истории.
+
+
+
 function renderIceHistoryStrip() {
     const strip = document.getElementById('iceHistoryStrip');
     if (!strip) return;
@@ -8091,10 +8093,10 @@ function renderIceHistoryStrip() {
     }).join('');
 }
 
-// Открывает модалку истории сразу на экране реплея конкретного раунда
-// (используется чипами кэфов под полем) — список истории при этом не
-// показывается, только рендерится "под капотом", чтобы кнопка "Назад"
-// в детальном экране продолжала работать корректно.
+
+
+
+
 function openIceArenaHistoryDirect(id) {
     renderIceArenaHistoryList();
     document.getElementById('iceHistoryModal')?.classList.remove('hidden');
@@ -8108,9 +8110,9 @@ function openIceArenaHistory() {
     document.getElementById('iceHistoryModal')?.classList.remove('hidden');
     document.body.classList.add('ice-history-modal-open');
 
-    // Подтягиваем самую свежую глобальную историю (могли пройти раунды на
-    // других устройствах/у других игроков) и перерисовываем список, если
-    // модалка всё ещё открыта и пользователь не ушёл в детальный экран.
+    
+    
+    
     loadIceArenaHistory().then(() => {
         const modalOpen = !document.getElementById('iceHistoryModal')?.classList.contains('hidden');
         const listVisible = !document.getElementById('iceHistoryListView')?.classList.contains('hidden');
@@ -8145,8 +8147,8 @@ function renderIceArenaHistoryList() {
         const color = iceHistoryMultColor(entry.multiplier);
         const chance = entry.bank > 0 ? ((entry.winner.bet / entry.bank) * 100).toFixed(0) : '0';
 
-        // Клик по всей карточке сразу открывает экран реплея этого раунда —
-        // отдельных кнопок "Честность"/"Повтор" в списке нет.
+        
+        
         return '<div class="ice-history-row" onclick="openIceArenaHistoryDetail(\'' + entry.id + '\')">' +
             '<div class="ice-history-row-top">' +
                 '<div>' +
@@ -8264,9 +8266,9 @@ function replayIceArenaHistoryRound() {
     });
 }
 
-// Упрощённая версия анимации шайбы (launchIceArenaPuck), параметризованная
-// произвольным полем/шайбой/списком игроков — используется для реплея
-// уже завершённого раунда из истории, не трогая живую игру.
+
+
+
 function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
     const arrow = puck.querySelector('.ice-puck-arrow');
 
@@ -8383,7 +8385,7 @@ function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
     requestAnimationFrame(frame);
 }
 
-// Перетягивание вниз для закрытия истории Айс Арены (как в доке честности)
+
 (function initIceHistoryDrag() {
     const handle = document.getElementById('iceHistoryDragHandle');
     const content = document.getElementById('iceHistoryContent');
@@ -8458,10 +8460,10 @@ window.applyBetMax = applyBetMax;
 })();
 
 
-/* Ждёт, пока результат (галочка/крестик, искры и текст) полностью
-   проиграет свою анимацию, и держит его на экране не меньше minMs.
-   Благодаря этому следующий бросок или скрытие результата никогда
-   не обрывают анимацию галочки на середине. */
+
+
+
+
 function waitResultAnimationEnd(res, minMs) {
     const min = Math.max(0, minMs || 1000);
     const startedAt = performance.now();
@@ -8484,8 +8486,8 @@ function waitResultAnimationEnd(res, minMs) {
             else resolve();
         };
 
-        // Последней в блоке результата доигрывает сумма — по ней и понимаем,
-        // что галочка/крестик и подписи уже полностью отрисовались.
+        
+        
         const onEnd = (e) => {
             const t = e.target;
             if (t && t.classList && t.classList.contains('dice-result-amount')) finish();
@@ -8497,17 +8499,17 @@ function waitResultAnimationEnd(res, minMs) {
 }
 
 
-/* =========================
-   СТИКЕРЫ ВМЕСТО ЭМОДЗИ В БЫСТРЫХ ДЕЙСТВИЯХ (Пополнить, Вывод, VIP, Задания)
-   Положи по ОДНОМУ файлу в animations/stickers/: deposit, withdraw, vip, tasks + <расширение>:
-   .tgs (рекомендуется, весит ~20 КБ), .json (Lottie), .webp или .gif.
-   Пока файл грузится — спиннер; если файла нет, иконка остаётся пустой.
-========================= */
+
+
+
+
+
+
 (function () {
     const STICKER_DIR = 'animations/stickers/';
-    const STICKER_EXTS = ['tgs', 'json', 'webp', 'gif'];   // порядок поиска
+    const STICKER_EXTS = ['tgs', 'json', 'webp', 'gif'];   
 
-    // .tgs — это gzip-архив с Lottie-JSON. Распаковываем встроенным API, а если его нет — через pako.
+    
     async function readLottieJson(buf) {
         const bytes = new Uint8Array(buf);
         const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
@@ -8531,8 +8533,8 @@ function waitResultAnimationEnd(res, minMs) {
         });
     }
 
-    // Анимации играют только пока видны на экране (и вкладка активна).
-    // Раньше все 8 SVG-стикеров крутились всегда, даже на скрытых страницах.
+    
+    
     const stickerRecs = new Map();
     function syncSticker(rec) {
         if (rec.visible && !document.hidden) rec.anim.play(); else rec.anim.pause();
@@ -8547,7 +8549,7 @@ function waitResultAnimationEnd(res, minMs) {
         : null;
     document.addEventListener('visibilitychange', () => stickerRecs.forEach(syncSticker));
     function trackSticker(box, anim) {
-        if (anim.setSubframe) anim.setSubframe(false);      // только целые кадры
+        if (anim.setSubframe) anim.setSubframe(false);      
         const rec = { anim, visible: !stickerIO };
         stickerRecs.set(box, rec);
         if (stickerIO) stickerIO.observe(box); else syncSticker(rec);
@@ -8585,13 +8587,13 @@ function waitResultAnimationEnd(res, minMs) {
                 el.appendChild(node);
                 el.classList.add('has-sticker');
                 return;
-            } catch (e) { /* пробуем следующий формат */ }
+            } catch (e) {  }
         }
-        // ни один файл не подошёл — убираем спиннер, эмодзи не показываем
+        
         el.textContent = '';
     }
 
-    // id иконки в index.html -> имя файла в animations/stickers/ (без расширения)
+    
     const QUICK_ACTION_STICKERS = {
         depositSticker:  'deposit',
         withdrawSticker: 'withdraw',
@@ -8609,8 +8611,8 @@ function waitResultAnimationEnd(res, minMs) {
         initQuickActionStickers();
     }
 
-    // ---- Стикеры в карточках статистики профиля ----
-    // Файлы: animations/stickers/turnover.tgs, koef.tgs, wins.tgs, bets.tgs
+    
+    
     const STAT_STICKERS = {
         statStickerTurnover: 'turnover',
         statStickerKoef:     'koef',
@@ -8630,29 +8632,29 @@ function waitResultAnimationEnd(res, minMs) {
 })();
 
 
-/* =========================
-   СТАБИЛЬНЫЕ 60 FPS ДЛЯ TELEGRAM EMOJI И ИГР (КУБ, ФУТБОЛ)
-   • Честные 60 кадров/с (16.67 мс) без искусственного урезания до 24/30 к/с.
-   • Быстрый Canvas-рендерер с аппаратным ускорением и предпрогревом кадров:
-     в отличие от тяжёлого DOM/SVG-рендерера, он не пересчитывает сотни SVG-узлов
-     и масок на каждом кадре, поэтому анимации идут идеально плавно в 60 FPS.
-   • Строгая изоляция активной страницы: когда открыт список баннеров — работают
-     только баннеры; когда открыта игра («Куб» или «Футбол») — баннеры мгновенно
-     встают на паузу и отдают 100% ресурсов текущей игре.
-   • Предварительное кэширование всех граней кубика и ударов футбола в памяти
-     при входе в игру — при нажатии «Играть» бросок стартует мгновенно без лагов.
-========================= */
+
+
+
+
+
+
+
+
+
+
+
+
 window.WXS_ANIM_FRAME_MS = 1000 / 60;
 
 (function () {
     const DIRS = ['animations/dice/banners/', 'animations/dice/banner/'];
     const IMG_EXTS = ['webp', 'gif', 'png'];
-    // Баннеры рисуем в родном разрешении экрана (минимум 2×, максимум 3×) — иначе
-    // canvas растягивается браузером и картинка выходит мягкой/размытой.
+    
+    
     const BANNER_DPR = window.WXS_LOTTIE_DPR || Math.min(window.devicePixelRatio || 1, 2.5);
     const STAGE_DPR = Math.min(window.devicePixelRatio || 1, 1.75);
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    
     const nextFrame = () => new Promise(r => {
         let done = false;
         const fin = () => { if (done) return; done = true; r(); };
@@ -8672,7 +8674,7 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         throw new Error('no gzip support');
     }
 
-    // Глубокое клонирование JSON для Lottie (чтобы мутации lottie-web не портили кэш)
+    
     function cloneAnimData(data) {
         if (!data) return null;
         if (typeof structuredClone === 'function') {
@@ -8681,8 +8683,8 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         return JSON.parse(JSON.stringify(data));
     }
 
-    /* ---------- общий кэш .tgs ---------- */
-    const cache = new Map();   // base (без расширения) -> Promise<json|null>
+    
+    const cache = new Map();   
     function loadTgs(base) {
         if (cache.has(base)) return cache.get(base);
         const p = (async () => {
@@ -8691,7 +8693,7 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
                     const res = await fetch(base + '.' + ext);
                     if (!res.ok) continue;
                     return await readLottieJson(await res.arrayBuffer());
-                } catch (e) { /* следующий формат */ }
+                } catch (e) {  }
             }
             return null;
         })();
@@ -8714,7 +8716,7 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         return null;
     }
 
-    /* ---------- предзагрузка в фоне без блокировки UI ---------- */
+    
     const idle = window.requestIdleCallback || (cb => setTimeout(cb, 16));
     const idleWait = () => new Promise(r => idle(() => r()));
 
@@ -8745,10 +8747,10 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
     if (document.readyState === 'complete') schedulePreload();
     else window.addEventListener('load', schedulePreload, { once: true });
 
-    /* ---------- проигрыватели баннеров (60 FPS, активны только на tgEmojiPage) ---------- */
+    
     let started = false;
     let pageActive = false;
-    const players = new Map();   // элемент баннера -> { anim, frame, last, total, fr, visible }
+    const players = new Map();   
     let rafId = 0;
     let lastTick = 0;
 
@@ -8757,8 +8759,8 @@ window.WXS_ANIM_FRAME_MS = 1000 / 60;
         return !!(pg && !pg.classList.contains('hidden')) && !document.hidden;
     }
 
-    // --- ИСПРАВЛЕНИЕ: эти функции/переменные использовались, но не были объявлены,
-    // из-за чего goHome() падал с "stopLoop is not defined" и приложение не запускалось ---
+    
+    
     const observer = ('IntersectionObserver' in window)
         ? new IntersectionObserver(entries => {
             entries.forEach(e => {
@@ -8795,7 +8797,7 @@ function tick(now) {
     rafId = 0;
     if (!pageActive || !isTgEmojiPageVisible()) return;
 
-    // Собираем видимые плееры один раз — не бегаем по всем в цикле каждый кадр
+    
     const visibleList = [];
     players.forEach(p => { if (p.visible) visibleList.push(p); });
     if (!visibleList.length) return;
@@ -8805,7 +8807,7 @@ function tick(now) {
     const dt = lastTick ? Math.min((now - lastTick) / 1000, 0.05) : (1 / 60);
     lastTick = now;
 
-    // 1) двигаем время у всех; в очередь на отрисовку — только те, у кого сменился кадр
+    
     const due = [];
     for (let i = 0; i < visibleList.length; i++) {
         const p = visibleList[i];
@@ -8818,10 +8820,10 @@ function tick(now) {
     }
     if (!due.length) return;
 
-    // 2) рисуем в рамках бюджета кадра. На мощных телефонах бюджет не исчерпывается
-    //    и рисуются ВСЕ баннеры каждый кадр; на слабых — вместо общей просадки FPS
-    //    самый «обделённый» баннер на кадр пропускается и в следующем кадре
-    //    сразу прыгает на актуальный (очередь по кругу — справедливо для всех).
+    
+    
+    
+    
     const budget = Math.min(12, Math.max(6, dt * 1000 * 0.6));
     const t0 = performance.now();
     const n = due.length;
@@ -8843,11 +8845,11 @@ function mountAnim(el, name, data) {
         container: box,
         renderer: 'canvas',
         loop: false,
-        autoplay: false,           // ← ВАЖНО: отключён autoplay, чтобы Lottie не крутил свой внутренний rAF параллельно нашему
+        autoplay: false,           
         animationData: data,
         rendererSettings: {
             clearCanvas: true,
-            dpr: BANNER_DPR,       // чёткость = пиксели экрана 1:1 (было 1.25 — отсюда размытие)
+            dpr: BANNER_DPR,       
             progressiveLoad: false,
             preserveAspectRatio: 'xMidYMid meet'
         }
@@ -8855,9 +8857,9 @@ function mountAnim(el, name, data) {
     if (anim.setSubframe) anim.setSubframe(false);
     if (lottie.wxsTrack) lottie.wxsTrack(box, anim);
 
-    // Прогрев: первый реальный рендер Lottie в canvas на Android WebView
-    // может занять 30-50 мс (создание текстур). Делаем его заранее,
-    // до добавления на экран, чтобы первый tick был мгновенным.
+    
+    
+    
     anim.goToAndStop(0, true);
     void box.offsetWidth;
     anim.goToAndStop(1, true);
@@ -8888,7 +8890,7 @@ function mountAnim(el, name, data) {
                     el.appendChild(img);
                     el.classList.add('has-anim');
                     return;
-                } catch (e) { /* дальше */ }
+                } catch (e) {  }
             }
         }
         console.warn('[Telegram Emoji] анимация не найдена для режима:', name);
@@ -8906,9 +8908,9 @@ function mountAnim(el, name, data) {
         }
         started = true;
         const els = Array.from(document.querySelectorAll('.tge-banner[data-banner]'));
-// Загружаем данные параллельно из кэша/сети, а монтируем по одному в кадр.
-// На Android между баннерами даём браузеру два кадра — успевает собрать GC,
-// иначе при монтировании 6 анимаций подряд видна просадка на старте.
+
+
+
 const isAndroid = /Android/i.test(navigator.userAgent);
 const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.dataset.banner))));
         for (let i = 0; i < els.length; i++) {
@@ -8922,7 +8924,7 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
                 await nextFrame();
     if (isAndroid) await nextFrame();
 }
-        // После того как баннеры отрисованы — тихо подгружаем Куб и Футбол в фоне
+        
         idle(() => {
             if (window.preloadDice) window.preloadDice();
             if (window.preloadFootball) window.preloadFootball();
@@ -8944,19 +8946,19 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
 })();
 
 
-/* =========================
-   КУБ — сцена 60 FPS: превью → выпавший кубик → результат
-   • Используется быстрый Canvas-рендерер (или лёгкий SVG без тяжёлых пересчётов)
-     с полными 60 кадрами в секунду и предзаготовленным пулом анимаций граней 1..6.
-   • Все 6 граней создаются и прогреваются заранее, поэтому в момент нажатия
-     «Играть» ничего не парсится и не создаётся — анимация стартует мгновенно в 60 FPS.
-========================= */
+
+
+
+
+
+
+
 (function () {
     const PREVIEW_SRC = 'animations/dice/banners/dice';
-    const ROLL_DIR = 'animations/dice/';   // cube1 … cube6
-    const ROLL_MS = 4000;                  // общее время броска: анимация + удержание последнего кадра
+    const ROLL_DIR = 'animations/dice/';   
+    const ROLL_MS = 4000;                  
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    
     const nextFrame = () => new Promise(r => {
         let done = false;
         const fin = () => { if (done) return; done = true; r(); };
@@ -8987,7 +8989,7 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         return anim;
     }
 
-    /* ---------- предзагрузка файлов ---------- */
+    
     let preloadPromise = null;
     window.preloadDice = function () {
     if (preloadPromise) return preloadPromise;
@@ -9001,8 +9003,8 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
     return preloadPromise;
 };
 
-    /* ---------- превью (крутится в 60 FPS, только когда страница Куба открыта) ---------- */
-    let preview = null;      // { anim, frame, last, total, fr, visible, paused }
+    
+    let preview = null;      
     let pageActive = false;
     let rafId = 0, lastTick = 0, previewStarted = false;
 
@@ -9041,11 +9043,11 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         }
     }
 
-    /* ---------- 2 / 3 куба: превью раздваивается и растраивается ---------- */
-    let cells = null;          // { a, b, c } — ячейки внутри превью
+    
+    let cells = null;          
     let previewData = null;
-    let previewB = null;       // второй экземпляр анимации
-    let previewC = null;       // третий экземпляр анимации
+    let previewB = null;       
+    let previewC = null;       
     let cubesCount = 1;
 
     function buildPair(el, emoji) {
@@ -9097,8 +9099,8 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         el.classList.toggle('triple', cubesCount === 3);
     }
 
-    /* ---------- пул готовых анимаций граней 1..6 (мгновенный старт без пересборки DOM) ---------- */
-    const rollPool = new Map(); // roll (1..6) -> Promise<{ box, anim }>
+    
+    const rollPool = new Map(); 
     function getPooledRoll(roll) {
         if (rollPool.has(roll)) return rollPool.get(roll);
         const p = (async () => {
@@ -9154,7 +9156,7 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         }, 120);
     };
 
-    /* ---------- подготовка выпавшей грани ---------- */
+    
     let prepared = null;
     function prepare(roll) {
         const rollEl = $('diceRoll');
@@ -9185,7 +9187,7 @@ const loaded = await Promise.all(els.map(el => loadFirst(DIRS.map(d => d + el.da
         return st.ready;
     }
 
-/* ---------- 60 FPS воспроизведение броска ---------- */
+
 function playRoll(anim, totalMs) {
     return new Promise(resolve => {
         const fr = anim.frameRate || 60;
@@ -9226,8 +9228,8 @@ function playRoll(anim, totalMs) {
                 '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
     }
 
-    function resultHtml(win, amountText, title) {
-        const mark = win
+    function resultHtml(win, amountText, title, pending) {
+        const mark = (win || pending)
             ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
             : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
               '<path class="dr-mark dr-second" pathLength="1" d="M119 81 L81 119"/>';
@@ -9279,7 +9281,7 @@ function playRoll(anim, totalMs) {
         prepared.used = true;
         const { box, anim } = st;
 
-        // 1) превью (или прошлый результат) плавно уплывает вверх, затем заезжает новый кубик
+        
         const hadResult = res.classList.contains('show');
         hideResult(true);
         setPreviewPaused(true);
@@ -9288,15 +9290,15 @@ function playRoll(anim, totalMs) {
         else await nextFrame();
         rollEl.classList.add('in');
 
-        // 2) играет в полные 60 FPS и замирает на последнем кадре
+        
         if (anim) await playRoll(anim, ROLL_MS);
         else await fallbackRoll(box, roll, ROLL_MS);
         await wait(350);
 
-        // 3) кубик плавно уходит, появляется галочка / крестик
+        
         rollEl.classList.add('away');
         if (skipResult) {
-            // бросок без вердикта: просто даём кубику уйти и переходим к следующему
+            
             await wait(350);
             if (box && box.parentNode === rollEl) rollEl.removeChild(box);
             rollEl.className = 'dice-layer dice-roll';
@@ -9307,16 +9309,17 @@ function playRoll(anim, totalMs) {
         }
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
-        res.innerHTML = resultHtml(win, amountText, title);
+        res.innerHTML = resultHtml(win, amountText, title, pending);
         res.classList.toggle('win', win && !counted);
-        res.classList.toggle('counted', !!counted);   // зелёная галочка «Ставка зачтена»
-        res.classList.toggle('lose', !win);
+        res.classList.toggle('counted', !!counted);   
+        res.classList.toggle('lose', !win && !pending);
+        res.classList.toggle('pending', !!pending);
         reflow(res);
         res.style.transition = '';
         res.classList.add('show');
 
-        // Галочка/крестик, искры и текст доигрывают полностью и не обрываются
-        // следующим кубом — ждём именно конца анимации, а не фиксированный таймер.
+        
+        
         await waitResultAnimationEnd(res, 1050);
         if (box && box.parentNode === rollEl) rollEl.removeChild(box);
         rollEl.className = 'dice-layer dice-roll';
@@ -9343,23 +9346,23 @@ function playRoll(anim, totalMs) {
     window.DiceStage = { play, reset, prepare, setCubes, setPageActive };
 })();
 
-/* ==========================================
-   ФУТБОЛ — сцена 60 FPS: превью → замах (prefootball.tgs) → удар (football1..5.tgs) → результат
-   • Полные 60 кадров/с без пропуска кадров.
-   • Замах (animations/dice/prefootball.tgs) и все 5 анимаций ударов
-     (animations/dice/football1 … football5) предзаготавливаются в пуле
-     и монтируются в один общий контейнер.
-   • Как только заканчивается последний кадр замаха, в тот же самый кадр
-     requestAnimationFrame без задержки, паузы или мигания включается 0-й кадр
-     удара — точь-в-точь как в настоящем Telegram.
-========================================== */
+
+
+
+
+
+
+
+
+
+
 (function () {
     const PREVIEW_SRC = 'animations/dice/banners/football';
-    const PRE_KICK_SRC = 'animations/dice/prefootball'; // замах перед ударом
-    const ROLL_DIR = 'animations/dice/';                // football1 … football5
-    const HOLD_AFTER_KICK_MS = 450;                     // пауза на последнем кадре после удара (как в ТГ)
+    const PRE_KICK_SRC = 'animations/dice/prefootball'; 
+    const ROLL_DIR = 'animations/dice/';                
+    const HOLD_AFTER_KICK_MS = 450;                     
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    
     const nextFrame = () => new Promise(r => {
         let done = false;
         const fin = () => { if (done) return; done = true; r(); };
@@ -9390,7 +9393,7 @@ function playRoll(anim, totalMs) {
         return anim;
     }
 
-    /* ---------- предзагрузка файлов (включая prefootball.tgs) ---------- */
+    
     let preloadPromise = null;
     window.preloadFootball = function () {
         if (preloadPromise) return preloadPromise;
@@ -9405,12 +9408,12 @@ function playRoll(anim, totalMs) {
         return preloadPromise;
     };
 
-    /* ---------- превью (60 FPS), с ячейками под 2–3 удара ---------- */
+    
     let preview = null;
     let previewData = null;
     let pageActive = false;
     let rafId = 0, lastTick = 0, previewStarted = false;
-    // Сплит как в кубах: 1 / 2 / 3 ячейки, каждая со своей анимацией превью.
+    
     let cells = [];
     let cellAnims = [];
     let kicksCount = 1;
@@ -9491,8 +9494,8 @@ function playRoll(anim, totalMs) {
         if (!prev || !cells.length) return;
         prev.classList.toggle('pair', kicksCount === 2);
         prev.classList.toggle('triple', kicksCount === 3);
-        // Держим все три ячейки живыми: при 1→3 они разъезжаются, при 3→1
-        // съезжаются к центру — без «выскакивания» новой анимации.
+        
+        
         for (let i = 0; i < cells.length; i++) ensureCellAnim(i);
         if (preview) {
             const fi = Math.floor(preview.frame) % preview.total;
@@ -9501,7 +9504,7 @@ function playRoll(anim, totalMs) {
         ensureLoop();
     }
 
-    /* ---------- пул анимаций: замах (prefootball) + удары 1..5 ---------- */
+    
     let preKickPoolPromise = null;
     function getPooledPreKick() {
         if (preKickPoolPromise) return preKickPoolPromise;
@@ -9565,14 +9568,14 @@ function playRoll(anim, totalMs) {
         previewData = data;
         buildCells(el);
         el.classList.add('has-anim');
-        // Берём актуальное количество ударов уже после загрузки: игрок мог
-        // переключить 1/2/3, пока превью ещё грузилось.
+        
+        
         setKicks(window.getFootballKicks ? window.getFootballKicks() : 1);
         ensureLoop();
         setTimeout(warmUpFootballPool, 120);
     };
 
-    /* ---------- подготовка связки «замах + удар» ---------- */
+    
     let prepared = null;
     function prepare(roll) {
         const rollEl = $('footballRoll');
@@ -9617,7 +9620,7 @@ function playRoll(anim, totalMs) {
         return st.ready;
     }
 
-    /* ---------- бесшовное 60 FPS воспроизведение: замах -> сразу пинок ---------- */
+    
     function playPreAndKick(preAnim, preBox, kickAnim, kickBox, holdMs, alive) {
         return new Promise(resolve => {
             const hasPre = !!(preAnim && preBox);
@@ -9662,9 +9665,9 @@ function playRoll(anim, totalMs) {
                         requestAnimationFrame(step);
                         return;
                     }
-                    // Стык кадр-в-кадр (как в Telegram): в этот же тик rAF
-                    // переключаем видимость со статичного последнего кадра замаха
-                    // на 0-й кадр удара без паузы и без моргания.
+                    
+                    
+                    
                     if (hasKick) {
                         phase = 'kick';
                         prevFrame = 0;
@@ -9679,7 +9682,7 @@ function playRoll(anim, totalMs) {
                     return;
                 }
 
-                // Фаза 2: сам удар и полёт мяча в ворота
+                
                 const elapsedKick = now - kickStartTime;
                 const target = Math.min(Math.floor((elapsedKick / 1000) * kickFr), kickLast);
                 if (target !== prevFrame) {
@@ -9713,8 +9716,8 @@ function playRoll(anim, totalMs) {
                 '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
     }
 
-    function resultHtml(win, amountText, title) {
-        const mark = win
+    function resultHtml(win, amountText, title, pending) {
+        const mark = (win || pending)
             ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
             : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
               '<path class="dr-mark dr-second" pathLength="1" d="M119 81 L81 119"/>';
@@ -9754,8 +9757,8 @@ function playRoll(anim, totalMs) {
     }
 
     function reset() {
-        // Отменяем недоигранный удар: при возврате в режим показываем превью,
-        // а не результат прошлой партии.
+        
+        
         playGen++;
         prepared = null;
         hideResult(false);
@@ -9764,23 +9767,23 @@ function playRoll(anim, totalMs) {
         showPreview();
     }
 
-    // Сценарий: превью (или прошлый итог) плавно уплывает вверх,
-    // сцена с замахом заезжает сбоку, проигрывает замах (prefootball.tgs) и
-    // мгновенно кадр-в-кадр переходит в сам пинок (football1..5.tgs) в 60 FPS,
-    // затем уходит — появляется итог.
+    
+    
+    
+    
     async function play({ roll, win, amountText, title, nextRoll }) {
         const prev = $('footballPreview'), rollEl = $('footballRoll'), res = $('footballResult');
         if (!prev || !rollEl || !res) return;
         const myGen = ++playGen;
         const alive = () => myGen === playGen;
 
-        // 1) получаем подготовленную связку «замах + удар»
+        
         const st = await ((prepared && prepared.roll === roll && !prepared.used) ? prepared.ready : prepare(roll));
         if (!alive() || !st) return;
         st.used = true;
         const { wrap, preBox, preAnim, kickBox, kickAnim } = st;
 
-        // 2) превью / прошлый итог уплывают вверх, затем заезжает сцена с замахом
+        
         const hadResult = res.classList.contains('show');
         hideResult(true);
         setPreviewPaused(true);
@@ -9790,7 +9793,7 @@ function playRoll(anim, totalMs) {
         reflow(rollEl);
         rollEl.classList.add('in');
 
-        // 3) замах (prefootball.tgs) -> бесшовный переход в удар (football1..5.tgs)
+        
         if (preAnim || kickAnim) {
             await playPreAndKick(preAnim, preBox, kickAnim, kickBox, HOLD_AFTER_KICK_MS, alive);
         } else {
@@ -9798,13 +9801,14 @@ function playRoll(anim, totalMs) {
         }
         if (!alive()) return;
 
-        // 4) ворота плавно уходят, появляется итог
+        
         rollEl.classList.add('away');
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
-        res.innerHTML = resultHtml(win, amountText, title);
+        res.innerHTML = resultHtml(win, amountText, title, pending);
         res.classList.toggle('win', !!win);
-        res.classList.toggle('lose', !win);
+        res.classList.toggle('lose', !win && !pending);
+        res.classList.toggle('pending', !!pending);
         reflow(res);
         res.style.transition = '';
         res.classList.add('show');
@@ -9839,14 +9843,14 @@ function playRoll(anim, totalMs) {
     window.FootballStage = { play, reset, prepare, setKicks, setPageActive };
 })();
 
-/* ==========================================
-   EMOJI-ИГРЫ — общая сцена для баскетбола, дартса, боулинга и слотов.
-   Использует готовые .tgs-анимации из animations/dice/banners/.
-========================================== */
+
+
+
+
 (function () {
     const DIRS = ['animations/dice/banners/', 'animations/dice/'];
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    // rAF не срабатывает в скрытой вкладке — страхуем кадр таймаутом.
+    
     const nextFrame = () => new Promise(r => {
         let done = false;
         const fin = () => { if (done) return; done = true; r(); };
@@ -9864,14 +9868,14 @@ function playRoll(anim, totalMs) {
     let previewKey = null;
     let pageActive = false;
     let initToken = 0;
-    // Сплит: при 2–3 попытках превью делится на ячейки (как кубы),
-    // и каждый бросок играет в СВОЕЙ ячейке, а не поверх всей сцены.
+    
+    
     let attemptsCount = 1;
     let cells = [];
     let cellAnims = [];
     let playGen = 0;
-    // Единый драйвер превью: одна rAF-петля двигает ВСЕ ячейки на один и тот
-    // же кадр, поэтому анимации всегда синхронны (а не «кто когда стартовал»).
+    
+    
     let preview = null;
     let previewRaf = 0;
     let previewLastTick = 0;
@@ -9890,8 +9894,8 @@ function playRoll(anim, totalMs) {
         return null;
     }
 
-    // Заранее подтягиваем все броски игры (darts1…darts6, basketball1…5,
-    // bowling1…6), чтобы нужный номер проигрывался без задержки.
+    
+    
     function preloadRolls(gameKey, count) {
         if (!gameKey || !count || !window.TgsCache) return;
         for (let n = 1; n <= count; n++) {
@@ -9899,7 +9903,7 @@ function playRoll(anim, totalMs) {
                 try { window.TgsCache.peekRaw(DIRS[1] + gameKey + n); } catch (e) {}
             }, n * 100);
         }
-        // замах (prebasketball / predarts / prebowling) — грузим первым
+        
         try { window.TgsCache.peekRaw(DIRS[1] + 'pre' + gameKey); } catch (e) {}
     }
 
@@ -9913,8 +9917,8 @@ function playRoll(anim, totalMs) {
                 '<circle class="dr-dot" style="--d:' + d + 's" cx="' + x + '" cy="' + y + '" r="4.6"/>').join('');
     }
 
-    function resultHtml(win, amountText, title) {
-        const mark = win
+    function resultHtml(win, amountText, title, pending) {
+        const mark = (win || pending)
             ? '<path class="dr-mark" pathLength="1" d="M76 102 L94 120 L126 83"/>'
             : '<path class="dr-mark" pathLength="1" d="M81 81 L119 119"/>' +
               '<path class="dr-mark dr-second" pathLength="1" d="M119 81 L81 119"/>';
@@ -9928,7 +9932,7 @@ function playRoll(anim, totalMs) {
             '<div class="dice-result-amount' + (amountText ? '' : ' is-empty') + '">' + (amountText || '+0.00$') + '</div>';
     }
 
-    /* ---------- ячейки превью (сплит на 2 / 3 попытки) ---------- */
+    
 
     function destroyCellAnims() {
         cellAnims.forEach(a => { try { a.destroy(); } catch (e) {} });
@@ -9949,10 +9953,10 @@ function playRoll(anim, totalMs) {
         prev.appendChild(pair);
     }
 
-    // Одна лотти-анимация превью на ячейку. Все ячейки создаются сразу
-    // (1 / 2 / 3 — в зависимости от maxAttempts игры) и живут всё время:
-    // так при смене количества попыток они плавно разъезжаются/съезжаются,
-    // а не появляются «из ниоткуда».
+    
+    
+    
+    
     function ensureCellAnim(i) {
         if (!previewData || !cells[i]) return null;
         if (cellAnims[i]) return cellAnims[i];
@@ -9980,7 +9984,7 @@ function playRoll(anim, totalMs) {
                 fr: anim.frameRate || 60
             };
         }
-        // Новая ячейка входит в общий ритм с текущего кадра остальных.
+        
         anim.goToAndStop(Math.floor(preview.frame) % preview.total, true);
         return anim;
     }
@@ -10026,7 +10030,7 @@ function playRoll(anim, totalMs) {
         prev.classList.toggle('pair', n === 2);
         prev.classList.toggle('triple', n === 3);
         ensureAllCellAnims();
-        // Пока идёт CSS-морф (0.75 с), новые ячейки уже на актуальном кадре.
+        
         if (preview) {
             const fi = Math.floor(preview.frame) % preview.total;
             cellAnims.forEach(a => { if (a) { try { a.goToAndStop(fi, true); } catch (e) {} } });
@@ -10034,7 +10038,7 @@ function playRoll(anim, totalMs) {
         ensurePreviewLoop();
     }
 
-    // Вернуть сцену к превью: тем же плавным заездом снизу, что и в кубе.
+    
     function resumePreview() {
         const prev = $('emojiGamePreview');
         if (prev && prev.classList.contains('out')) {
@@ -10060,9 +10064,9 @@ function playRoll(anim, totalMs) {
     }
 
     function reset() {
-        // ++playGen отменяет незавершённый playAttempt (например, игрок ушёл
-        // со страницы до конца анимации) — иначе его результат «всплывал»
-        // при следующем заходе в режим.
+        
+        
+        
         playGen++;
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
@@ -10161,12 +10165,12 @@ function playRoll(anim, totalMs) {
         await wait(600);
     }
 
-    /* ---------- пул готовых анимаций: замах (pre<игра>) + броски 1..N ---------- */
-    const HOLD_AFTER_ROLL_MS = 450;   // пауза на последнем кадре броска (как в футболе)
+    
+    const HOLD_AFTER_ROLL_MS = 450;   
     const ABS_BOX = 'position:absolute;inset:0;width:100%;height:100%;';
     const reflow = el => void el.offsetWidth;
-    const rollPool = new Map(); // 'darts:3' -> Promise<{ box, anim }>
-    const prePool = new Map();  // 'darts'   -> Promise<{ box, anim }>
+    const rollPool = new Map(); 
+    const prePool = new Map();  
 
     function makeAnim(box, data) {
         const anim = lottie.loadAnimation({
@@ -10186,8 +10190,8 @@ function playRoll(anim, totalMs) {
         return anim;
     }
 
-    // Замах: animations/dice/prebasketball | predarts | prebowling (.tgs).
-    // Нет файла — { box: null, anim: null }, и бросок играет сразу, как раньше.
+    
+    
     function getPooledPre(gameKey) {
         if (prePool.has(gameKey)) return prePool.get(gameKey);
         const p = (async () => {
@@ -10210,7 +10214,7 @@ function playRoll(anim, totalMs) {
         const p = (async () => {
             let data = null;
             if (window.TgsCache) data = await window.TgsCache.load(DIRS[1] + gameKey + n);
-            if (!data) data = await loadData(gameKey);   // нет номерного файла — общий баннер игры
+            if (!data) data = await loadData(gameKey);   
             if (!data || typeof lottie === 'undefined') return { box: null, anim: null };
             const box = document.createElement('div');
             box.className = 'sticker-lottie';
@@ -10234,7 +10238,7 @@ function playRoll(anim, totalMs) {
         }
     }
 
-    /* ---------- бесшовные 60 FPS: замах -> сразу бросок (как prefootball -> football) ---------- */
+    
     function playPreAndRoll(preAnim, preBox, anim, box, holdMs, alive) {
         return new Promise(resolve => {
             const hasPre = !!(preAnim && preBox);
@@ -10270,8 +10274,8 @@ function playRoll(anim, totalMs) {
                     const target = Math.min(Math.floor(elapsed / 1000 * preFr), preLast);
                     if (target !== prevFrame) { preAnim.goToAndStop(target, true); prevFrame = target; }
                     if (elapsed < preDurationMs) { requestAnimationFrame(step); return; }
-                    // Стык кадр-в-кадр: в этом же тике rAF прячем замах и
-                    // показываем 0-й кадр броска — без паузы и моргания.
+                    
+                    
                     if (hasRoll) {
                         phase = 'roll';
                         prevFrame = 0;
@@ -10310,34 +10314,35 @@ function playRoll(anim, totalMs) {
         setTimeout(() => { if (!res.classList.contains('show')) res.innerHTML = ''; }, 650);
     }
 
-    function showResult(win, amountText, title) {
+    function showResult(win, amountText, title, pending) {
         const res = $('emojiGameResult');
         if (!res) return;
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
-        res.innerHTML = resultHtml(win, amountText, title);
+        res.innerHTML = resultHtml(win, amountText, title, pending);
         res.classList.toggle('win', !!win);
-        res.classList.toggle('lose', !win);
+        res.classList.toggle('lose', !win && !pending);
+        res.classList.toggle('pending', !!pending);
         reflow(res);
         res.style.transition = '';
         res.classList.add('show');
     }
 
-    // Один сценарий для баскетбола, дартса, боулинга и слотов — как в кубе:
-    // превью (или прошлый итог) уплывает вверх → бросок заезжает сбоку и играет
-    // в 60 FPS → уходит → итог (галочка/крестик, искры, текст).
-    // Итог показывается после КАЖДОГО раунда, как в кубе.
-    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols }) {
+    
+    
+    
+    
+    async function playAttempt({ roll: rollNumber, win, pending = false, title, amountText, symbols }) {
         const prev = $('emojiGamePreview');
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
         const rollEl = $('emojiGameRoll');
         if (!prev || !res || !rollEl) return;
-        // reset() (уход со страницы, смена режима) отменяет доигрывание прошлой партии
+        
         const myGen = ++playGen;
         const alive = () => myGen === playGen;
 
-        /* ----- слоты: тот же «въезд → результат», но барабаны вместо ролика ----- */
+        
         if (cfg && cfg.slots) {
             const hadResult = res.classList.contains('show');
             hideResult(true);
@@ -10355,15 +10360,15 @@ function playRoll(anim, totalMs) {
             await wait(220);
             if (!alive()) return;
 
-            if (slots) slots.classList.remove('show');   // барабаны плавно гаснут, итог плавно появляется
-            showResult(win, amountText, title);
+            if (slots) slots.classList.remove('show');   
+            showResult(win, amountText, title, pending);
             await waitResultAnimationEnd(res, 1050);
             if (!alive()) return;
             await wait(300);
             return;
         }
 
-        /* ----- 1) слой с броском собираем из пула за кадром ----- */
+        
         const gameKey = key;
         const [prePooled, pooled] = await Promise.all([getPooledPre(gameKey), getPooledRoll(rollNumber)]);
         if (!alive()) return;
@@ -10389,7 +10394,7 @@ function playRoll(anim, totalMs) {
             wrap.appendChild(box);
         }
 
-        /* ----- 2) превью / прошлый итог уплывают вверх, заезжает бросок ----- */
+        
         const hadResult = res.classList.contains('show');
         hideResult(true);
         pausePreview();
@@ -10400,14 +10405,14 @@ function playRoll(anim, totalMs) {
         reflow(rollEl);
         rollEl.classList.add('in');
 
-        /* ----- 3) замах (pre<игра>) -> встык бросок, 60 FPS ----- */
+        
         if (preAnim || anim) await playPreAndRoll(preAnim, preBox, anim, box, HOLD_AFTER_ROLL_MS, alive);
         else await fallbackRoll(wrap, 3000);
         if (!alive()) return;
 
-        /* ----- 4) бросок уходит, появляется итог ----- */
+        
         rollEl.classList.add('away');
-        showResult(win, amountText, title);
+        showResult(win, amountText, title, pending);
         await waitResultAnimationEnd(res, 1050);
         if (!alive()) return;
         if (preBox && preBox.parentNode) preBox.parentNode.removeChild(preBox);
@@ -10435,7 +10440,7 @@ function playRoll(anim, totalMs) {
     window.EmojiGameStage = { init, reset, playAttempt, setAttempts, setPageActive };
 })();
 
-/* Переключение активности анимаций при смене страниц — чтобы в играх 100% CPU/GPU шло на 60 FPS */
+
 window.syncTgEmojiPageState = function (pageId) {
     if (typeof window.setTgEmojiBannersActive === 'function') {
         window.setTgEmojiBannersActive(pageId === 'tgEmojiPage');
@@ -10452,9 +10457,9 @@ window.syncTgEmojiPageState = function (pageId) {
 };
 
 
-/* ==========================================
-   LIQUID GLASS НИЖНЯЯ ПАНЕЛЬ: тап / зажать и тянуть
-========================================== */
+
+
+
 (function () {
     function init() {
         const nav = document.getElementById('bottomNav');
@@ -10475,13 +10480,13 @@ window.syncTgEmojiPageState = function (pageId) {
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
         const hap = t => { try { window.haptic && window.haptic(t); } catch (e) {} };
 
-// --- Тир качества стекла ---
-// 0 — fallback (blur+brightness, дешёвый)  ← дефолт на мобильных и Android WebView
-// 1 — облегчённый SVG-фильтр (одно преломление)  ← десктопный Chromium
-// 2 — полный SVG-фильтр  ← десктопный Chromium с мощным GPU
-// SVG в backdrop-filter реально работает только в Chrome для десктопа.
-// На Android WebView и iOS Safari он либо игнорируется, либо пересчитывается
-// на каждом кадре — именно это и вызывало лаги.
+
+
+
+
+
+
+
 const ua = navigator.userAgent;
 const isAndroid = /Android/i.test(ua);
 const isIOS = /iPhone|iPad|iPod/i.test(ua);
@@ -10508,14 +10513,14 @@ applyTier();
             itemW = W / items.length;
             restW = itemW - 10;  restH = H - 12;
             dragW = itemW * 1.3; dragH = H + 16;
-            // размеры задаём один раз: фильтр стекла работает с постоянным размером
+            
             pill.style.width = restW + 'px';  pill.style.height = restH + 'px';
             pill.style.borderRadius = restH / 2 + 'px';
             lens.style.width = dragW + 'px';  lens.style.height = dragH + 'px';
             lens.style.borderRadius = dragH / 2 + 'px';
         }
 
-        // x — центр линзы, g — «раздутость» (0 плашка, 1 стекло), sq — сжатие о стенку
+        
         const st = { x: 0, vx: 0, g: 0, vg: 0, sq: 0, vsq: 0, side: 0 };
         const tgt = { x: 0, g: 0, sq: 0 };
         let activeIdx = 0, hoverIdx = 0, pressed = false, moved = false, activePointerId = null;
@@ -10537,7 +10542,7 @@ applyTier();
             const centered = st.x - w / 2;
             const pinned = st.side < 0 ? st.x - sw / 2 : st.x + sw / 2 - w;
             const left = centered + (pinned - centered) * sq;
-            // только transform и opacity — без пересчёта layout
+            
             lens.style.transform = 'translate3d(' + left + 'px,' + (-dragH / 2) + 'px,0) scale(' + (w / dragW) + ',' + (h / dragH) + ')';
             pill.style.transform = 'translate3d(' + (st.x - restW / 2) + 'px,' + (-restH / 2) + 'px,0)';
             const go = clamp((g - 0.05) / 0.55, 0, 1);
@@ -10558,8 +10563,8 @@ applyTier();
             [st.sq, st.vsq] = sp(st.sq, st.vsq, tgt.sq, 520, 30);
         }
 let lensWillChange = false;
-// will-change ставим только когда линза реально движется —
-// постоянный will-change держит GPU-слой занятым и тормозит остальное.
+
+
 function setLensWillChange(on) {
     if (lensWillChange === on) return;
     lensWillChange = on;
@@ -10575,8 +10580,8 @@ function frame(now) {
     step(dt / 2); step(dt / 2);
     render();
 
-    // Авто-снижение: если > 24 мс на кадр стабильно — это заметный фриз,
-    // понижаем тир и запоминаем, чтобы не мучить устройство снова.
+    
+    
     if (tier > 0 && st.g > 0.3) {
         frameCount++;
         slow = raw > 0.024 ? slow + 1 : Math.max(0, slow - 1);
@@ -10588,7 +10593,7 @@ function frame(now) {
         frameCount = 0; slow = 0;
     }
 
-    // когда всё успокоилось (в т.ч. палец стоит на месте) — цикл останавливается
+    
     const settled =
         Math.abs(st.x - tgt.x) < 0.1 && Math.abs(st.vx) < 0.5 &&
         Math.abs(st.g - tgt.g) < 0.002 && Math.abs(st.vg) < 0.01 &&
@@ -10596,7 +10601,7 @@ function frame(now) {
     if (settled) {
         st.x = tgt.x; st.g = tgt.g; st.sq = tgt.sq; st.vx = st.vg = st.vsq = 0;
         render();
-        setLensWillChange(false);   // анимация остановилась — отпускаем GPU-слой
+        setLensWillChange(false);   
         raf = 0;
         return;
     }
@@ -10606,13 +10611,13 @@ function frame(now) {
 function kick() {
     if (!raf) {
         lastFrame = performance.now();
-        setLensWillChange(true);    // анимация стартует — включаем composited-слой
+        setLensWillChange(true);    
         raf = requestAnimationFrame(frame);
     }
 }
 
-// Скрытая вкладка / свёрнутое приложение — rAF останавливаем,
-// чтобы не расходовать батарею. При возврате — догоняем, если не осело.
+
+
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && raf) {
         cancelAnimationFrame(raf);
@@ -10712,20 +10717,20 @@ document.addEventListener('visibilitychange', () => {
     else init();
 })();
 
-/* ==========================================
-   ВКЛАДКА «ТОП»: рейтинг игроков
-   Данные: RPC wxs_leaderboard (см. leaderboard.sql). Если функции в базе ещё нет —
-   считаем напрямую из wxs_game / live_bets.
-========================================== */
+
+
+
+
+
 (function () {
     const $ = id => document.getElementById(id);
     const supabase = window.wxsSupabase;
     const TTL = 20000;
     const st = { metric: 'turnover', period: 'all', date: null, seq: 0, cache: new Map(), bound: false };
 
-    /* ---------- анимированный доллар (dollar.tgs) ----------
-       Один раз раскладываем анимацию на кадры и рисуем их во все маленькие canvas одним таймером —
-       так даже 50 строк с анимированным значком почти ничего не стоят. */
+    
+
+
     const DOLLAR = 'animations/stickers/dollar';
     const dollarCanvases = new Set();
     let dollarSprite, dollarPromise = null, dRaf = 0, dLast = -1;
@@ -10833,7 +10838,7 @@ document.addEventListener('visibilitychange', () => {
         return c;
     }
 
-    /* ---------- данные ---------- */
+    
     const num = v => Number(v) || 0;
     const fmt = v => num(v).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
     const pname = r => r.nickname || r.username || 'Игрок';
@@ -10913,7 +10918,7 @@ document.addEventListener('visibilitychange', () => {
     async function fetchRows(metric, period, date) {
         const { from, to } = range(period, date);
         if (metric === 'balance') {
-            // максимальный баланс игрока за период (дневные пики из wxs_balance_daily)
+            
             try {
                 const { data, error } = await supabase.rpc('wxs_balance_peaks', {
                     p_from: dayStr(from), p_to: dayStr(to), p_limit: 50
@@ -10921,7 +10926,7 @@ document.addEventListener('visibilitychange', () => {
                 if (!error && Array.isArray(data)) {
                     return data.map(r => ({ id: r.telegram_id, name: r.name || 'Игрок', photo: r.photo_url || '', value: num(r.value) }));
                 }
-            } catch (e) { /* функции ещё нет — покажем текущий баланс */ }
+            } catch (e) {  }
             return fallbackRows('balance', null, null);
         }
         try {
@@ -10934,11 +10939,11 @@ document.addEventListener('visibilitychange', () => {
             if (!error && Array.isArray(data)) {
                 return data.map(r => ({ id: r.telegram_id, name: r.name || 'Игрок', photo: r.photo_url || '', value: num(r.value) }));
             }
-        } catch (e) { /* функции ещё нет — считаем напрямую */ }
+        } catch (e) {  }
         return fallbackRows(metric, from, to);
     }
 
-    /* ---------- отрисовка ---------- */
+    
     const MEDAL_COLORS = { 1: ['#ffe27a', '#f0a500', '#e0301e'], 2: ['#e4ebff', '#9db0e6', '#3a63d8'], 3: ['#ffc58a', '#e08a3c', '#d4401e'] };
     function medalSVG(n) {
         const [a, b, r] = MEDAL_COLORS[n];
@@ -11056,13 +11061,13 @@ document.addEventListener('visibilitychange', () => {
         renderLoading();
         let rows = null;
         try { rows = await fetchRows(st.metric, period, st.date); } catch (e) { rows = null; }
-        if (seq !== st.seq) return;               // пока грузили, выбрали другое
+        if (seq !== st.seq) return;               
         if (!rows) { renderError(); return; }
         st.cache.set(key, { t: Date.now(), rows });
         render(rows);
     }
 
-    /* ---------- управление ---------- */
+    
     const hap = t => { try { window.haptic && window.haptic(t); } catch (e) {} };
     function setActive(container, attr, value) {
         container.querySelectorAll('.lb-chip').forEach(b => b.classList.toggle('active', b.dataset[attr] === value));
@@ -11109,24 +11114,24 @@ document.addEventListener('visibilitychange', () => {
         const alreadyOpen = !!pg && !pg.classList.contains('hidden');
         window.showPage('topPage');
         window.updateNav('top');
-        if (alreadyOpen) return;     // повторный тап по «Топ» — без перерисовки и повтора анимации
+        if (alreadyOpen) return;     
         bind();
         load(false);
         loadDollar().then(startDollarLoop);
     };
 })();
 
-/* Свернули мини-апп — не крутим бесконечные CSS-анимации */
+
 document.addEventListener('visibilitychange', function () {
     document.documentElement.classList.toggle('app-paused', document.hidden);
 });
 
-/* =========================================================
-   ПОП-АП ВЫИГРЫША (для любой игры)
-   window.showWinPopup(сумма, коэффициент)
-   Иконка — случайная из 5 .tgs: animations/stickers/win1.tgs … win5.tgs
-   (папку и имена можно поменять в WIN_TGS_DIR / WIN_TGS_NAMES)
-========================================================= */
+
+
+
+
+
+
 (function () {
     const WIN_TGS_DIR = 'animations/stickers/';
     const WIN_TGS_NAMES = ['win1', 'win2', 'win3', 'win4', 'win5'];
@@ -11153,7 +11158,7 @@ document.addEventListener('visibilitychange', function () {
         return '+' + Number(n).toFixed(2).replace('.', ',') + '$';
     }
     function fmtMult(m) {
-        // 9.80 -> x9.8, 1.62 -> x1.62, 2.00 -> x2
+        
         return 'x' + String(parseFloat(Number(m).toFixed(2)));
     }
 
@@ -11174,7 +11179,7 @@ document.addEventListener('visibilitychange', function () {
                 data = await window.TgsCache.load(WIN_TGS_DIR + WIN_TGS_NAMES[idx]);
             }
         } catch (e) {}
-        if (my !== token) return;   // за время загрузки пришёл новый поп-ап
+        if (my !== token) return;   
 
         destroyAnim();
         if (data) {
@@ -11186,7 +11191,7 @@ document.addEventListener('visibilitychange', function () {
                 animationData: data
             });
         } else {
-            iconBox.textContent = '🎉';   // запасной вариант, пока .tgs не загружены
+            iconBox.textContent = '🎉';   
         }
     }
 
@@ -11201,7 +11206,7 @@ document.addEventListener('visibilitychange', function () {
         if (isFinite(m) && m > 0) text += ' (' + fmtMult(m) + ')';
         textEl.textContent = text;
 
-        // перезапуск полоски времени и анимации появления
+        
         clearTimeout(hideTimer);
         root.classList.remove('show');
         barEl.style.animation = 'none';
@@ -11217,7 +11222,7 @@ document.addEventListener('visibilitychange', function () {
         }, SHOW_MS);
     };
 
-    // Прогрев: тихо подгружаем 5 стикеров в кэш, чтобы поп-ап появлялся мгновенно
+    
     window.addEventListener('load', function () {
         setTimeout(function () {
             if (!window.TgsCache) return;
@@ -11229,30 +11234,30 @@ document.addEventListener('visibilitychange', function () {
 })();
 
 
-/* =========================================================
-   СИНХРОНИЗАЦИЯ БАЛАНСА С БАЗОЙ (чат-бот ⇄ аппка)
-   Бот в чате («б», «баланс») читает wxs_game.balance из Supabase,
-   а аппка раньше показывала только то, что вернули её собственные
-   операции — любые изменения баланса снаружи (игры в чате, промокоды,
-   начисления) в ней не появлялись до перезапуска.
-   Теперь аппка раз в несколько секунд и при возврате в окно сверяет
-   баланс с базой и подтягивает его. Идущая игра/анимация не ломается:
-   пока её результат на экране ещё не раскрыт, к нему лишь прибавляется
-   внешнее изменение, а полная сверка происходит, когда всё затихло.
-========================================================= */
+
+
+
+
+
+
+
+
+
+
+
 (function balanceSync() {
-    const POLL_MS = 3000;       // как часто сверяемся
-    const IDLE_MS = 12000;      // сколько без своих операций, чтобы принудительно выровнять
+    const POLL_MS = 3000;       
+    const IDLE_MS = 12000;      
     const cents = (n) => Math.round(Number(n) * 100) / 100;
 
-    let base = null;            // баланс в базе при прошлой сверке
-    let baseSeq = -1;           // номер «своей» операции на тот момент
-    let seq = 0;                // растёт при каждом изменении баланса самой аппкой
+    let base = null;            
+    let baseSeq = -1;           
+    let seq = 0;                
     let lastSetAt = Date.now();
     let busy = false;
 
     const origSetUIBalance = setUIBalance;
-    // все игры вызывают setUIBalance — перехватываем, чтобы знать о своих операциях
+    
     setUIBalance = function (v) {
         seq++;
         lastSetAt = Date.now();
@@ -11274,8 +11279,8 @@ document.addEventListener('visibilitychange', function () {
             const srv = cents(data[0].balance);
             if (!isFinite(srv)) return;
 
-            // пока шла проверка, аппка сама меняла баланс (или идёт ставка) —
-            // этот ответ мог устареть, просто запомним ориентир и выйдем
+            
+            
             if (startSeq !== seq || isEconomyLocked) { base = null; return; }
 
             if (base !== null && baseSeq !== startSeq) base = null;
@@ -11284,14 +11289,14 @@ document.addEventListener('visibilitychange', function () {
             if (srv === ui) { base = srv; baseSeq = startSeq; return; }
 
             if (base !== null && srv !== base) {
-                // база изменилась, а своих операций не было → изменение снаружи (чат и т.п)
+                
                 origSetUIBalance(cents(ui + (srv - base)));
                 base = srv; baseSeq = startSeq;
                 return;
             }
 
             base = srv; baseSeq = startSeq;
-            // экран расходится с базой и давно ничего не происходит → выравниваем
+            
             if (Date.now() - lastSetAt > IDLE_MS) origSetUIBalance(srv);
         } catch (e) {
             console.warn('[balanceSync]', e);
