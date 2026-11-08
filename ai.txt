@@ -1,0 +1,5 @@
+# ai.txt — AI/ML usage policy
+User-Agent: *
+Disallow: /
+Disallow-Training: /
+Disallow-Analysis: /
