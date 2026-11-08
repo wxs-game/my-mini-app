@@ -62,7 +62,7 @@
 
     const origLoad = lottie.loadAnimation.bind(lottie);
     lottie.loadAnimation = function (opts) {
-        if (!useCanvas || !opts || opts.renderer !== 'svg' || !opts.container) return origLoad(opts);
+        if (!useCanvas || !opts || opts.renderer !== 'svg' || !opts.container || opts.rendererSettings?.wxsKeepSvg) return origLoad(opts);
         const rs = opts.rendererSettings || {};
         const o = Object.assign({}, opts, {
             renderer: 'canvas',
@@ -4506,7 +4506,7 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
         const anim = lottie.loadAnimation({
             container: holder, renderer: "svg", loop: false, autoplay: true,
             animationData: data,
-            rendererSettings: { preserveAspectRatio: "xMidYMid meet" }
+            rendererSettings: { preserveAspectRatio: "xMidYMid meet", ...(el.classList.contains("dart-mode-icon") ? { wxsKeepSvg: true } : {}) }
         });
         el._anim = anim;
         let shown = false;
@@ -5291,7 +5291,7 @@ function fitDartsLabels() {
         const content = btn.querySelector('.darts-fit-content');
         if (!content) return;
         content.style.transform = 'none';
-        const available = Math.max(1, btn.clientWidth - 12);
+        const available = Math.max(1, btn.clientWidth - 20);
         const actual = content.scrollWidth;
         const scale = Math.min(1, available / Math.max(1, actual));
         content.style.transform = `scaleX(${scale})`;

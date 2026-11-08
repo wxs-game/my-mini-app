@@ -5008,3 +5008,23 @@ img.img-pending { opacity: 0; }
     white-space: nowrap !important;
     flex: 0 0 auto;
 }
+
+/* Darts: uniform button dimensions, native typography and SVG icon stability. */
+#emojiGameModes { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+#emojiGameModes .darts-fit-tile {
+    min-width: 0; min-height: 52px; height: 52px;
+    padding: 14px 6px; box-sizing: border-box;
+    font-size: 14px; font-weight: 800;
+    justify-content: center; align-items: center;
+}
+#emojiGameModes .darts-fit-content {
+    font-size: inherit; font-weight: inherit; line-height: 1.2;
+    gap: 4px; max-width: none; flex-shrink: 0;
+    backface-visibility: hidden;
+}
+#emojiGameModes .dart-mode-icon {
+    width: 22px; height: 22px; margin: 0; flex: 0 0 22px;
+    overflow: hidden;
+}
+#emojiGameModes .dart-mode-icon .dice-tgs-holder { transition: none; }
+#emojiGameModes .dart-mode-icon svg { display: block; width: 100% !important; height: 100% !important; }
