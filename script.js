@@ -5143,17 +5143,43 @@ const EMOJI_GAME_CONFIGS = {
         rolls: 6,
         attemptLabels: ['1 ДРОТИК', '2 ДРОТИКА', '3 ДРОТИКА'],
         modes: [
-            // 1 — отскок, 2 — красный сектор 1, 3 — белый сектор 1,
-            // 4 — красный сектор 2, 5 — белый сектор 2, 6 — центр
-            { key: 'center', name: 'Центр', wins: [6] },
-            { key: 'miss', name: 'Промах', wins: [1] },
-            { key: 's1red', name: 'Сектор 1 🔴', wins: [2] },
-            { key: 's1white', name: 'Сектор 1 ⚪️', wins: [3] },
-            { key: 's2red', name: 'Сектор 2 🔴', wins: [4] },
-            { key: 's2white', name: 'Сектор 2 ⚪️', wins: [5] },
-            { key: 'anySector', name: 'Любой сектор', wins: [2, 3, 4, 5] },
-            { key: 'redCenter', name: '🔴 Сектор или центр', wins: [2, 4, 6] },
-            { key: 'whiteBounce', name: '⚪️ Сектор или отскок', wins: [1, 3, 5] }
+            // Исходы: 1 — отскок, 2/4 — красные сектора, 3/5 — белые, 6 — центр.
+            { key: 'redSector', name: 'Сектор', icon: 'red', attempts: 1, p: [2, 6] },
+            { key: 'bounce', name: 'Отскок', icon: 'bounce', attempts: 1, p: [1, 6] },
+            { key: 'whiteSector', name: 'Сектор', icon: 'white', attempts: 1, p: [2, 6] },
+            { key: 'center', name: 'Центр', icon: 'center', attempts: 1, p: [1, 6] },
+            { key: 'anySector', name: 'Любой сектор', attempts: 1, p: [4, 6], full: true },
+            { key: 'redCenter', name: 'Сектор или центр', icon: 'red', attempts: 1, p: [3, 6], full: true },
+            { key: 'whiteBounce', name: 'Сектор или отскок', icon: 'white', attempts: 1, p: [3, 6], full: true },
+
+            { key: 'bothBounce', name: 'Отскок', icon: 'bounce', attempts: 2, p: [1, 36] },
+            { key: 'bothRedSector', name: 'Сектор', icon: 'red', attempts: 2, p: [4, 36] },
+            { key: 'bothCenter', name: 'Центр', icon: 'center', attempts: 2, p: [1, 36] },
+            { key: 'bothWhiteSector', name: 'Сектор', icon: 'white', attempts: 2, p: [4, 36] },
+            { key: 'bothRed', name: 'Красное', icon: 'red', attempts: 2, p: [9, 36] },
+            { key: 'bothWhite', name: 'Белое/Мимо', icon: 'white', attempts: 2, p: [9, 36] },
+            { key: 'bothAnySector', name: 'Любой сектор', attempts: 2, p: [16, 36] },
+            { key: 'noBounce', name: 'Без промахов', attempts: 2, p: [25, 36] },
+            { key: 'adjacent', name: 'Рядом', attempts: 2, p: [8, 36] },
+            { key: 'same', name: 'Оба одинаково', attempts: 2, p: [6, 36] },
+            { key: 'differentColors', name: 'Разные цвета', attempts: 2, p: [8, 36] },
+            { key: 'hasCenter2', name: 'Есть центр', attempts: 2, p: [11, 36] },
+            { key: 'firstCloser', name: '1-й точнее', attempts: 2, p: [15, 36] },
+            { key: 'secondCloser', name: '2-й точнее', attempts: 2, p: [15, 36] },
+
+            { key: 'threeBounce', name: 'Отскок', icon: 'bounce', attempts: 3, p: [1, 216] },
+            { key: 'threeRedSector', name: 'Сектор', icon: 'red', attempts: 3, p: [8, 216] },
+            { key: 'threeCenter', name: 'Центр', icon: 'center', attempts: 3, p: [1, 216] },
+            { key: 'threeWhiteSector', name: 'Сектор', icon: 'white', attempts: 3, p: [8, 216] },
+            { key: 'threeRed', name: 'Красное', icon: 'red', attempts: 3, p: [27, 216] },
+            { key: 'threeWhite', name: 'Белое/Мимо', icon: 'white', attempts: 3, p: [27, 216] },
+            { key: 'threeAnySector', name: 'Любой сектор', attempts: 3, p: [64, 216], full: true },
+            { key: 'threeSame', name: 'Три одинаково', attempts: 3, p: [6, 216] },
+            { key: 'trafficLight', name: 'Светофор', attempts: 3, p: [24, 216] },
+            { key: 'ascending', name: 'Возрастание', attempts: 3, p: [20, 216] },
+            { key: 'descending', name: 'Убывание', attempts: 3, p: [20, 216] },
+            { key: 'thirdCloser', name: '3-й точнее', attempts: 3, p: [55, 216] },
+            { key: 'hasCenter3', name: 'Есть центр', attempts: 3, p: [91, 216] }
         ]
     },
     bowling: {
@@ -5226,7 +5252,7 @@ function emojiModeProb(mode, cfg) {
 // Итоговый коэффициент режима с маржой 2.5%, округление вниз до сотых
 function emojiCompoundCoef(mode, attempts, cfg) {
     const p = emojiModeProb(mode, cfg);
-    return Math.min(9999.99, houseCoef(p[0], p[1], attempts));
+    return Math.min(9999.99, houseCoef(p[0], p[1], mode.attempts ? 1 : attempts));
 }
 
 function openEmojiGame(key) {
@@ -5266,13 +5292,22 @@ function renderEmojiGameModes(animate) {
 
     const oldH = box.offsetHeight;
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
-    box.innerHTML = cfg.modes.map((m, i) => {
+    box.querySelectorAll('.dart-mode-icon').forEach(el => {
+        try { el._anim && el._anim.destroy(); } catch (e) {}
+    });
+    box.innerHTML = cfg.modes.filter(m => !m.attempts || m.attempts === attempts).map((m, i) => {
         const coef = emojiCompoundCoef(m, attempts, cfg);
-        return '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
+        return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
             '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
+            (m.icon ? '<span class="dice-num-icon dart-mode-icon" data-icon="' + m.icon + '"></span>' : '') +
             '<span class="dice-mode-name">' + m.name + '</span> ' +
             '<span class="dice-mode-coef">(' + coef.toFixed(2) + '×)</span></button>';
     }).join("");
+    box.querySelectorAll('.dart-mode-icon').forEach(el => {
+        const icon = el.dataset.icon;
+        const fallback = icon === 'white' ? '⚪' : '🎯';
+        mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + 'modedarts' + icon + '.tgs'], null, null, '<span class="dart-icon-fallback">' + fallback + '</span>');
+    });
 
     if (animate && oldH) {
         box.style.height = "auto";

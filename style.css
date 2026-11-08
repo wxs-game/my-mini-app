@@ -4420,6 +4420,7 @@ body.anim-page .top {
 .emoji-game-page .dice-modes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.emoji-game-page #emojiGameModes .dart-full { grid-column: 1 / -1; }
 .emoji-game-page .dice-mode-name { white-space: normal; }
 .emoji-game-page .dice-tile { white-space: normal; }
 .emoji-game-page .dice-count-row.hidden-row { display: none; }
@@ -4953,6 +4954,12 @@ img.img-pending { opacity: 0; }
 }
 .dice-num-icon svg, .dice-num-icon canvas { width: 100% !important; height: 100% !important; }
 .dice-num-icon .dice-num-img { width: 100%; height: 100%; }
+.dart-mode-icon {
+    width: 34px;
+    height: 34px;
+    margin: -8px -6px;
+}
+.dart-icon-fallback { font-size: 16px; line-height: 1; }
 .dice-num-img {
     width: 22px;
     height: 22px;
