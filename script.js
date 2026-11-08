@@ -4631,6 +4631,25 @@ function doRenderDiceModes(animate) {
     }
 
     
+    if (emojiGame.key === 'darts') {
+        const fitLabels = () => {
+            box.querySelectorAll('.darts-nowrap').forEach(btn => {
+                const label = btn.querySelector('.darts-label-content');
+                if (!label) return;
+                label.style.transform = 'translate(-50%, -50%) scaleX(1)';
+                const available = btn.clientWidth - 12;
+                const natural = label.scrollWidth;
+                const scale = natural > 0 ? Math.min(1, available / natural) : 1;
+                label.style.transform = `translate(-50%, -50%) scaleX(${Math.max(0.1, scale)})`;
+            });
+        };
+        requestAnimationFrame(fitLabels);
+        if (!box._dartsFitObserver && typeof ResizeObserver !== 'undefined') {
+            box._dartsFitObserver = new ResizeObserver(fitLabels);
+            box._dartsFitObserver.observe(box);
+        }
+    }
+
     if (animate && oldH) {
         box.style.height = "auto";
         const newH = box.offsetHeight;
@@ -5299,9 +5318,10 @@ function renderEmojiGameModes(animate) {
         const coef = emojiCompoundCoef(m, attempts, cfg);
         return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (emojiGame.key === 'darts' ? ' darts-nowrap' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
             '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
+            '<span class="darts-label-content">' +
             (m.icon ? '<span class="dice-num-icon dart-mode-icon" data-icon="' + m.icon + '"></span>' : '') +
             '<span class="dice-mode-name">' + m.name + '</span> ' +
-            '<span class="dice-mode-coef">(×' + coef.toFixed(2) + ')</span></button>';
+            '<span class="dice-mode-coef">(×' + coef.toFixed(2) + ')</span></span></button>';
     }).join("");
     box.querySelectorAll('.dart-mode-icon').forEach(el => {
         const icon = el.dataset.icon;
