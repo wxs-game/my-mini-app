@@ -5144,20 +5144,20 @@ const EMOJI_GAME_CONFIGS = {
         attemptLabels: ['1 ДРОТИК', '2 ДРОТИКА', '3 ДРОТИКА'],
         modes: [
             // Исходы: 1 — отскок, 2/4 — красные сектора, 3/5 — белые, 6 — центр.
-            { key: 'redSector', name: 'Сектор', icon: 'red', attempts: 1, p: [2, 6] },
-            { key: 'bounce', name: 'Отскок', icon: 'bounce', attempts: 1, p: [1, 6] },
-            { key: 'whiteSector', name: 'Сектор', icon: 'white', attempts: 1, p: [2, 6] },
-            { key: 'center', name: 'Центр', icon: 'center', attempts: 1, p: [1, 6] },
+            { key: 'redSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 1, p: [2, 6] },
+            { key: 'bounce', name: 'Отскок', icon: 'dartsoff.tgs', attempts: 1, p: [1, 6] },
+            { key: 'whiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 1, p: [2, 6] },
+            { key: 'center', name: 'Центр', icon: 'dartscenter.tgs', attempts: 1, p: [1, 6] },
             { key: 'anySector', name: 'Любой сектор', attempts: 1, p: [4, 6], full: true },
-            { key: 'redCenter', name: 'Сектор или центр', icon: 'red', attempts: 1, p: [3, 6], full: true },
-            { key: 'whiteBounce', name: 'Сектор или отскок', icon: 'white', attempts: 1, p: [3, 6], full: true },
+            { key: 'redCenter', name: 'Сектор или центр', icon: 'dartsred2.tgs', attempts: 1, p: [3, 6], full: true },
+            { key: 'whiteBounce', name: 'Сектор или отскок', icon: 'dartswhite2.tgs', attempts: 1, p: [3, 6], full: true },
 
-            { key: 'bothBounce', name: 'Отскок', icon: 'bounce', attempts: 2, p: [1, 36] },
-            { key: 'bothRedSector', name: 'Сектор', icon: 'red', attempts: 2, p: [4, 36] },
-            { key: 'bothCenter', name: 'Центр', icon: 'center', attempts: 2, p: [1, 36] },
-            { key: 'bothWhiteSector', name: 'Сектор', icon: 'white', attempts: 2, p: [4, 36] },
-            { key: 'bothRed', name: 'Красное', icon: 'red', attempts: 2, p: [9, 36] },
-            { key: 'bothWhite', name: 'Белое/Мимо', icon: 'white', attempts: 2, p: [9, 36] },
+            { key: 'bothBounce', name: 'Отскок', icon: 'dartsoff.tgs', attempts: 2, p: [1, 36] },
+            { key: 'bothRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 2, p: [4, 36] },
+            { key: 'bothCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 2, p: [1, 36] },
+            { key: 'bothWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 2, p: [4, 36] },
+            { key: 'bothRed', name: 'Сектор/Центр', icon: 'dartsred1.tgs', attempts: 2, p: [9, 36] },
+            { key: 'bothWhite', name: 'Сектор/Мимо', icon: 'dartswhite1.tgs', attempts: 2, p: [9, 36] },
             { key: 'bothAnySector', name: 'Любой сектор', attempts: 2, p: [16, 36] },
             { key: 'noBounce', name: 'Без промахов', attempts: 2, p: [25, 36] },
             { key: 'adjacent', name: 'Рядом', attempts: 2, p: [8, 36] },
@@ -5167,12 +5167,12 @@ const EMOJI_GAME_CONFIGS = {
             { key: 'firstCloser', name: '1-й точнее', attempts: 2, p: [15, 36] },
             { key: 'secondCloser', name: '2-й точнее', attempts: 2, p: [15, 36] },
 
-            { key: 'threeBounce', name: 'Отскок', icon: 'bounce', attempts: 3, p: [1, 216] },
-            { key: 'threeRedSector', name: 'Сектор', icon: 'red', attempts: 3, p: [8, 216] },
-            { key: 'threeCenter', name: 'Центр', icon: 'center', attempts: 3, p: [1, 216] },
-            { key: 'threeWhiteSector', name: 'Сектор', icon: 'white', attempts: 3, p: [8, 216] },
-            { key: 'threeRed', name: 'Красное', icon: 'red', attempts: 3, p: [27, 216] },
-            { key: 'threeWhite', name: 'Белое/Мимо', icon: 'white', attempts: 3, p: [27, 216] },
+            { key: 'threeBounce', name: 'Отскок', icon: 'dartsoff.tgs', attempts: 3, p: [1, 216] },
+            { key: 'threeRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 3, p: [8, 216] },
+            { key: 'threeCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 3, p: [1, 216] },
+            { key: 'threeWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 3, p: [8, 216] },
+            { key: 'threeRed', name: 'Сектор/Центр', icon: 'dartsred1.tgs', attempts: 3, p: [27, 216] },
+            { key: 'threeWhite', name: 'Сектор/Мимо', icon: 'dartswhite1.tgs', attempts: 3, p: [27, 216] },
             { key: 'threeAnySector', name: 'Любой сектор', attempts: 3, p: [64, 216], full: true },
             { key: 'threeSame', name: 'Три одинаково', attempts: 3, p: [6, 216] },
             { key: 'trafficLight', name: 'Светофор', attempts: 3, p: [24, 216] },
@@ -5285,6 +5285,20 @@ function openEmojiGame(key) {
     if (window.EmojiGameStage) window.EmojiGameStage.init(key, emojiGame.attempts);
 }
 
+
+function fitDartsLabels() {
+    document.querySelectorAll('#emojiGameModes .darts-fit-tile').forEach(btn => {
+        const content = btn.querySelector('.darts-fit-content');
+        if (!content) return;
+        content.style.transform = 'none';
+        const available = Math.max(1, btn.clientWidth - 12);
+        const actual = content.scrollWidth;
+        const scale = Math.min(1, available / Math.max(1, actual));
+        content.style.transform = `scaleX(${scale})`;
+    });
+}
+window.addEventListener('resize', () => requestAnimationFrame(fitDartsLabels));
+
 function renderEmojiGameModes(animate) {
     const box = document.getElementById("emojiGameModes");
     const cfg = emojiGameCfg();
@@ -5297,17 +5311,20 @@ function renderEmojiGameModes(animate) {
     });
     box.innerHTML = cfg.modes.filter(m => !m.attempts || m.attempts === attempts).map((m, i) => {
         const coef = emojiCompoundCoef(m, attempts, cfg);
-        return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
+        return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (emojiGame.key === 'darts' ? ' darts-fit-tile' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
             '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
-            (m.icon ? '<span class="dice-num-icon dart-mode-icon" data-icon="' + m.icon + '"></span>' : '') +
+            (emojiGame.key === 'darts' ? '<span class="darts-fit-content">' : '') + (m.icon ? '<span class="dice-num-icon dart-mode-icon" data-icon="' + m.icon + '"></span>' : '') +
             '<span class="dice-mode-name">' + m.name + '</span> ' +
-            '<span class="dice-mode-coef">(' + coef.toFixed(2) + '×)</span></button>';
+            '<span class="dice-mode-coef">(' + (emojiGame.key === 'darts' ? '×' + coef.toFixed(2) : coef.toFixed(2) + '×') + ')</span>' + (emojiGame.key === 'darts' ? '</span>' : '') + '</button>';
     }).join("");
     box.querySelectorAll('.dart-mode-icon').forEach(el => {
         const icon = el.dataset.icon;
-        const fallback = icon === 'white' ? '⚪' : '🎯';
-        mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + 'modedarts' + icon + '.tgs'], null, null, '<span class="dart-icon-fallback">' + fallback + '</span>');
+        const fallback = icon.startsWith('dartswhite') ? '⚪' : '🎯';
+        const path = emojiGame.key === 'darts' ? DICE_NUM_TGS_DIR + icon : DICE_NUM_TGS_DIR + 'modedarts' + icon + '.tgs';
+        mountDiceTgsIcon(el, [path], null, null, '<span class="dart-icon-fallback">' + fallback + '</span>');
     });
+
+    if (emojiGame.key === 'darts') requestAnimationFrame(fitDartsLabels);
 
     if (animate && oldH) {
         box.style.height = "auto";

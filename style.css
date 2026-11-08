@@ -4983,3 +4983,28 @@ img.img-pending { opacity: 0; }
     transform: rotate(45deg);
     margin-left: 3px;
 }
+
+/* Darts: original tile geometry and font size, text-only horizontal fitting. */
+#emojiGameModes .darts-fit-tile {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
+}
+#emojiGameModes .darts-fit-content {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: max-content;
+    max-width: none;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    transform-origin: center center;
+    font-size: 14px;
+    line-height: 1.2;
+}
+#emojiGameModes .darts-fit-content .dice-mode-name,
+#emojiGameModes .darts-fit-content .dice-mode-coef {
+    white-space: nowrap !important;
+    flex: 0 0 auto;
+}
