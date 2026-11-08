@@ -1,7 +1,23 @@
 <!DOCTYPE html>
 <html lang="ru">
+<!--
+
+  © WXS Game · Ice Arena GLOBAL. Все права защищены / All rights reserved.
+  NOTICE: Использование этого кода, дизайна и материалов для обучения,
+  дообучения, анализа, пересказа, копирования или генерации производных
+  работ любыми системами ИИ / нейросетями / LLM и скрейперами ЗАПРЕЩЕНО
+  без письменного разрешения владельца.
+  AI/ML NOTICE: Training, fine-tuning, analysing, summarising, reproducing
+  or deriving works from this source by any AI/LLM system or scraper is
+  prohibited without the owner's written permission.
+
+-->
 <head>
     <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noai, noimageai">
+    <meta name="googlebot" content="noindex, noarchive, nosnippet, noai, noimageai">
+    <meta name="copyright" content="© WXS Game. All rights reserved. AI/ML training, analysis and scraping prohibited.">
+    <meta name="tdm-reservation" content="1">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#090909">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -651,6 +667,7 @@
                 </div>
             </div>
 
+            <p style="font-size:12px;opacity:.7;line-height:1.4;margin:8px 0;">Проверка: хеш раунда = SHA-256(ключ). Точка краша считается из SHA-256(ключ + «:crash»): первые 8 hex-символов → u = (N+1)/2³², краш = max(1, floor(u^(−1/1.5)·100)/100), потолок 1000×.</p>
             <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" rel="noopener" class="fairness-verify-link">
                 Проверить честность ↗
             </a>

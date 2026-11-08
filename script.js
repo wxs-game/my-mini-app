@@ -1,3 +1,13 @@
+/*!
+ * © WXS Game · Ice Arena GLOBAL. Все права защищены / All rights reserved.
+ * NOTICE: Использование этого кода, дизайна и материалов для обучения,
+ * дообучения, анализа, пересказа, копирования или генерации производных
+ * работ любыми системами ИИ / нейросетями / LLM и скрейперами ЗАПРЕЩЕНО
+ * без письменного разрешения владельца.
+ * AI/ML NOTICE: Training, fine-tuning, analysing, summarising, reproducing
+ * or deriving works from this source by any AI/LLM system or scraper is
+ * prohibited without the owner's written permission.
+ */
 /* =========================================================
    WXS PERF: единый слой оптимизации Lottie (подключён первым)
    • Все .tgs-анимации, которые раньше рисовались тяжёлым SVG-рендерером
@@ -357,7 +367,10 @@ const CRASH_RTP = 0.95;
 // получается из этой же формулы сам по себе (когда X настолько мало, что
 // crash < 1.00 и округляется вверх до 1.00) — его частота автоматически
 // равна ровно (1 - CRASH_RTP), без отдельной "магической" ветки.
-// ВАЖНО: тот же расчёт делает сервер в crash_tick() (crash_server.sql) —
+// ВАЖНО: расчёт делает ТОЛЬКО сервер (crash_secure.sql): seed = SHA-256(ключ + ":crash"),
+// а публичный хеш раунда = SHA-256(ключ). Клиент точку краша заранее не знает.
+// Эта функция осталась лишь для самопроверки раунда после краша.
+// — тот же расчёт делает сервер в crash_tick() (crash_server.sql) —
 // если меняешь формулу тут, меняй и там.
 //
 // Новое распределение: P(crash >= m) = m^(-CRASH_TAIL_ALPHA).
@@ -1155,6 +1168,25 @@ let saveQueue = Promise.resolve();
    без сервера.
 ========================= */
 
+
+/* =========================
+   КРАШ: ставка / очередь / кэшаут делает СЕРВЕР (crash_bet, crash_queue_bet,
+   crash_promote, crash_cashout). Клиент больше не пишет в crash_bets /
+   crash_queue / crash_rounds и не присылает сумму выигрыша: сервер сам берёт
+   ставку из своей таблицы и считает множитель по своему времени.
+========================= */
+async function crashRpc(fn, args) {
+    try {
+        const p = Promise.resolve(supabase.rpc(fn, Object.assign({ p_init: tg?.initData || '' }, args || {})));
+        netBar.track(p);
+        const { data, error } = await p;
+        if (error) return { ok: false, error: error.message || 'Ошибка сервера' };
+        return data || { ok: false, error: 'Пустой ответ сервера' };
+    } catch (e) {
+        return { ok: false, error: 'Нет соединения с сервером' };
+    }
+}
+
 async function placeBetServer(amount, gameLabel) {
     const tgUser = tg?.initDataUnsafe?.user;
     if (!tgUser) return { ok: true, balance: currentBalance }; // запуск вне Telegram — локальный демо-режим
@@ -1743,6 +1775,7 @@ const CRASH_ADVANCE_RETRY_MS = 500;     // не чаще — повтор зап
 // было 1 с, и КАЖДЫЙ открытый мини-апп бил в базу раз в секунду (см. лог:
 // "canceling statement due to statement timeout", "cron job startup timeout").
 const CRASH_TICK_CALL_MS = 2000;
+const CRASH_FLIGHT_POKE_MS = 400;     // в полёте: сервер сам знает момент краша, клиент лишь торопит его
 // При ошибке тик не повторяем вплотную: пауза удваивается до этого потолка.
 const CRASH_TICK_BACKOFF_MAX_MS = 30000;
 const CRASH_CLOCK_RESYNC_MS = 90000;
@@ -2223,6 +2256,7 @@ function scheduleCrashPhaseTimer() {
     else if (crashGame.phase === 'flying') at = crashGame.crashAt;
     else if (crashGame.phase === 'crashed') at = crashGame.crashAt + CRASH_RESULT_HOLD_MS;
     else return;
+    if (!isFinite(at)) return;
     crashLobby.phaseTimer = setTimeout(crashClockTick, Math.max(0, at - crashNow()) + 2);
 }
 
@@ -2266,19 +2300,8 @@ async function promoteCrashQueue() {
 
     crashLobby.promoting = true;
     try {
-        for (const q of ready) {
-            const { error } = await supabase.from(CRASH_BETS_TABLE).upsert({
-                round_id: round.id,
-                telegram_id: q.telegramId,
-                name: q.name,
-                avatar: q.avatar,
-                amount: q.amount,
-                status: 'active'
-            }, { onConflict: 'round_id,telegram_id', ignoreDuplicates: true });
-            if (error) { console.error('Crash queue promote:', error); continue; }
-            const { error: delErr } = await supabase.from(CRASH_QUEUE_TABLE).delete().eq('id', q.id);
-            if (delErr) console.error('Crash queue cleanup:', delErr);
-        }
+        const res = await supabase.rpc('crash_promote');
+        if (res.error) console.error('Crash queue promote:', res.error);
     } catch (e) {
         console.error('Crash queue promote:', e);
     } finally {
@@ -2330,37 +2353,23 @@ async function queueCrashBet() {
     const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
     const myAvatar = getMyIceArenaAvatar();
 
-    // 1) Сначала занимаем место в очереди (unique по игроку — вторую не создать)
-    const { data: row, error: qErr } = await supabase.from(CRASH_QUEUE_TABLE).insert({
-        telegram_id: myId, name: myName, avatar: myAvatar, amount: bet
-    }).select('id, created_at').single();
-    if (qErr || !row) {
-        if (qErr && qErr.code === '23505') showMessage('Ваша ставка уже стоит в очереди.');
-        else showMessage('Не удалось поставить на следующий раунд. Попробуйте ещё раз.');
-        if (qErr && qErr.code !== '23505') console.error('Crash queue insert:', qErr);
-        crashGame.isProcessing = false;
-        unlockEconomy();
-        scheduleCrashReload();
-        return;
-    }
-
-    // 2) Списываем деньги
+    // Сервер сам ставит в очередь и списывает ставку одной транзакцией
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    const debitResult = await placeBetServer(bet, 'Краш');
-    if (!debitResult.ok) {
+    const srv = await crashRpc('crash_queue_bet', { p_amount: bet, p_name: myName, p_avatar: myAvatar });
+    if (!srv.ok) {
         restoreBalanceState(snapshot);
-        await supabase.from(CRASH_QUEUE_TABLE).delete().eq('id', row.id);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        showMessage(srv.error || 'Не удалось поставить на следующий раунд. Попробуйте ещё раз.');
         crashGame.isProcessing = false;
         unlockEconomy();
         scheduleCrashReload();
         return;
     }
-    currentBalance = debitResult.balance;
+    const row = { id: srv.id, created_at: srv.created_at };
+    currentBalance = Number(srv.balance);
     setUIBalance(currentBalance);
 
     crashGame.queued = { id: row.id, amount: bet };
@@ -2513,21 +2522,8 @@ async function getOrCreateCrashRound() {
 
     if (active && active[0]) return active[0];
 
-    const secrets = await generateCrashRoundSecrets();
-    const { data: created, error } = await supabase
-        .from(CRASH_ROUNDS_TABLE)
-        .insert({
-            status: 'waiting',
-            hash: secrets.hash,
-            salt: secrets.salt,
-            crash_point: secrets.crashPoint,
-            waiting_ends_at: new Date(crashNow() + CRASH_WAIT_MS).toISOString()
-        })
-        .select()
-        .single();
-
-    if (!error && created) return created;
-
+    // Новый раунд создаёт только сервер (crash_tick_safe), клиент в таблицу не пишет
+    await supabase.rpc('crash_tick_safe');
     const { data: retry } = await supabase
         .from(CRASH_ROUNDS_TABLE)
         .select('*')
@@ -2549,7 +2545,10 @@ function setCrashRoundTimes(round) {
     }
     // Раунд закрашен, а starts_at в БД нет (ручная запись) — не ждём «полёта»
     const noStamp = round.status === 'crashed' && !round.starts_at;
-    crashGame.crashAt = crashGame.startTime + (noStamp ? 0 : computeCrashDurationMs(crashGame.crashPoint));
+    // момент краша известен только после краша; до него — «бесконечность»
+    crashGame.crashAt = crashGame.crashPoint == null
+        ? Infinity
+        : crashGame.startTime + (noStamp ? 0 : computeCrashDurationMs(crashGame.crashPoint));
 }
 
 // Применяет строку раунда из БД к локальному состоянию экрана — вызывается
@@ -2585,7 +2584,7 @@ function applyCrashRound(round, bets) {
         (crashGame.phase === 'flying' || crashGame.phase === 'crashed')) {
         const holdEnd = crashGame.crashAt + CRASH_RESULT_HOLD_MS;
         const wait = Math.min(holdEnd - crashNow(), 120000);
-        if (wait > 0) {
+        if (isFinite(holdEnd) && wait > 0) {
             crashLobby.deferredRound = { round, bets };
             clearTimeout(crashLobby.deferTimer);
             crashLobby.deferTimer = setTimeout(() => {
@@ -2618,7 +2617,9 @@ function applyCrashRound(round, bets) {
         crashGame.currentMult = 1.00;
         crashGame.explosionPlayed = false;
     }
-    crashGame.crashPoint = Number(round.crash_point) || 1;
+    // До краша сервер точку НЕ отдаёт (crash_point = null) — клиент крутит множитель,
+    // пока сервер не пришлёт status='crashed' вместе с раскрытой точкой и ключом.
+    crashGame.crashPoint = round.crash_point != null ? (Number(round.crash_point) || 1) : null;
     setCrashRoundTimes(round);
 
     crashLobby.bets = mapCrashBetsToPlayers(bets);
@@ -2628,7 +2629,7 @@ function applyCrashRound(round, bets) {
     currentCrashState = {
         salt: round.status === 'crashed' ? (round.salt || '') : '',
         hash: round.hash || '',
-        crashPoint: Number(round.crash_point) || 1,
+        crashPoint: round.crash_point != null ? (Number(round.crash_point) || 1) : 1,
         isFinished: round.status === 'crashed'
     };
     const hashInput = document.getElementById('crashRoundHashInput');
@@ -2731,10 +2732,11 @@ async function maybeAdvanceCrash() {
     const now = crashNow();
     // После ошибки не долбим сервер: пауза удваивается до 30 с
     if (now < crashLobby.tickBackoffUntil) return;
-    if (now - crashLobby.lastAdvanceTry < CRASH_TICK_CALL_MS) return;
+    const flightPoke = round.status === 'flying' && !isFinite(crashGame.crashAt);
+    if (now - crashLobby.lastAdvanceTry < (flightPoke ? CRASH_FLIGHT_POKE_MS : CRASH_TICK_CALL_MS)) return;
 
     const holdEnd = crashGame.crashAt + CRASH_RESULT_HOLD_MS;
-    const due =
+    const due = flightPoke ||
         (round.status === 'waiting' && now >= crashGame.waitEndsAt) ||
         ((round.status === 'flying' || round.status === 'waiting') && now >= crashGame.crashAt) ||
         // Пауза после краша: ждём, пока сервер создаст следующий раунд.
@@ -2785,6 +2787,7 @@ async function maybeAdvanceCrash() {
 }
 
 async function maybeAdvanceCrashLegacy() {
+    return; // отключено: клиент больше не пишет в crash_rounds/crash_bets
     const round = crashLobby.round;
     if (!round || crashLobby.advancing) return;
     if (round.id !== crashGame.roundId) return;
@@ -3304,15 +3307,17 @@ async function placeCrashBet() {
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    const debitResult = await placeBetServer(bet, 'Краш');
-    if (!debitResult.ok) {
+    const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
+    const srv = await crashRpc('crash_bet', { p_amount: bet, p_name: myName, p_avatar: getMyIceArenaAvatar() });
+    if (!srv.ok) {
         restoreBalanceState(snapshot);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        showMessage(srv.error || "Не удалось сделать ставку. Проверьте соединение и попробуйте снова.");
         crashGame.isProcessing = false;
         unlockEconomy();
+        scheduleCrashReload();
         return;
     }
-    currentBalance = debitResult.balance;
+    currentBalance = Number(srv.balance);
     setUIBalance(currentBalance);
 
     crashGame.bet = bet;
@@ -3320,22 +3325,7 @@ async function placeCrashBet() {
     crashGame.cashedOut = false;
     crashGame.liveBetResolved = false;
     crashGame.liveBetId = await broadcastLiveBet(bet, 'Краш');
-
-    const myId = myCrashTelegramId();
-    if (myId != null) {
-        const myName = document.getElementById('username')?.textContent?.trim() || 'Игрок';
-        const myAvatar = getMyIceArenaAvatar();
-        const { data, error } = await supabase.from(CRASH_BETS_TABLE).insert({
-            round_id: round.id,
-            telegram_id: myId,
-            name: myName,
-            avatar: myAvatar,
-            amount: bet,
-            status: 'active'
-        }).select('id').single();
-        if (error) console.error('Crash bet insert:', error);
-        else crashGame.myBetRowId = data?.id ?? null;
-    }
+    crashGame.myBetRowId = srv.bet_id ?? null;
 
     crashGame.isProcessing = false;
     unlockEconomy();
@@ -3352,26 +3342,25 @@ async function cashOutCrash() {
     crashGame.isProcessing = true;
     const snapshot = snapshotBalanceState();
 
-    // Коэффициент берём по серверному времени в момент нажатия, а не из
-    // последнего отрисованного кадра — так «забрал» == ровно то, что видел.
-    const mult = computeCrashMultAt(crashNow() - crashGame.startTime, crashGame.crashPoint);
-    const winAmount = roundMoney(crashGame.bet * mult);
+    // Сервер сам находит ставку, считает множитель по своему времени и платит.
+    // Клиент шлёт лишь «на каком иксе нажал» — сервер возьмёт минимум из него и своего.
+    const seenMult = computeCrashMultAt(crashNow() - crashGame.startTime, crashGame.crashPoint);
+    const srv = await crashRpc('crash_cashout', { p_mult: seenMult });
+    if (!srv.ok) {
+        restoreBalanceState(snapshot);
+        showMessage(srv.error || "Не удалось забрать выигрыш. Проверьте соединение.");
+        crashGame.isProcessing = false;
+        unlockEconomy();
+        scheduleCrashReload();
+        return;
+    }
+    const mult = Number(srv.mult);
+    const winAmount = roundMoney(srv.win);
 
     currentTotalWin = roundMoney(currentTotalWin + winAmount);
     currentWinsCount++;
     if (mult > currentMaxWin) currentMaxWin = mult;
-
-    setUIBalance(roundMoney(currentBalance + winAmount));
-    const creditResult = await resolveWinServerWithRetry(winAmount, mult);
-
-    if (!creditResult.ok) {
-        restoreBalanceState(snapshot);
-        showMessage("Не удалось зачислить выигрыш. Проверьте соединение и нажмите «Забрать» ещё раз.");
-        crashGame.isProcessing = false;
-        unlockEconomy();
-        return;
-    }
-    currentBalance = creditResult.balance;
+    currentBalance = Number(srv.balance);
     setUIBalance(currentBalance);
 
     crashGame.cashedOut = true;
@@ -3384,13 +3373,6 @@ async function cashOutCrash() {
     if (window.tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
     window.showWinPopup?.(winAmount, mult);
     resolveLiveBetWin(crashGame.liveBetId, crashGame.bet, winAmount);
-
-    if (crashGame.myBetRowId != null) {
-        supabase.from(CRASH_BETS_TABLE)
-            .update({ status: 'cashed_out', cashout_mult: mult, win_amount: winAmount })
-            .eq('id', crashGame.myBetRowId)
-            .then(({ error }) => { if (error) console.error('Crash bet cashout update:', error); });
-    }
 
     // Сразу показываем свой кэшаут в списке игроков
     crashLobby.bets = crashLobby.bets.map(b => b.isUser
@@ -4766,11 +4748,32 @@ function setDiceBusy(on) {
     if (page) page.classList.toggle("is-busy", on);
 }
 
-// Честный бросок 1..6 без смещения (crypto вместо Math.random)
-function rollDie() {
-    const a = new Uint32Array(1);
-    do { crypto.getRandomValues(a); } while (a[0] >= 4294967292); // 6 * 715827882
-    return (a[0] % 6) + 1;
+
+/* =========================
+   EMOJI-ИГРЫ: ВСЁ СЧИТАЕТ СЕРВЕР (Supabase RPC emoji_play)
+   Клиент отправляет только «что выбрал» (игра, режим, число бросков, ставка).
+   Ставку, броски, проверку выигрыша, коэффициент и выплату делает база
+   атомарно в одной транзакции и возвращает готовые rolls/passes/win/balance.
+   Подменить результат через F12 нельзя: клиент лишь проигрывает анимацию.
+========================= */
+async function emojiPlayApi(game, mode, count, bet, nums) {
+    try {
+        // rpc() — «ленивый» thenable: оборачиваем в Promise, чтобы не было двойного запроса
+        const p = Promise.resolve(supabase.rpc('emoji_play', {
+            p_init: tg?.initData || '',
+            p_game: game,
+            p_mode: mode,
+            p_count: count,
+            p_bet: bet,
+            p_nums: nums || []
+        }));
+        netBar.track(p);
+        const { data, error } = await p;
+        if (error) return { ok: false, error: error.message || 'Ошибка сервера' };
+        return data;
+    } catch (e) {
+        return { ok: false, error: 'Нет соединения с сервером' };
+    }
 }
 
 // Выигрыш = ставка × коэффициент, округлённый ВНИЗ до цента (не в пользу игрока).
@@ -4780,23 +4783,6 @@ function calcDiceWin(bet, coef) {
     const cents = Math.round(bet * 100);
     const coefHundredths = Math.round(coef * 100);
     return Math.floor((cents * coefHundredths) / 100) / 100;
-}
-
-// i — номер куба (0, 1, …), rolls — уже выпавшие грани (для «Одинаковые» / «Дубль»).
-function isDiceWin(mode, r, nums, i, rolls) {
-    switch (mode) {
-        case "same":   return i === 0 ? true : r === rolls[0];                       // второй куб = первому
-        case "double": return i === 0 ? (Array.isArray(nums) && nums.indexOf(r) !== -1)
-                                      : r === rolls[0];                              // первый в выбранных, второй такой же
-        case "high":   return r >= 4;
-        case "low":    return r <= 3;
-        case "even":   return r % 2 === 0;
-        case "odd":    return r % 2 === 1;
-        case "center": return r === 3 || r === 4;   // 3 и 4
-        case "edges":  return r === 1 || r === 6;   // 1 и 6
-        case "number": return Array.isArray(nums) && nums.indexOf(r) !== -1;
-    }
-    return false;
 }
 
 async function handleDicePlay() {
@@ -4826,59 +4812,36 @@ async function handleDicePlay() {
     const nums = diceGame.numbers.slice();      // выбранные грани для «Число»
     const coef = diceCoefFor(mode, cubes, nums.length);
 
-    // --- 1. списываем ставку ---
+    // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    const debit = await placeBetServer(bet, "Куб");
-    if (!debit.ok) {
+    const srv = await emojiPlayApi("dice", mode, cubes, bet, nums);
+    if (!srv || !srv.ok) {
         restoreBalanceState(snapshot);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        showMessage((srv && srv.error) || "Не удалось сыграть. Проверьте соединение и попробуйте снова.");
         setDiceBusy(false);
         unlockEconomy();
         return;
     }
-    currentBalance = debit.balance;
-    setUIBalance(currentBalance);
+    const rolls = (srv.rolls || []).map(Number);
+    const passes = (srv.passes || []).map(Boolean);
+    const win = !!srv.win;
+    const winAmount = win ? roundMoney(srv.payout) : 0;
+    const coefSrv = Number(srv.coef) || coef;
+    const finalBalance = Number(srv.balance);
+    // до конца анимации показываем баланс без выигрыша
+    currentBalance = finalBalance;
+    setUIBalance(roundMoney(finalBalance - winAmount));
     const liveBetId = await broadcastLiveBet(bet, "Куб");
-
-    // --- 2. броски и расчёт ---
-    // Каждый следующий куб кидается только если предыдущий подошёл.
-    // Выигрыш — когда подошли ВСЕ кубы выбранного режима.
-    const rolls = [];
-    const passes = [];
-    let allPass = true;
-    for (let i = 0; i < cubes; i++) {
-        const r = rollDie();
-        const p = isDiceWin(mode, r, nums, i, rolls);
-        rolls.push(r);
-        passes.push(p);
-        if (!p) { allPass = false; break; }
-    }
-    const win = allPass && rolls.length === cubes;
     if (window.DiceStage) window.DiceStage.prepare(rolls[0]);   // заранее собираем анимацию выпавшей грани
-    const winAmount = win ? calcDiceWin(bet, coef) : 0;
-    let finalBalance = currentBalance;
 
     if (win) {
-        const afterBet = snapshotBalanceState();
         currentTotalWin = roundMoney(currentTotalWin + winAmount);
         currentWinsCount++;
-        if (coef > currentMaxWin) currentMaxWin = coef;
-
-        // Выигрыш зачисляем на сервер сразу, а на экране баланс покажем после анимации
-        const credit = await resolveWinServerWithRetry(winAmount, coef, 3);
-        if (!credit.ok) {
-            restoreBalanceState(afterBet);
-            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку.");
-            setDiceBusy(false);
-            unlockEconomy();
-            if (window.DiceStage) window.DiceStage.reset();
-            return;
-        }
-        finalBalance = credit.balance;
+        if (coefSrv > currentMaxWin) currentMaxWin = coefSrv;
     }
     unlockEconomy();
 
@@ -4918,7 +4881,7 @@ async function handleDicePlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setDiceBusy(false);
-    if (win) window.showWinPopup?.(winAmount, coef);
+    if (win) window.showWinPopup?.(winAmount, coefSrv);
 }
 
 /* ---------- ФУТБОЛ ---------- */
@@ -5039,25 +5002,10 @@ function setFootballBusy(on) {
     if (page) page.classList.toggle("is-busy", on);
 }
 
-// Честный бросок 1..5 для футбола
-function rollFootball() {
-    const a = new Uint32Array(1);
-    do { crypto.getRandomValues(a); } while (a[0] >= 4294967295); // 5 * 858993459
-    return (a[0] % 5) + 1;
-}
-
 function calcFootballWin(bet, coef) {
     const cents = Math.round(bet * 100);
     const coefHundredths = Math.round(coef * 100);
     return Math.floor((cents * coefHundredths) / 100) / 100;
-}
-
-// football 1,2 = промах; football 3,4,5 = гол; football 2,4 = штанга
-function isFootballWin(mode, roll) {
-    if (mode === "goal") return roll >= 3;              // football 3,4,5 = гол
-    if (mode === "miss") return roll <= 2;              // football 1,2 = промах
-    if (mode === "bar") return roll === 2 || roll === 4;  // football 2,4 = штанга
-    return false;
 }
 
 async function handleFootballPlay() {
@@ -5083,59 +5031,36 @@ async function handleFootballPlay() {
     const kicks = footballGame.kicks;
     const coef = FOOTBALL_MODE_COEFS[mode];
 
-    // --- 1. списываем ставку ---
+    // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    const debit = await placeBetServer(bet, "Футбол");
-    if (!debit.ok) {
+    const srv = await emojiPlayApi("football", mode, kicks, bet, []);
+    if (!srv || !srv.ok) {
         restoreBalanceState(snapshot);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        showMessage((srv && srv.error) || "Не удалось сыграть. Проверьте соединение и попробуйте снова.");
         setFootballBusy(false);
         unlockEconomy();
         return;
     }
-    currentBalance = debit.balance;
-    setUIBalance(currentBalance);
+    const rolls = (srv.rolls || []).map(Number);
+    const passes = (srv.passes || []).map(Boolean);
+    const win = !!srv.win;
+    const winAmount = win ? roundMoney(srv.payout) : 0;
+    const coefSrv = Number(srv.coef) || coef;
+    const finalBalance = Number(srv.balance);
+    // до конца анимации показываем баланс без выигрыша
+    currentBalance = finalBalance;
+    setUIBalance(roundMoney(finalBalance - winAmount));
     const liveBetId = await broadcastLiveBet(bet, "Футбол");
-
-    // --- 2. удары и расчёт ---
-    // Следующий удар бьётся только если предыдущий попал в выбранный исход.
-    // Выигрыш — когда все удары серии попали в него.
-    const baseMode = mode.replace(/[23]$/, "");
-    const rolls = [];
-    const passes = [];
-    let allPass = true;
-    for (let i = 0; i < kicks; i++) {
-        const roll = rollFootball();
-        const pass = isFootballWin(baseMode, roll);
-        rolls.push(roll);
-        passes.push(pass);
-        if (!pass) { allPass = false; break; }
-    }
-    const win = allPass && rolls.length === kicks;
     if (window.FootballStage) window.FootballStage.prepare(rolls[0]);
-    const winAmount = win ? calcFootballWin(bet, coef) : 0;
-    let finalBalance = currentBalance;
 
     if (win) {
-        const afterBet = snapshotBalanceState();
         currentTotalWin = roundMoney(currentTotalWin + winAmount);
         currentWinsCount++;
-        if (coef > currentMaxWin) currentMaxWin = coef;
-
-        const credit = await resolveWinServerWithRetry(winAmount, coef, 3);
-        if (!credit.ok) {
-            restoreBalanceState(afterBet);
-            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку.");
-            setFootballBusy(false);
-            unlockEconomy();
-            if (window.FootballStage) window.FootballStage.reset();
-            return;
-        }
-        finalBalance = credit.balance;
+        if (coefSrv > currentMaxWin) currentMaxWin = coefSrv;
     }
     unlockEconomy();
 
@@ -5171,7 +5096,7 @@ async function handleFootballPlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setFootballBusy(false);
-    if (win) window.showWinPopup?.(winAmount, coef);
+    if (win) window.showWinPopup?.(winAmount, coefSrv);
 }
 
 /* ---------- EMOJI-ИГРЫ: БАСКЕТБОЛ, ДАРТС, БОУЛИНГ, СЛОТЫ ---------- */
@@ -5410,69 +5335,6 @@ function setEmojiGameBusy(on) {
     if (page) page.classList.toggle("is-busy", on);
 }
 
-function cryptoUnitRandom() {
-    try {
-        const a = new Uint32Array(1);
-        crypto.getRandomValues(a);
-        return a[0] / 4294967296;
-    } catch (e) {
-        return Math.random();
-    }
-}
-
-// Вероятность выигрыша задана точно (wins/total), а не через коэффициент,
-// чтобы маржа заведения ровно 2.5% не «плавала» из-за округления коэффициента.
-function emojiAttemptWin(p) {
-    return cryptoUnitRandom() < (p[0] / p[1]);
-}
-
-// Честный номер броска 1..count (crypto вместо Math.random), как у Куба и Футбола.
-function rollEmojiOutcome(count) {
-    const n = Math.max(1, count | 0);
-    if (n === 1) return 1;
-    try {
-        const a = new Uint32Array(1);
-        const limit = 4294967296 - (4294967296 % n);
-        do { crypto.getRandomValues(a); } while (a[0] >= limit);
-        return (a[0] % n) + 1;
-    } catch (e) {
-        return Math.floor(Math.random() * n) + 1;
-    }
-}
-
-function emojiSlotSymbols(cfg, modeKey, win) {
-    const keys = ['bar', 'grape', 'lemon', 'seven'];
-    const mode = cfg.modes.find(m => m.key === modeKey) || {};
-    const randomSymbol = () => keys[Math.floor(Math.random() * keys.length)];
-    let result;
-
-    if (win && mode.symbol) {
-        result = [mode.symbol, mode.symbol, mode.symbol];
-    } else if (win && modeKey === 'anyCombo') {
-        const s = randomSymbol();
-        result = [s, s, s];
-    } else if (win && modeKey === 'unique') {
-        result = keys.slice().sort(() => Math.random() - 0.5).slice(0, 3);
-    } else if (win && modeKey === 'duel') {
-        // Дуэль = ровно пара одинаковых (не тройка)
-        const s = randomSymbol();
-        result = [s, s, keys.filter(k => k !== s)[Math.floor(Math.random() * 3)]];
-    } else {
-        result = [randomSymbol(), randomSymbol(), randomSymbol()];
-        if (mode.symbol) {
-            const isJackpot = result.every(s => s === mode.symbol);
-            if (isJackpot) result[2] = keys.find(s => s !== mode.symbol) || 'bar';
-        } else if (modeKey === 'anyCombo') {
-            if (result.every(s => s === result[0])) result[2] = keys.find(s => s !== result[0]) || 'bar';
-        } else if (modeKey === 'unique') {
-            if (new Set(result).size === 3) result[2] = result[0];
-        } else if (modeKey === 'duel') {
-            if (new Set(result).size === 2) result = [result[0], result[0], result[0]];   // пара → тройка (проигрыш)
-        }
-    }
-    return result.map(s => EMOJI_SLOT_SYMBOLS[s] || s);
-}
-
 async function handleEmojiGamePlay() {
     if (emojiGame.busy) return;
     const cfg = emojiGameCfg();
@@ -5504,62 +5366,35 @@ async function handleEmojiGamePlay() {
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
     const coef = emojiCompoundCoef(mode, attempts, cfg);
 
-    // --- 1. списываем ставку ---
+    // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
     const snapshot = snapshotBalanceState();
     currentTurnover = roundMoney(currentTurnover + bet);
     currentBetsCount++;
     setUIBalance(roundMoney(currentBalance - bet));
 
-    const debit = await placeBetServer(bet, cfg.label);
-    if (!debit.ok) {
+    const srv = await emojiPlayApi(emojiGame.key, mode.key, attempts, bet, []);
+    if (!srv || !srv.ok) {
         restoreBalanceState(snapshot);
-        showMessage("Не удалось списать ставку. Проверьте соединение и попробуйте снова.");
+        showMessage((srv && srv.error) || "Не удалось сыграть. Проверьте соединение и попробуйте снова.");
         setEmojiGameBusy(false);
         unlockEconomy();
         return;
     }
-    currentBalance = debit.balance;
-    setUIBalance(currentBalance);
+    const rolls = (srv.rolls || []).map(Number);
+    const passes = (srv.passes || []).map(Boolean);
+    const win = !!srv.win;
+    const winAmount = win ? roundMoney(srv.payout) : 0;
+    const coefSrv = Number(srv.coef) || coef;
+    const finalBalance = Number(srv.balance);
+    // до конца анимации показываем баланс без выигрыша
+    currentBalance = finalBalance;
+    setUIBalance(roundMoney(finalBalance - winAmount));
     const liveBetId = await broadcastLiveBet(bet, cfg.label);
 
-    // --- 2. исходы ---
-    // Для дартса, баскетбола и боулинга сначала выпадает номер броска
-    // (1..rolls), и по нему уже определяется выигрыш режима — как у Куба и
-    // Футбола. Слоты работают по-прежнему по вероятности.
-    const results = [];
-    let allPass = true;
-    for (let i = 0; i < attempts; i++) {
-        let pass;
-        let roll = null;
-        if (cfg.slots) {
-            pass = emojiAttemptWin(emojiModeProb(mode, cfg));
-        } else {
-            roll = rollEmojiOutcome(cfg.rolls || 1);
-            pass = Array.isArray(mode.wins) && mode.wins.indexOf(roll) !== -1;
-        }
-        results.push({ pass, roll });
-        if (!pass) { allPass = false; break; }
-    }
-    const win = allPass && results.length === attempts;
-    const winAmount = win ? calcDiceWin(bet, coef) : 0;
-    let finalBalance = currentBalance;
-
     if (win) {
-        const afterBet = snapshotBalanceState();
         currentTotalWin = roundMoney(currentTotalWin + winAmount);
         currentWinsCount++;
-        if (coef > currentMaxWin) currentMaxWin = coef;
-
-        const credit = await resolveWinServerWithRetry(winAmount, coef, 3);
-        if (!credit.ok) {
-            restoreBalanceState(afterBet);
-            showMessage("Не удалось зачислить выигрыш. Обратитесь в поддержку.");
-            setEmojiGameBusy(false);
-            unlockEconomy();
-            if (window.EmojiGameStage) window.EmojiGameStage.reset();
-            return;
-        }
-        finalBalance = credit.balance;
+        if (coefSrv > currentMaxWin) currentMaxWin = coefSrv;
     }
     unlockEconomy();
 
@@ -5569,9 +5404,10 @@ async function handleEmojiGamePlay() {
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.EmojiGameStage) {
-            for (let i = 0; i < results.length; i++) {
-                const isFinal = i === results.length - 1;
-                const { pass, roll } = results[i];
+            for (let i = 0; i < passes.length; i++) {
+                const isFinal = i === passes.length - 1;
+                const pass = passes[i];
+                const roll = cfg.slots ? null : rolls[i];
                 const roundTag = attempts > 1 ? " (" + (i + 1) + "/" + attempts + ")" : "";
                 const title = (pass ? "Ставка зашла" : "Ставка не зашла") + roundTag;
                 await window.EmojiGameStage.playAttempt({
@@ -5579,7 +5415,7 @@ async function handleEmojiGamePlay() {
                     win: pass,
                     title,
                     amountText: isFinal ? amountText : "",
-                    symbols: cfg.slots ? emojiSlotSymbols(cfg, mode.key, pass) : null,
+                    symbols: cfg.slots ? ((srv.symbols && srv.symbols[i]) || []).map(k => EMOJI_SLOT_SYMBOLS[k] || k) : null,
                     index: i,
                     total: attempts,
                     showResult: isFinal
@@ -5595,7 +5431,7 @@ async function handleEmojiGamePlay() {
     if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "error");
     resolveLiveBetWin(liveBetId, bet, winAmount);
     setEmojiGameBusy(false);
-    if (win) window.showWinPopup?.(winAmount, coef);
+    if (win) window.showWinPopup?.(winAmount, coefSrv);
 }
 
 function openMines() {
@@ -7118,12 +6954,16 @@ function myIceTelegramId() {
 }
 
 function iceAvatarHtml(avatar) {
-    const raw = String(avatar || '🧑');
-    if (raw.includes('<img')) return raw;
-    if (/^https?:\/\//i.test(raw) || raw.startsWith('data:')) {
+    // Никакого сырого HTML: из чужого поля берём только https-ссылку на картинку или короткий эмодзи.
+    let raw = String(avatar || '🧑');
+    if (raw.indexOf('<') !== -1) {
+        const m = raw.match(/src\s*=\s*"([^"]+)"/i);
+        raw = m ? m[1] : '🧑';
+    }
+    if (/^https:\/\/[^\s"'<>`\\]{4,400}$/i.test(raw) || /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]{1,200000}$/.test(raw)) {
         return '<img src="' + escapeIceName(raw) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
     }
-    return escapeIceName(raw);
+    return escapeIceName(raw.slice(0, 8));
 }
 
 function getMyIceArenaAvatar() {
@@ -7149,6 +6989,7 @@ function isIceArenaVisible() {
 }
 
 function openIceArena() {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     showPage('iceArenaPage');
     updateNav('games');
     iceArena.watching = true;
@@ -7193,6 +7034,7 @@ function resetIceArenaVisuals(opts) {
 }
 
 function restartIceArena() {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     const overlay = document.getElementById('iceResultOverlay');
     if (overlay) overlay.classList.add('hidden');
     resetIceArenaVisuals({ hideOverlay: true, resetPuck: true });
@@ -7205,6 +7047,7 @@ function restartIceArena() {
 }
 
 async function startIceArenaLobby() {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     await refreshIceArenaState();
     startIceArenaClock();
     if (!iceArena.pollInterval) {
@@ -7427,6 +7270,7 @@ function updateIceArenaBetControls() {
 }
 
 async function maybeAdvanceIceArena(round, bets) {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     if (!round || iceArena.advancing) return;
 
     if (round.status === 'betting') {
@@ -7535,6 +7379,7 @@ async function pickIceArenaWinnerFromSeed(players, seed) {
 }
 
 async function getOrCreateIceBettingRound() {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     const { data: active } = await supabase
         .from(ICE_ARENA_ROUNDS_TABLE)
         .select('*')
@@ -7563,6 +7408,7 @@ async function getOrCreateIceBettingRound() {
 }
 
 async function placeIceArenaBet() {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     if (iceArena.isProcessing) return;
     if (iceArena.phase === 'spinning') return;
     if (iceArena.round && iceArena.round.status !== 'betting') {
@@ -7969,6 +7815,7 @@ function zoomIceArenaField(targetXPct, winner) {
 }
 
 async function tryIceArenaPayout(round) {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     if (!round || iceArena.paying) return;
     if (round.payout_done) return;
     const myId = myIceTelegramId();
@@ -8015,6 +7862,7 @@ async function tryIceArenaPayout(round) {
 }
 
 async function finishIceArenaRound(winner) {
+    return; // Айс Арена отключена: заглушка, ничего не происходит
     iceArena.phase = 'result';
     iceArena.winner = winner;
 
