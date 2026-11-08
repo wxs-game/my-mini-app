@@ -1,4 +1,6 @@
-
+/* ==========================================
+   СБРОС И БАЗОВЫЕ НАСТРОЙКИ (RESET & BASE)
+========================================== */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -12,15 +14,15 @@
 html {
     background-color: #090909;
     height: 100%;
-    overflow: hidden;            
-    overscroll-behavior: none;   
-    touch-action: pan-y;         
+    overflow: hidden;            /* окно не скроллится — нет системного «растягивания» на краях */
+    overscroll-behavior: none;   /* запрет "растягивания" страницы за края (pull-to-refresh, bounce) */
+    touch-action: pan-y;         /* разрешаем только вертикальную прокрутку, блокируем pinch-zoom */
 }
 
 body {
     margin: 0;
     padding: 0;
-    height: 100%;                
+    height: 100%;                /* body — единственный вертикальный скроллер страницы */
     background:
         radial-gradient(circle at 50% 0%, rgba(255, 160, 0, 0.15), transparent 40%),
         radial-gradient(circle at 80% 50%, rgba(255, 120, 0, 0.05), transparent 50%),
@@ -43,11 +45,13 @@ button, input, select, textarea {
     background: transparent;
 }
 
-
+/* ==========================================
+   БЛОКИРОВКА ДОСТУПА ВНЕ TELEGRAM
+========================================== */
 .tg-block-screen {
     position: fixed;
     inset: 0;
-    z-index: 999999; 
+    z-index: 999999; /* поверх абсолютно всего, включая экран загрузки */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -81,7 +85,10 @@ button, input, select, textarea {
     line-height: 1.5;
 }
 
-
+/* ==========================================
+   ЭКРАН ЗАГРУЗКИ (появляется при заходе в приложение,
+   скрывает интерфейс, пока всё не прогрузится)
+========================================== */
 .app-loader {
     position: fixed;
     inset: 0;
@@ -96,7 +103,7 @@ button, input, select, textarea {
     transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease;
 }
 
-
+/* При завершении загрузки экран плавно уходит вверх и растворяется */
 .app-loader.app-loader-hidden {
     transform: translateY(-8%) scale(1.03);
     opacity: 0;
@@ -111,7 +118,7 @@ button, input, select, textarea {
     padding: 0 32px;
 }
 
-
+/* ---------- Луна-логотип ---------- */
 .app-loader-moon-wrap {
     position: relative;
     width: 168px;
@@ -169,7 +176,8 @@ button, input, select, textarea {
                appLoaderMoonFloat 3.2s ease-in-out 0.9s infinite;
 }
 
-
+/* Тонкая зернистая текстура поверхности поверх основного градиента —
+   добавляет реализма без лишних деталей */
 .app-loader-moon::before {
     content: '';
     position: absolute;
@@ -187,7 +195,7 @@ button, input, select, textarea {
     pointer-events: none;
 }
 
-
+/* Кратеры — затемнённые вмятины разного размера с ободком-бликом для объёма */
 .app-loader-moon-crater {
     position: absolute;
     border-radius: 50%;
@@ -205,7 +213,8 @@ button, input, select, textarea {
 .app-loader-moon-crater-e { width: 11px; height: 9px;  top: 57px;  left: 7px;  transform: rotate(-15deg); }
 .app-loader-moon-crater-f { width: 5px;  height: 5px;  bottom: 39px; right: 11px; }
 
-
+/* Надпись "WXS" будто выбита кратером на поверхности луны — сдержанная,
+   без неонового свечения, лёгкий вдавленный (engraved) эффект */
 .app-loader-moon-text {
     position: relative;
     z-index: 2;
@@ -234,7 +243,7 @@ button, input, select, textarea {
     to { transform: rotate(360deg); }
 }
 
-
+/* ---------- Заголовок ---------- */
 .app-loader-title {
     font-size: 30px;
     font-weight: 950;
@@ -256,7 +265,7 @@ button, input, select, textarea {
     text-align: center;
 }
 
-
+/* ---------- Прогресс-бар (капсула) ---------- */
 .app-loader-progress-track {
     width: 220px;
     height: 7px;
@@ -274,7 +283,7 @@ button, input, select, textarea {
     transition: width 0.35s ease;
 }
 
-
+/* ---------- Лента прошлых коэффициентов краша — один скроллящийся ряд ---------- */
 .crash-history-scroll {
     display: flex;
     gap: 6px;
@@ -294,7 +303,7 @@ button, input, select, textarea {
     flex: 0 0 auto;
 }
 
-
+/* ---------- Промокод (страница "Бонусы") ---------- */
 .promo-card {
     text-align: left;
 }
@@ -376,7 +385,9 @@ a {
     user-select: none;
 }
 
-
+/* ==========================================
+   ОБЩИЕ КОНТЕЙНЕРЫ И СТРУКТУРА (LAYOUT)
+========================================== */
 .app {
     width: 100%;
     max-width: 760px;
@@ -398,7 +409,9 @@ main {
     display: none !important;
 }
 
-
+/* ==========================================
+   ВЕРХНЯЯ ПАНЕЛЬ ШАПКИ (LIQUID GLASS TOP HEADER)
+========================================== */
 .top {
     position: sticky;
     top: 12px;
@@ -412,7 +425,7 @@ main {
     padding: 8px 12px;
     border-radius: 30px;
     
-    
+    /* Liquid Glass Effect */
     background: linear-gradient(180deg, rgba(36, 28, 18, 0.95), rgba(22, 17, 10, 0.93));
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 
@@ -556,7 +569,9 @@ main {
     transform: scale(0.9);
 }
 
-
+/* ==========================================
+   HERO БАННЕР ГЛАВНОЙ (HERO SECTION)
+========================================== */
 .hero {
     position: relative;
     min-height: 240px;
@@ -658,7 +673,9 @@ main {
     animation: ringPulse 3s ease-in-out infinite;
 }
 
-
+/* ==========================================
+   ЛЕНТА ПОСЛЕДНИХ ВЫИГРЫШЕЙ (LIVE WINS)
+========================================== */
 .live-wins-section {
     margin-bottom: 22px;
 }
@@ -694,14 +711,14 @@ main {
     color: #ff5c4d;
 }
 
-
+/* ---------- Лента крупных выигрышей (свайп, без автопрокрутки) ---------- */
 .live-wins-row {
     display: flex;
     align-items: stretch;
     gap: 10px;
 }
 
-
+/* Неподвижная карточка "Выигрыш дня" — максимум за последние 24 часа */
 .live-win-pinned {
     flex: 0 0 34%;
     display: flex;
@@ -732,7 +749,7 @@ main {
     font-weight: 700;
 }
 
-
+/* Свайпаемый список последних крупных выигрышей — до 10 штук, без анимации */
 .live-wins-scroll {
     flex: 1;
     display: flex;
@@ -763,7 +780,7 @@ main {
     min-width: 0;
 }
 
-
+/* Общие стили содержимого карточки (и неподвижной, и свайпаемых) */
 .live-wins-name {
     display: block;
     overflow: hidden;
@@ -830,7 +847,9 @@ main {
     padding: 0 6px;
 }
 
-
+/* ==========================================
+   БЫСТРЫЕ ДЕЙСТВИЯ (QUICK ACTIONS)
+========================================== */
 .quick-actions {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -869,7 +888,7 @@ main {
     background: rgba(255, 255, 255, 0.03);
 }
 
-
+/* Стикер вместо эмодзи в иконке быстрого действия (см. loadStickerInto в script.js) */
 .action-icon.has-sticker {
     font-size: 0;
     background: transparent;
@@ -897,7 +916,9 @@ main {
     font-weight: 600;
 }
 
-
+/* ==========================================
+   СЕТКА ИГР (GAMES SECTION)
+========================================== */
 .games-section {
     margin-top: 10px;
 }
@@ -940,26 +961,26 @@ main {
 .game-image {
     display: block;
     width: 100%;
-    aspect-ratio: 1 / 1; 
+    aspect-ratio: 1 / 1; /* Квадратное превью под загруженные картинки */
     border-radius: 24px;
-    object-fit: cover; 
+    object-fit: cover; /* Заполняем карточку целиком, одинаковый отступ у всех превью */
     object-position: center;
     background: #121212;
-    transform: scale(1.18); 
-    -webkit-touch-callout: none; 
+    transform: scale(1.18); /* Зум по умолчанию, если для картинки нет своего класса ниже */
+    -webkit-touch-callout: none; /* Убираем меню iOS по долгому нажатию */
     -webkit-user-select: none;
     user-select: none;
     -webkit-user-drag: none;
     user-drag: none;
-    pointer-events: none; 
+    pointer-events: none; /* Клик всё равно ловит кнопка .game */
 }
 
-
+/* Индивидуальный зум под каждую картинку — меняй цифру scale() под свою картинку */
 .game-image.mines-img   { transform: scale(1.12); }
 .game-image.crash-img   { transform: scale(1.125); }
 .game-image.upg-img     { transform: scale(1.12); }
 
-
+/* Баннер «Telegram Emoji» — на всю ширину сетки (как 2 обычных поля) */
 .game-banner {
     grid-column: 1 / -1;
     cursor: pointer;
@@ -967,7 +988,7 @@ main {
 .game-banner-img {
     display: block;
     width: 100%;
-    aspect-ratio: 1536 / 858; 
+    aspect-ratio: 1536 / 858; /* Пропорции картинки баннера */
     object-fit: cover;
     object-position: center;
     border-radius: 24px;
@@ -979,7 +1000,9 @@ main {
     pointer-events: none;
 }
 
-
+/* ==========================================
+   ИГРА МИНЫ (MINES GAME SECTION)
+========================================== */
 .mines-page {
     animation: fadeIn 0.25s ease;
     margin-top: -6px;
@@ -993,7 +1016,7 @@ main {
     text-align: center;
 }
 
-
+/* Лента коэффициентов сверху */
 .mines-coef-bar {
     display: flex;
     gap: 8px;
@@ -1041,7 +1064,7 @@ main {
     color: #ffc800;
 }
 
-
+/* Поле 5х5 */
 .mines-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
@@ -1049,7 +1072,9 @@ main {
     margin-bottom: 20px;
 }
 
-
+/* ==========================================
+   ОБНОВЛЕННЫЕ СТИЛИ ПЛИТОК МИН
+========================================== */
 .mine-tile {
     aspect-ratio: 1;
     background: rgba(255, 255, 255, 0.04);
@@ -1074,7 +1099,7 @@ main {
     transform: scale(0.92);
 }
 
-
+/* Открытый алмаз */
 .mine-tile.revealed-gem {
     background: radial-gradient(circle, #1a3c27, #0d2115) !important;
     border-color: #2ecc71 !important;
@@ -1083,7 +1108,7 @@ main {
     opacity: 1 !important;
 }
 
-
+/* Открытая бомба (при взрыве) */
 .mine-tile.revealed-bomb {
     background: radial-gradient(circle, #4a1515, #240a0a) !important;
     border-color: #e74c3c !important;
@@ -1092,7 +1117,7 @@ main {
     opacity: 1 !important;
 }
 
-
+/* Закрытая плитка после завершения игры (показ где были бомбы/алмазы) */
 .mine-tile.end-show {
     opacity: 0.5;
     pointer-events: none;
@@ -1102,7 +1127,7 @@ main {
     pointer-events: none;
 }
 
-
+/* Панель управления */
 .mines-controls {
     background: #090909;
     border: 1px solid #222222;
@@ -1203,14 +1228,21 @@ main {
     cursor: not-allowed;
 }
 
+/* ==========================================
+   СТИЛИ ДЛЯ ДОКАЗУЕМОЙ ЧЕСТНОСТИ (CRASH)
+========================================== */
 
-
-
+/* Относительное позиционирование контейнера игры */
 .crash-page, .crash-card {
     position: relative;
 }
 
-
+/* Круглая кнопка с значком # внизу справа.
+   Раньше здесь был backdrop-filter: blur — но кнопка лежит поверх сцены
+   с ракетой, которая перерисовывается каждый кадр полёта, и GPU был
+   вынужден на каждый такой кадр пересчитывать размытие фона под кнопкой.
+   Заменили на более плотный полупрозрачный фон без backdrop-filter —
+   визуально почти то же самое "стекло", но без непрерывного пересчёта. */
 .crash-fairness-trigger {
     position: absolute;
     bottom: 12px;
@@ -1236,7 +1268,7 @@ main {
     background: rgba(255, 215, 0, 0.2);
 }
 
-
+/* Нижнее закругленное меню (Bottom Sheet) */
 .crash-fairness-modal {
     position: fixed;
     inset: 0;
@@ -1275,7 +1307,7 @@ main {
     to { transform: translateY(0); }
 }
 
-
+/* Увеличенная область захвата над плашкой: можно тянуть вниз или просто тапнуть */
 .crash-fairness-drag-handle-area {
     padding: 6px 0 14px 0;
     margin: -6px 0 0 0;
@@ -1315,7 +1347,7 @@ main {
     color: #ffffff;
 }
 
-
+/* Пока открыт док честности — блокируем прокрутку/свайпы фона (экрана ракетки) */
 body.fairness-modal-open {
     overflow: hidden !important;
     touch-action: none !important;
@@ -1338,7 +1370,7 @@ body.fairness-modal-open {
     letter-spacing: 0.5px;
 }
 
-
+/* Иконка перед подписью (замок/ключ) — размер как у обычного эмодзи в строке */
 .fairness-label-icon {
     width: 14px;
     height: 14px;
@@ -1383,7 +1415,7 @@ body.fairness-modal-open {
     transform: scale(0.9);
 }
 
-
+/* Иконка внутри кнопки копирования — тот же размер, что был у эмодзи 📋 */
 .copy-btn-icon {
     width: 16px;
     height: 16px;
@@ -1416,7 +1448,9 @@ body.fairness-modal-open {
     transform: scale(0.98);
 }
 
-
+/* ==========================================
+   СТРАНИЦА ПРОФИЛЯ (PROFILE PAGE)
+========================================== */
 .profile-page {
     animation: fadeIn 0.25s ease;
 }
@@ -1528,7 +1562,7 @@ body.fairness-modal-open {
     font-size: 22px;
 }
 
-
+/* Анимированные .tgs стикеры в карточках статистики */
 .stat-icon-bg.has-sticker {
     font-size: 0;
     overflow: hidden;
@@ -1596,7 +1630,9 @@ body.fairness-modal-open {
     transform: scale(0.95);
 }
 
-
+/* ==========================================
+   СТРАНИЦА БАЛАНСА (BALANCE PAGE)
+========================================== */
 .balance-page {
     animation: fadeIn 0.25s ease;
     margin-top: -6px;
@@ -1824,7 +1860,9 @@ body.fairness-modal-open {
     transform: scale(0.97);
 }
 
-
+/* ==========================================
+   СТРАНИЦА БОНУСОВ (BONUS PAGE)
+========================================== */
 .bonus-page {
     animation: fadeIn 0.25s ease;
     margin-top: -6px;
@@ -1944,7 +1982,7 @@ body.fairness-modal-open {
     cursor: wait;
 }
 
-
+/* Золотая подсветка поля ставки при фокусе — единая для всех игр */
 .card-input-wrap {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1952,7 +1990,9 @@ body.fairness-modal-open {
     border-color: #ffc800;
     box-shadow: 0 0 0 3px rgba(255, 200, 0, 0.15);
 }
-
+/* ==========================================
+   ОБЩИЕ КАРТОЧКИ И ПОЛЯ СТАВОК
+========================================== */
 .wheel-card {
     background: #121212;
     border-radius: 28px;
@@ -2009,7 +2049,9 @@ body.fairness-modal-open {
     color: #000000;
 }
 
-
+/* ==========================================
+   ИСТОРИЯ ТРАНЗАКЦИЙ (TRANSACTIONS HISTORY)
+========================================== */
 .history-box {
     margin-top: 16px;
     background: #121212;
@@ -2142,7 +2184,9 @@ body.fairness-modal-open {
     color: #f1c40f;
 }
 
-
+/* ==========================================
+   НИЖНЯЯ НАВИГАЦИЯ (LIQUID GLASS BOTTOM NAV)
+========================================== */
 .bottom-nav {
     position: fixed;
     z-index: 100;
@@ -2161,7 +2205,8 @@ body.fairness-modal-open {
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
 }
-
+/* Фон панели — отдельный слой: blur считается один раз и не пересчитывается
+   при движении линзы (раньше backdrop-filter был на общей панели). */
 .nav-bg {
     position: absolute;
     inset: 0;
@@ -2176,7 +2221,7 @@ body.fairness-modal-open {
         inset 0 -1px 1px rgba(0, 0, 0, 0.35);
     pointer-events: none;
     contain: strict;
-    transform: translateZ(0);   
+    transform: translateZ(0);   /* отдельный composited-слой для blur */
 }
 
 .nav-item {
@@ -2222,7 +2267,7 @@ body.fairness-modal-open {
 }
 .nav-item.on small { font-weight: 700; opacity: 1; }
 
-
+/* Плашка под активным разделом (в покое) */
 .nav-pill {
     position: absolute;
     left: 0;
@@ -2235,7 +2280,8 @@ body.fairness-modal-open {
     transform: translate3d(0, 0, 0);
 }
 
-
+/* Линза: will-change ставится динамически из JS только на время анимации —
+   постоянный will-change держит GPU-слой и память занятыми даже в покое. */
 .nav-lens {
     position: absolute;
     left: 0;
@@ -2250,23 +2296,25 @@ body.fairness-modal-open {
 }
 .lens-glass, .lens-rim { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
 
-
+/* Стекло. Fallback (по умолчанию на Android WebView и iOS Safari) — дешёвый
+   blur+brightness. SVG в backdrop-filter эти движки либо игнорируют, либо
+   пересчитывают на каждом кадре — именно это давало просадки. */
 .lens-glass {
     backdrop-filter: blur(0.4px) brightness(1.04) saturate(1.2);
     -webkit-backdrop-filter: blur(0.4px) brightness(1.04) saturate(1.2);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px rgba(0, 0, 0, 0.22);
 }
-
+/* Полное SVG-стекло — включается из JS только на десктопном Chromium с мощным GPU */
 .bottom-nav.svgglass .lens-glass {
     backdrop-filter: url(#lg-refract) brightness(1.02) saturate(1.15);
     -webkit-backdrop-filter: url(#lg-refract) brightness(1.02) saturate(1.15);
 }
-
+/* Облегчённый SVG-фильтр — тоже только на десктопном Chromium */
 .bottom-nav.svglite .lens-glass {
     backdrop-filter: url(#lg-refract-lite) brightness(1.02) saturate(1.15);
     -webkit-backdrop-filter: url(#lg-refract-lite) brightness(1.02) saturate(1.15);
 }
-
+/* Кромка нужна только в fallback — при SVG-стекле блики считает сам фильтр */
 .lens-rim {
     padding: 1.5px;
     background: conic-gradient(from -45deg,
@@ -2278,7 +2326,9 @@ body.fairness-modal-open {
 }
 .bottom-nav.svgglass .lens-rim, .bottom-nav.svglite .lens-rim { display: none; }
 
-
+/* ==========================================
+   ЗАГОЛОВКИ СТРАНИЦ И ШАПКИ (PAGE HEADERS)
+========================================== */
 .page-header {
     display: grid;
     grid-template-columns: 40px 1fr 40px;
@@ -2319,7 +2369,9 @@ body.fairness-modal-open {
     width: 38px;
 }
 
-
+/* ==========================================
+   КАСТОМИЗАЦИЯ ПРОФИЛЯ
+========================================== */
 #bgEmojiPattern {
     opacity: 0.18;
     font-size: 24px;
@@ -2380,7 +2432,9 @@ body.fairness-modal-open {
     transform: scale(1.05);
 }
 
-
+/* ==========================================
+   АНИМАЦИИ (KEYFRAMES)
+========================================== */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
@@ -2407,7 +2461,9 @@ body.fairness-modal-open {
     100% { transform: scale(1); }
 }
 
-
+/* ==========================================
+   АДАПТИВНОСТЬ (MEDIA QUERIES)
+========================================== */
 @media (max-width: 480px) {
     .app {
         padding: 12px 10px 95px 10px;
@@ -2451,10 +2507,12 @@ body.fairness-modal-open {
     }
 }
 
-
+/* ==========================================
+   ВЫРОВНЕННАЯ ШАПКА ПОЛЯ СТАВКИ В МИНАХ
+========================================== */
 .mines-bet-header {
     display: flex;
-    align-items: center; 
+    align-items: center; /* Выравнивает label и карточку ввода строго по центру по вертикали */
     justify-content: space-between;
     width: 100%;
 }
@@ -2468,16 +2526,16 @@ body.fairness-modal-open {
     line-height: 1;
 }
 
-
+/* Компактный инпут с фиксированной высотой и вертикальным выравниванием */
 .mines-bet-header .card-input-wrap {
     display: flex;
-    align-items: center; 
+    align-items: center; /* Центрирует внутренний input и значок $ */
     justify-content: flex-end;
     background: #121212;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
     padding: 0 12px;
-    height: 38px; 
+    height: 38px; /* Выравниваем общую высоту контейнера */
     width: 130px;
     box-sizing: border-box;
 }
@@ -2494,7 +2552,7 @@ body.fairness-modal-open {
     padding: 0;
     margin: 0;
     height: 100%;
-    line-height: normal; 
+    line-height: normal; /* Центрирует плейсхолдер и текст */
 }
 
 .mines-bet-header .card-input-wrap input::placeholder {
@@ -2512,18 +2570,18 @@ body.fairness-modal-open {
     user-select: none;
 }
 
+/* ==================== КАПСУЛА ВЫБОРА МИН ==================== */
 
-
-
+/* Стилизация контейнера-капсулы */
 .mines-stepper-capsule {
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .mines-stepper-capsule:focus-within {
-  border-color: rgba(255, 200, 0, 0.4) !important; 
+  border-color: rgba(255, 200, 0, 0.4) !important; /* Легкая подсветка при фокусе */
 }
 
-
+/* Скрытие стандартных стрелок у input type="number" */
 #customMinesInput::-webkit-outer-spin-button,
 #customMinesInput::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -2534,7 +2592,7 @@ body.fairness-modal-open {
   -moz-appearance: textfield;
 }
 
-
+/* Кнопки + и - */
 .stepper-btn {
   transition: color 0.2s ease, transform 0.1s ease;
 }
@@ -2547,7 +2605,11 @@ body.fairness-modal-open {
   transform: scale(0.9);
        }
 
-
+/* ================================================================
+   АЙС АРЕНА (Ice Arena) — PvP-банк: чем больше ставка, тем выше шанс
+   забрать весь банк. Комиссия 5% берётся только с выигрыша сверх
+   собственной ставки.
+================================================================ */
 
 .ice-arena-tile {
     width: 100%;
@@ -2769,7 +2831,7 @@ body.fairness-modal-open {
     to   { transform: translate(-50%, -18px) rotate(var(--ice-spin-deg, 1080deg)); }
 }
 
-
+/* ---------- Лента кэфов последних игр Айс Арены — под игровым полем ---------- */
 .ice-history-strip {
     display: flex;
     gap: 6px;
@@ -2803,7 +2865,7 @@ body.fairness-modal-open {
     background: rgba(255, 255, 255, 0.12);
 }
 
-
+/* ---------- Кнопка "История игр" под полем ---------- */
 .ice-history-open-btn {
     display: flex;
     align-items: center;
@@ -2831,7 +2893,7 @@ body.fairness-modal-open {
     font-size: 14px;
 }
 
-
+/* ===== Модалка истории Айс Арены ===== */
 .ice-history-modal {
     position: fixed;
     inset: 0;
@@ -2943,7 +3005,10 @@ body.ice-history-modal-open {
     padding: 30px 10px;
 }
 
-
+/* Карточка раунда в списке истории — стиль "ARENA": шапка с номером
+   игры/временем/выплатой и отдельная строка со ставкой/кэфом/шансом.
+   Весь блок кликабелен и сразу переводит в экран реплея — отдельных
+   кнопок "Честность"/"Повтор" в списке нет. */
 .ice-history-row {
     display: flex;
     flex-direction: column;
@@ -3253,7 +3318,11 @@ body.ice-history-modal-open {
     flex-shrink: 0;
 }
 
-
+/* ================================================================
+   КРАШ — список игроков текущего раунда (общий для всех, как в
+   Айс Арене): кто сейчас летит, кто уже забрал (и на сколько x),
+   кто проиграл. Оформлен отдельным боксом внутри карточки игры.
+================================================================ */
 .crash-players-box {
     margin: 16px 0;
     padding: 14px 12px 12px;
@@ -3312,7 +3381,7 @@ body.ice-history-modal-open {
     padding: 8px 10px;
 }
 
-
+/* Игрок (я) — подсвечен жёлтым */
 .crash-player-row.crash-player-row-user {
     background: rgba(255, 200, 0, 0.10);
     border-color: rgba(255, 200, 0, 0.60);
@@ -3335,7 +3404,7 @@ body.ice-history-modal-open {
     overflow: hidden;
 }
 
-
+/* min-width: 0 — без него flex-элемент не сжимается и длинное имя не обрезается */
 .crash-player-row-info {
     flex: 1 1 auto;
     min-width: 0;
@@ -3390,7 +3459,7 @@ body.ice-history-modal-open {
     opacity: 0.9;
 }
 
-
+/* Забрал — зелёная «плашка» с иксом и суммой выигрыша */
 .crash-player-status-win {
     color: #2ecc71;
     background: rgba(46, 204, 113, 0.14);
@@ -3425,7 +3494,9 @@ body.ice-history-modal-open {
 }
 
 
-
+/* ==========================================
+   ИГРА АПГРЕЙДЕР
+========================================== */
 .upg-tile {
     background:
         radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 55%),
@@ -3485,7 +3556,8 @@ body.ice-history-modal-open {
 }
 .upg-locked #upgPlayBtn:disabled { opacity: 0.6; }
 
-
+/* Слои канваса апгрейдера: колесо, свечение, текст и стрелка накладываются
+   друг на друга в одном квадрате (без этого они шли друг под другом). */
 .upg-stack {
     position: relative;
     width: 100%;
@@ -3508,7 +3580,10 @@ body.ice-history-modal-open {
 }
 
 
-
+/* ==========================================
+   ЗАЩИТА: не съезжает, не свайпается по горизонтали,
+   не выделяется текст, нет автозума в полях ввода
+========================================== */
 html, body {
     width: 100%;
     max-width: 100%;
@@ -3520,12 +3595,15 @@ body {
     position: relative;
 }
 
-
+/* Всё, что выходит за экран по ширине (zoom колеса/арены и т.п.), обрезается —
+   страницу нельзя сдвинуть влево-вправо. clip (в отличие от hidden)
+   не ломает sticky-шапку. */
 .app {
     overflow-x: clip;
 }
 
-
+/* Внутренние ленты (Live Wins, история краша, коэффициенты, история арены)
+   по-прежнему листаются пальцем по горизонтали */
 .live-wins-scroll,
 .crash-history-scroll,
 .mines-coef-bar,
@@ -3534,7 +3612,7 @@ body {
     overscroll-behavior-x: contain;
 }
 
-
+/* Нельзя выделять текст нигде */
 *, *::before, *::after {
     -webkit-user-select: none;
     user-select: none;
@@ -3546,13 +3624,15 @@ body {
     color: inherit;
 }
 
-
+/* Исключение: в полях ввода выделение должно быть включено,
+   иначе на iOS в них невозможно печатать */
 input, textarea {
     -webkit-user-select: text;
     user-select: text;
 }
 
-
+/* iOS/Telegram приближает (зумит) экран и сдвигает его влево, когда
+   фокусируешься на поле со шрифтом меньше 16px. Делаем 16px. */
 .card-input-wrap input,
 .mines-bet-header .card-input-wrap input,
 .promo-input,
@@ -3560,7 +3640,8 @@ input, textarea {
     font-size: 16px !important;
 }
 
-
+/* Поля хеша/ключа только для чтения — не фокусируются (нет зума, нет выделения);
+   копирование идёт по кнопке рядом */
 .fairness-input-box input {
     pointer-events: none;
     -webkit-user-select: none;
@@ -3568,10 +3649,14 @@ input, textarea {
 }
 
 
-
+/* ==========================================================
+   TELEGRAM EMOJI — выбор режима (Кубик, Футбол, Баскетбол…)
+   Лёгкая версия: плоская тёмная плитка + янтарная обводка,
+   без теней, градиентов и фильтров (меньше перерисовок = нет лагов).
+========================================================== */
 .tge-page {
     --tge-amber: #ff9d00;
-    --tge-title-font: 'Russo One', 'Arial Black', Impact, sans-serif; 
+    --tge-title-font: 'Russo One', 'Arial Black', Impact, sans-serif; /* поменяй здесь, если найдёшь точнее шрифт */
 }
 
 .tge-grid {
@@ -3579,7 +3664,7 @@ input, textarea {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     margin-top: 14px;
-    
+    /* нижний отступ под меню уже есть у .app — второй не нужен */
 }
 
 .tge-tile {
@@ -3590,11 +3675,11 @@ input, textarea {
     padding: 10px 10px 12px;
     border-radius: 24px;
     border: 3px solid var(--tge-amber);
-    background: transparent;      
+    background: transparent;      /* фон плитки убран */
     box-shadow: none;
     color: #ffffff;
     text-align: center;
-    contain: layout style;        
+    contain: layout style;        /* paint-containment с rounded-углами заставлял GPU маскировать плитку каждый кадр */
 }
 
 .tge-tile:active {
@@ -3612,7 +3697,7 @@ input, textarea {
     color: #ffffff;
     white-space: nowrap;
     padding-top: 4px;
-    -webkit-text-stroke: 0.9px #ffffff;   
+    -webkit-text-stroke: 0.9px #ffffff;   /* утолщаем штрих до «маркерного» */
 }
 
 .tge-banner {
@@ -3624,8 +3709,8 @@ input, textarea {
     aspect-ratio: 1 / 1;
     border-radius: 16px;
     overflow: hidden;
-    font-size: 54px;                      
-    background: transparent;              
+    font-size: 54px;                      /* размер эмодзи-заглушки */
+    background: transparent;              /* фон баннера убран */
     -webkit-user-select: none;
     user-select: none;
     pointer-events: none;
@@ -3647,14 +3732,19 @@ input, textarea {
 }
 .tge-banner.has-anim { font-size: 0; }
 
-
+/* Каждый баннер — отдельный слой GPU: кадр анимации не перерисовывает
+   страницу (градиенты фона, плитки, меню) */
 .tge-banner {
     transform: translateZ(0);
     will-change: transform;
 }
 
 
-
+/* ==========================================================
+   КУБ (Telegram Emoji) — страница режима
+   Шрифт, размеры и обводка — как у остальных плиток приложения
+   (см. .mines-count-btn: тёмная плитка, тонкая рамка, жёлтый актив).
+========================================================== */
 .dice-page {
     --dice-yellow: #ffc800;
 }
@@ -3673,12 +3763,12 @@ input, textarea {
     font-weight: 800;
     line-height: 1.2;
     text-align: center;
-    white-space: nowrap;           
+    white-space: nowrap;           /* название и коэффициент всегда в одну строку */
     transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .dice-tile:active { transform: scale(0.96); }
 
-
+/* 1 куб / 2 куба / 3 куба */
 .dice-count-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -3687,7 +3777,7 @@ input, textarea {
 }
 .dice-count-btn.is-soon { opacity: 0.5; }
 
-
+/* Режимы */
 .dice-modes {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -3700,7 +3790,7 @@ input, textarea {
     font-weight: 700;
 }
 
-
+/* Выбранная / активная плитка — жёлтая */
 .dice-tile.selected,
 .dice-count-btn.active {
     background: #281d09;
@@ -3710,7 +3800,7 @@ input, textarea {
 }
 .dice-tile.selected .dice-mode-coef { opacity: 1; }
 
-
+/* Сцена: превью → выпавший кубик → результат */
 .dice-page { --dice-size: min(62vw, 250px); }
 
 .dice-stage {
@@ -3718,7 +3808,7 @@ input, textarea {
     width: 100%;
     height: min(84vw, 340px);
     margin: 10px 0 10px;
-    overflow: hidden;                 
+    overflow: hidden;                 /* слои уезжают за края, не создавая прокрутку */
     -webkit-user-select: none;
     user-select: none;
     pointer-events: none;
@@ -3733,14 +3823,14 @@ input, textarea {
     will-change: transform, opacity;
 }
 
-
+/* Превью: плавно уплывает вверх */
 .dice-preview {
     transition: transform 0.8s cubic-bezier(.32, .72, 0, 1), opacity 0.55s ease;
 }
 .dice-preview.is-fallback { font-size: 110px; }
 .dice-preview.out { transform: translateY(-62%) scale(0.94); opacity: 0; }
 
-
+/* Превью из двух ячеек: в режиме «2 куба» кубик раздваивается, при возврате склеивается */
 .dice-pair {
     position: relative;
     width: var(--dice-size);
@@ -3755,13 +3845,15 @@ input, textarea {
     transition: transform 0.75s cubic-bezier(.32, .72, 0, 1), opacity 0.35s ease;
     will-change: transform, opacity;
 }
-.dice-cell.b { opacity: 0.01; }      
+.dice-cell.b { opacity: 0.01; }      /* лежит под первым кубиком (почти невидим, но уже растеризован) */
 .dice-pair.is-fallback .dice-cell { font-size: 110px; }
 
 .dice-preview.pair .dice-cell.a { transform: translateX(calc(var(--dice-size) * -0.33)) scale(0.7); }
 .dice-preview.pair .dice-cell.b { transform: translateX(calc(var(--dice-size) * 0.33)) scale(0.7); opacity: 1; }
 
-
+/* Выпавший кубик: плавно заезжает сбоку.
+   will-change ставится динамически из JS только на время анимации,
+   чтобы не держать GPU-слой постоянно. */
 .dice-roll {
     opacity: 0;
     pointer-events: none;
@@ -3791,13 +3883,13 @@ input, textarea {
     width: 100% !important;
     height: 100% !important;
 }
-
+/* Футбол: превью (ворота с мячом) — по размеру как сам удар, чуть меньше */
 #footballPreview > .sticker-lottie {
     width: calc(var(--dice-size) * 0.9);
     height: calc(var(--dice-size) * 0.9);
     contain: layout paint style;
 }
-
+/* Сплит 2–3 удара: превью живёт в ячейках, размер держим прежним */
 #footballPreview .dice-cell > .sticker-lottie {
     width: calc(var(--dice-size) * 0.9);
     height: calc(var(--dice-size) * 0.9);
@@ -3824,7 +3916,7 @@ input, textarea {
     75% { transform: rotate(-9deg) translateY(-6px); }
 }
 
-
+/* Результат */
 .dice-result {
     --rc: #2ecc71;
     flex-direction: column;
@@ -3865,14 +3957,16 @@ input, textarea {
     stroke-dashoffset: 1;
 }
 
-
+/* Появление по частям: быстро, но мягко (без «пружинистых» рывков) */
 .dice-result.show .dr-ring  { animation: drPop 0.32s cubic-bezier(.22, 1, .36, 1) backwards; }
 .dice-result.show .dr-disc  { animation: drPop 0.34s 0.06s cubic-bezier(.3, 1.25, .5, 1) backwards; }
 .dice-result.show .dr-mark  { animation: drDraw 0.3s 0.24s cubic-bezier(.4, 0, .2, 1) forwards; }
 .dice-result.show .dr-second { animation-delay: 0.38s; }
 .dice-result.show .dr-spark,
 .dice-result.show .dr-dot {
-    
+    /* backwards, а не forwards: после анимации элемент возвращается в обычную
+       отрисовку и перерастеризуется чётко (при forwards остаётся GPU-слой с
+       растром от scale(0.2) — отсюда мыльные блёстки) */
     opacity: 1;
     animation: drSpark 0.36s var(--d, 0.4s) cubic-bezier(.22, 1.1, .4, 1) backwards;
 }
@@ -3894,7 +3988,7 @@ input, textarea {
 @keyframes drSpark { 0% { transform: scale(0.2) rotate(-30deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
 @keyframes drText  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-
+/* Пока идёт бросок — управление заблокировано */
 .dice-page.is-busy .dice-count-row,
 .dice-page.is-busy .dice-modes,
 .dice-page.is-busy .dice-bet-box,
@@ -3903,7 +3997,7 @@ input, textarea {
 }
 .dice-page.is-busy .dice-play-btn { opacity: 0.6; }
 
-
+/* Кнопка «Играть» — как «Начать игру» в Минах */
 .dice-play-btn {
     width: 100%;
     background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
@@ -3915,13 +4009,15 @@ input, textarea {
     box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3);
 }
 
-
+/* Блок ставки (как в Минах) */
 .dice-bet-box {
     margin-top: 14px;
 }
 
 
-
+/* ==========================================================
+   Спиннер загрузки анимаций (жёлтый)
+========================================================== */
 .tge-spinner {
     display: block;
     width: 34px;
@@ -3937,7 +4033,7 @@ input, textarea {
 @keyframes tgeSpin { to { transform: rotate(360deg); } }
 
 
-
+/* Смена набора плиток при переключении 1 куб ↔ 2 куба */
 .dice-modes { transition: height 0.5s cubic-bezier(.32, .72, 0, 1); }
 .dice-modes.resizing { overflow: hidden; }
 .dice-mode.enter { animation: diceModeIn 0.3s calc(var(--i, 0) * 30ms) cubic-bezier(.22, 1, .36, 1) backwards; }
@@ -3949,14 +4045,16 @@ input, textarea {
 }
 
 
-
+/* пустая строка суммы (промежуточный результат 1/2) — держит высоту блока */
 .dice-result-amount.is-empty { visibility: hidden; }
 
 
-
+/* статус «Отменено» в истории операций */
 .tx-status.failed { color: #e74c3c; }
 
-
+/* ==========================================
+   ВКЛАДКА «ТОП» (ЛИДЕРЫ)
+========================================== */
 .top-page { padding-bottom: 24px; }
 
 .lb-chips {
@@ -3997,7 +4095,7 @@ input, textarea {
     box-shadow: none;
 }
 
-
+/* период схлопывается плавно (для «Баланс», где период не нужен) */
 .lb-periods-wrap {
     display: grid;
     grid-template-rows: 1fr;
@@ -4028,7 +4126,7 @@ input, textarea {
 .lb-date-btn.active { background: rgba(255, 190, 0, 0.12); border-color: rgba(255, 190, 0, 0.55); color: #ffd24d; }
 .lb-date-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; }
 
-
+/* ----- подиум ----- */
 .lb-podium {
     display: grid;
     grid-template-columns: 1fr 1.08fr 1fr;
@@ -4091,7 +4189,7 @@ input, textarea {
 .lb-col--empty .lb-col-body { visibility: hidden; height: 120px; }
 .lb-col--empty .lb-block { opacity: 0.35; }
 
-
+/* ----- список ----- */
 .lb-list { display: flex; flex-direction: column; gap: 10px; transition: opacity 0.2s ease; }
 .lb-row {
     display: flex; align-items: center; gap: 12px;
@@ -4121,11 +4219,11 @@ input, textarea {
     .lb-block, .lb-col-body, .lb-row, .lb-empty, .lb-skel { animation: none !important; }
 }
 
-
+/* мини-апп свёрнут — анимации на паузе */
 .app-paused *, .app-paused *::before, .app-paused *::after { animation-play-state: paused !important; }
 
 
-
+/* КРАШ — игроки, ждущие следующий раунд: подпись слева + тонкая линия */
 .crash-queue-divider {
     display: flex;
     align-items: center;
@@ -4162,7 +4260,7 @@ input, textarea {
 }
 
 
-
+/* Спиннер вместо эмодзи, пока грузится .tgs */
 .action-icon > .tge-spinner,
 .stat-icon-bg > .tge-spinner {
     width: 24px;
@@ -4177,7 +4275,7 @@ input, textarea {
 }
 
 
-
+/* Появление любой страницы/игры — как во вкладке «Топ» */
 .page-enter {
     animation: pageItemIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
     animation-delay: calc(var(--pi, 0) * 55ms);
@@ -4191,7 +4289,12 @@ input, textarea {
 }
 
 
-
+/* ==========================================================
+   ПРОИЗВОДИТЕЛЬНОСТЬ: страницы Telegram Emoji (баннеры, Куб, Футбол)
+   Пока на экране идут Lottie-анимации, нижнее меню рисуется без
+   backdrop-filter (размытие фона пересчитывалось на каждом кадре).
+   Вид почти не меняется — фон меню просто чуть плотнее.
+========================================================== */
 body.anim-page .nav-bg {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -4199,7 +4302,11 @@ body.anim-page .nav-bg {
 }
 
 
-
+/* ==========================================================
+   ОПТИМИЗАЦИЯ 60 FPS ДЛЯ TELEGRAM EMOJI И ИГР (КУБ, ФУТБОЛ)
+   Аппаратное ускорение слоёв, изоляция перерисовок (contain) и
+   отключение лишних фильтров во время активных анимаций.
+========================================================== */
 .tge-grid {
     contain: layout style;
 }
@@ -4237,7 +4344,12 @@ body.anim-page .top {
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
-
+/* ==========================================================
+   ANDROID PERF: SVG-фильтр в backdrop-filter на Android WebView
+   не поддерживается, но браузер всё равно пересчитывает слой
+   на каждом кадре. Пока .svgglass/.svglite не выставлены JS-ом —
+   явно держим дешёвый fallback.
+========================================================== */
 .bottom-nav:not(.svgglass):not(.svglite) .lens-glass {
     backdrop-filter: blur(0.4px) brightness(1.04) saturate(1.2);
     -webkit-backdrop-filter: blur(0.4px) brightness(1.04) saturate(1.2);
@@ -4250,18 +4362,26 @@ body.anim-page .top {
     .tge-banner { animation: none !important; }
 }
 
-
+/* ==========================================================
+   ТРИ КУБА: третья ячейка превью
+   Порядок в тройке: a — слева, b — справа, c — ЦЕНТР.
+   Так переход 2 → 3 выглядит логично: две уже стоящие анимации
+   чуть раздвигаются, а новая аккуратно проявляется между ними.
+========================================================== */
 .dice-cell.c { opacity: 0.01; transform: scale(0.55); }
 .dice-preview.triple .dice-cell.a { transform: translateX(calc(var(--dice-size) * -0.38)) scale(0.55); }
 .dice-preview.triple .dice-cell.b { transform: translateX(calc(var(--dice-size) * 0.38)) scale(0.55); opacity: 1; }
 .dice-preview.triple .dice-cell.c { transform: translateX(0) scale(0.55); opacity: 1; }
 
-
+/* ==========================================================
+   ОБЩАЯ СТРАНИЦА EMOJI-ИГР (баскетбол, дартс, боулинг, слоты)
+========================================================== */
 .emoji-game-page .dice-stage {
     height: min(66vw, 275px);
     margin-top: 4px;
 }
-
+/* Превью баскетбола / дартса / боулинга чуть меньше, чем в кубах:
+   сцена не «съедает» экран, а под ней ещё блоки ставки и режимов. */
 .emoji-game-page { --dice-size: min(58vw, 235px); }
 .emoji-game-page .dice-preview > .sticker-lottie,
 .emoji-game-page .dice-roll > .sticker-lottie {
@@ -4279,7 +4399,7 @@ body.anim-page .top {
     height: 100% !important;
     display: block;
 }
-
+/* Ролик броска внутри ячейки сплита (2 / 3 попытки) */
 .emoji-game-page .dice-cell > .dice-roll,
 .dice-page .dice-cell > .dice-roll {
     position: absolute;
@@ -4306,7 +4426,7 @@ body.anim-page .top {
 .emoji-game-page .dice-count-row.hidden-row { display: none; }
 .emoji-game-page .dice-play-btn { margin-top: 4px; }
 
-
+/* Слоты: три барабана */
 .slots-layer {
     opacity: 0;
     transition: opacity 0.35s ease;
@@ -4366,7 +4486,9 @@ body.anim-page .top {
     text-align: center;
 }
 
-
+/* ==========================================================
+   VIP И ЕЖЕДНЕВНЫЕ ЗАДАНИЯ
+========================================================== */
 .vip-page, .tasks-page { animation: fadeIn 0.25s ease; margin-top: -6px; }
 .vip-hero {
     position: relative;
@@ -4532,7 +4654,9 @@ body.anim-page .top {
 }
 .promo-hint code { color: #ffc800; background: rgba(255, 200, 0, 0.08); padding: 1px 5px; border-radius: 5px; }
 
-
+/* ==========================================================
+   xROCKET: понятная плашка вместо «скоро появится»
+========================================================== */
 .wallet-note {
     margin-top: 10px;
     padding: 12px 14px;
@@ -4546,7 +4670,8 @@ body.anim-page .top {
 }
 .wallet-note b { color: #ffc800; }
 
-
+/* Узкие экраны (320–360 px): длинные названия режимов не должны
+   вылезать за границы плитки и создавать горизонтальную прокрутку. */
 @media (max-width: 360px) {
     .dice-mode {
         min-width: 0;
@@ -4566,15 +4691,17 @@ body.anim-page .top {
 }
 
 
+/* ==========================================================
+   ПЛАВНОСТЬ И СПИННЕРЫ ЗАГРУЗКИ
+========================================================== */
 
-
-
+/* Быстрее отклик на тап, без задержки двойного тапа и серой вспышки */
 button, a, input, select, textarea, [onclick] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
 
-
+/* --- Спиннер на кнопке (любой цвет текста — берётся currentColor) --- */
 button.is-loading {
     cursor: progress;
     pointer-events: none;
@@ -4593,7 +4720,7 @@ button.is-loading::before {
 }
 button.is-loading:disabled { opacity: 0.85; }
 
-
+/* --- Тонкая полоса сетевой активности вверху экрана --- */
 .net-bar {
     position: fixed;
     left: 0;
@@ -4624,7 +4751,7 @@ button.is-loading:disabled { opacity: 0.85; }
     to   { transform: translateX(260%); }
 }
 
-
+/* --- Скелетон истории операций (вкладка «Баланс») --- */
 .hist-skel {
     pointer-events: none;
     animation: lbPulse 1.2s ease-in-out infinite;
@@ -4637,7 +4764,7 @@ button.is-loading:disabled { opacity: 0.85; }
 .hist-skel .hs-lines i:last-child  { width: 68%; height: 8px; opacity: 0.7; }
 .hist-skel .hs-amt  { width: 58px; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.07); flex: 0 0 auto; }
 
-
+/* --- Картинки: спиннер, пока грузятся, и мягкое появление --- */
 img.game-image, img.game-banner-img {
     transition: opacity 0.4s ease;
 }
@@ -4653,7 +4780,7 @@ img.img-pending { opacity: 0; }
     z-index: 1;
 }
 
-
+/* --- Мягкие переходы там, где раньше всё «щёлкало» --- */
 
 @media (prefers-reduced-motion: reduce) {
     .net-bar > i { animation-duration: 2.4s; }
@@ -4662,9 +4789,11 @@ img.img-pending { opacity: 0; }
 }
 
 
-
+/* =========================================================
+   ПОП-АП ВЫИГРЫША
+========================================================= */
 .win-popup {
-    --win-popup-top: 84px;               
+    --win-popup-top: 84px;               /* отступ сверху — меняй под свою шапку */
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + var(--win-popup-top));
     left: 50%;
@@ -4734,7 +4863,12 @@ img.img-pending { opacity: 0; }
 }
 
 
-
+/* ==========================================================
+   PERF: Lottie теперь рисуется в <canvas> (см. «WXS PERF» в script.js).
+   Общие правила размера для любых стикеров + убираем скруглённую
+   обрезку у баннеров с анимацией: overflow+border-radius поверх
+   обновляющегося canvas заставляет GPU пересобирать маску каждый кадр.
+========================================================== */
 .sticker-lottie > canvas,
 .sticker-lottie > svg {
     display: block;
@@ -4746,7 +4880,12 @@ img.img-pending { opacity: 0; }
 }
 
 
-
+/* ==========================================================
+   FIX: анимация схлопывалась в тонкую полоску при смене режима.
+   Canvas был «в потоке» и сам задавал высоту контейнера: на миг контейнер
+   мерился маленьким → canvas ужимался → контейнер оставался маленьким.
+   Теперь canvas вынут из потока (absolute) и размер задаёт только контейнер.
+========================================================== */
 .dice-stage .sticker-lottie {
     position: relative;
 }
@@ -4757,9 +4896,11 @@ img.img-pending { opacity: 0; }
 }
 
 
-
+/* ==========================================================
+   КУБ: режим «Число» — 6 граней + «Назад»
+========================================================== */
 .dice-modes.is-numbers { grid-template-columns: repeat(3, 1fr); }
-
+/* «Назад»: той же высоты, что «Число»; слово строго по центру, иконка back.tgs слева от слова */
 .dice-mode-back {
     grid-column: 1 / -1;
     display: grid;
@@ -4770,7 +4911,7 @@ img.img-pending { opacity: 0; }
     padding: 14px 6px;
     font-size: 14px;
 }
-.dice-mode[data-mode="number"] { grid-column: 1 / -1; }   
+.dice-mode[data-mode="number"] { grid-column: 1 / -1; }   /* «Число» — на всю ширину последней строкой */
 .dice-mode-back .dice-mode-name { grid-column: 2; grid-row: 1; margin: 0; font-size: 14px; }
 .dice-back-icon {
     grid-column: 1;
@@ -4781,17 +4922,17 @@ img.img-pending { opacity: 0; }
     justify-content: center;
     width: 22px;
     height: 22px;
-    margin: -3px 0;               
+    margin: -3px 0;               /* иконка не увеличивает высоту плитки */
     flex: none;
     pointer-events: none;
 }
-
+/* нет ни .tgs, ни png — иконка не занимает место, текст «Назад» ровно по центру плитки */
 .dice-back-icon.is-empty, .dice-num-icon.is-empty { display: none; }
 .dice-back-icon svg, .dice-back-icon img, .dice-back-icon canvas { width: 100% !important; height: 100% !important; object-fit: contain; }
 .dice-tgs-holder { display: block; width: 100%; height: 100%; transition: opacity .15s ease; }
 .dice-back-icon .dice-tgs-holder, .dice-num-icon .dice-tgs-holder { position: absolute; inset: 0; }
 .dice-back-icon, .dice-num-icon { position: relative; }
-
+/* мини-спиннер для иконок: тонкое жёлтое кольцо */
 .tge-spinner.mini {
     width: 16px; height: 16px;
     -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 1.5px));
@@ -4799,7 +4940,7 @@ img.img-pending { opacity: 0; }
     filter: drop-shadow(0 0 3px rgba(255, 200, 0, 0.4));
 }
 .dice-num, .dice-has-icon { gap: 5px; padding-left: 4px; padding-right: 4px; }
-
+/* «Центр» с иконкой: один пробел между названием и коэффициентом (как в «Число»), высота плитки не растёт из-за иконки */
 .dice-has-icon .dice-mode-coef { margin-left: 0; }
 .dice-has-icon .dice-num-icon { margin-top: -3px; margin-bottom: -3px; }
 .dice-num-icon {
@@ -4833,7 +4974,7 @@ img.img-pending { opacity: 0; }
     .dice-num-icon { width: 20px; height: 20px; }
 }
 
-
+/* запасная стрелка «Назад» (как в кнопке сверху), если back.tgs не загрузился */
 .dice-back-chevron {
     display: block;
     width: 8px; height: 8px;
@@ -4841,40 +4982,4 @@ img.img-pending { opacity: 0; }
     border-bottom: 2px solid #ffffff;
     transform: rotate(45deg);
     margin-left: 3px;
-}
-
-.dice-result.pending { --rc: #f2bd42; --ring: #33291a; --disc: #f2bd42; --mark: #1d140a; --sp: #f7c948; }
-
-/* Keep the standard tile dimensions; only text is horizontally scaled. */
-.emoji-game-page #emojiGameModes .darts-nowrap {
-    position: relative;
-    overflow: hidden;
-    min-width: 0;
-    white-space: nowrap;
-    font-size: 14px;
-    letter-spacing: normal;
-}
-.emoji-game-page #emojiGameModes .darts-label-content {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    width: max-content;
-    white-space: nowrap;
-    transform-origin: center;
-    transform: translate(-50%, -50%);
-}
-.emoji-game-page #emojiGameModes .darts-label-content .dice-mode-name,
-.emoji-game-page #emojiGameModes .darts-label-content .dice-mode-coef {
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-.emoji-game-page #emojiGameModes .darts-label-content .dice-mode-coef { margin-left: 0; }
-.emoji-game-page #emojiGameModes .darts-label-content .dice-num-icon {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
 }
