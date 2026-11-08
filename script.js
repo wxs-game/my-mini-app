@@ -4631,24 +4631,6 @@ function doRenderDiceModes(animate) {
     }
 
     
-    if (emojiGame.key === 'darts') {
-        const fitLabels = () => {
-            box.querySelectorAll('.darts-nowrap').forEach(btn => {
-                const label = btn.querySelector('.darts-label-content');
-                if (!label) return;
-                label.style.transform = 'translate(-50%, -50%) scaleX(1)';
-                const available = btn.clientWidth - 12;
-                const natural = label.scrollWidth;
-                const scale = natural > 0 ? Math.min(1, available / natural) : 1;
-                label.style.transform = `translate(-50%, -50%) scaleX(${Math.max(0.1, scale)})`;
-            });
-        };
-        requestAnimationFrame(fitLabels);
-        if (!box._dartsFitObserver && typeof ResizeObserver !== 'undefined') {
-            box._dartsFitObserver = new ResizeObserver(fitLabels);
-            box._dartsFitObserver.observe(box);
-        }
-    }
 
     if (animate && oldH) {
         box.style.height = "auto";
@@ -5328,6 +5310,26 @@ function renderEmojiGameModes(animate) {
         const fallback = icon.startsWith('dartswhite') ? '⚪' : '🎯';
         mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + icon], null, null, '<span class="dart-icon-fallback">' + fallback + '</span>');
     });
+
+
+    if (emojiGame.key === 'darts') {
+        const fitLabels = () => {
+            box.querySelectorAll('.darts-nowrap').forEach(btn => {
+                const label = btn.querySelector('.darts-label-content');
+                if (!label) return;
+                label.style.transform = 'translate(-50%, -50%) scaleX(1)';
+                const available = btn.clientWidth - 12;
+                const natural = label.scrollWidth;
+                const scale = natural > 0 ? Math.min(1, available / natural) : 1;
+                label.style.transform = `translate(-50%, -50%) scaleX(${Math.max(0.1, scale)})`;
+            });
+        };
+        requestAnimationFrame(fitLabels);
+        if (!box._dartsFitObserver && typeof ResizeObserver !== 'undefined') {
+            box._dartsFitObserver = new ResizeObserver(fitLabels);
+            box._dartsFitObserver.observe(box);
+        }
+    }
 
     if (animate && oldH) {
         box.style.height = "auto";

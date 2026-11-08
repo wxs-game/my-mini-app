@@ -4845,7 +4845,7 @@ img.img-pending { opacity: 0; }
 
 .dice-result.pending { --rc: #f2bd42; --ring: #33291a; --disc: #f2bd42; --mark: #1d140a; --sp: #f7c948; }
 
-/* Preserve full-size dart labels; compress horizontally only if needed. */
+/* Keep the standard tile dimensions; only text is horizontally scaled. */
 .emoji-game-page #emojiGameModes .darts-nowrap {
     position: relative;
     overflow: hidden;
@@ -4856,15 +4856,15 @@ img.img-pending { opacity: 0; }
 }
 .emoji-game-page #emojiGameModes .darts-label-content {
     position: absolute;
-    top: 50%;
     left: 50%;
+    top: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 5px;
     width: max-content;
     white-space: nowrap;
-    transform-origin: center center;
+    transform-origin: center;
     transform: translate(-50%, -50%);
 }
 .emoji-game-page #emojiGameModes .darts-label-content .dice-mode-name,
