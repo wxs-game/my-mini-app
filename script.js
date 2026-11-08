@@ -5156,8 +5156,8 @@ const EMOJI_GAME_CONFIGS = {
             { key: 'bothRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 2, p: [4, 36] },
             { key: 'bothCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 2, p: [1, 36] },
             { key: 'bothWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 2, p: [4, 36] },
-            { key: 'bothRed', name: 'Красное', icon: 'dartsred1.tgs', attempts: 2, p: [9, 36] },
-            { key: 'bothWhite', name: 'Белое/Мимо', icon: 'dartswhite1.tgs', attempts: 2, p: [9, 36] },
+            { key: 'bothRed', name: 'Сектор/Центр', icon: 'dartsred1.tgs', attempts: 2, p: [9, 36] },
+            { key: 'bothWhite', name: 'Сектор/Мимо', icon: 'dartswhite1.tgs', attempts: 2, p: [9, 36] },
             { key: 'bothAnySector', name: 'Любой сектор', attempts: 2, p: [16, 36] },
             { key: 'noBounce', name: 'Без промахов', attempts: 2, p: [25, 36] },
             { key: 'adjacent', name: 'Рядом', attempts: 2, p: [8, 36] },
@@ -5171,8 +5171,8 @@ const EMOJI_GAME_CONFIGS = {
             { key: 'threeRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 3, p: [8, 216] },
             { key: 'threeCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 3, p: [1, 216] },
             { key: 'threeWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 3, p: [8, 216] },
-            { key: 'threeRed', name: 'Красное', icon: 'dartsred1.tgs', attempts: 3, p: [27, 216] },
-            { key: 'threeWhite', name: 'Белое/Мимо', icon: 'dartswhite1.tgs', attempts: 3, p: [27, 216] },
+            { key: 'threeRed', name: 'Сектор/Центр', icon: 'dartsred1.tgs', attempts: 3, p: [27, 216] },
+            { key: 'threeWhite', name: 'Сектор/Мимо', icon: 'dartswhite1.tgs', attempts: 3, p: [27, 216] },
             { key: 'threeAnySector', name: 'Любой сектор', attempts: 3, p: [64, 216], full: true },
             { key: 'threeSame', name: 'Три одинаково', attempts: 3, p: [6, 216] },
             { key: 'trafficLight', name: 'Светофор', attempts: 3, p: [24, 216] },
@@ -5297,11 +5297,11 @@ function renderEmojiGameModes(animate) {
     });
     box.innerHTML = cfg.modes.filter(m => !m.attempts || m.attempts === attempts).map((m, i) => {
         const coef = emojiCompoundCoef(m, attempts, cfg);
-        return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
+        return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (emojiGame.key === 'darts' ? ' darts-nowrap' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
             '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
             (m.icon ? '<span class="dice-num-icon dart-mode-icon" data-icon="' + m.icon + '"></span>' : '') +
             '<span class="dice-mode-name">' + m.name + '</span> ' +
-            '<span class="dice-mode-coef">(' + coef.toFixed(2) + '×)</span></button>';
+            '<span class="dice-mode-coef">(×' + coef.toFixed(2) + ')</span></button>';
     }).join("");
     box.querySelectorAll('.dart-mode-icon').forEach(el => {
         const icon = el.dataset.icon;
@@ -5327,7 +5327,7 @@ function updateEmojiGamePlayLabel() {
     const mode = emojiModeCfg(emojiGame.mode);
     if (!mode) { btn.textContent = "Играть"; return; }
     const attempts = cfg.maxAttempts === 1 ? 1 : emojiGame.attempts;
-    btn.textContent = "Играть (" + emojiCompoundCoef(mode, attempts, cfg).toFixed(2) + "×)";
+    btn.textContent = "Играть (×" + emojiCompoundCoef(mode, attempts, cfg).toFixed(2) + ")";
 }
 
 function selectEmojiMode(modeKey, btn) {

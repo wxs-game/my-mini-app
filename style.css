@@ -4844,3 +4844,29 @@ img.img-pending { opacity: 0; }
 }
 
 .dice-result.pending { --rc: #f2bd42; --ring: #33291a; --disc: #f2bd42; --mark: #1d140a; --sp: #f7c948; }
+
+/* Dart option labels stay on one line across mobile widths. */
+.emoji-game-page #emojiGameModes .darts-nowrap {
+    min-width: 0;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    gap: 3px;
+    padding-inline: 3px;
+    font-size: clamp(9px, 2.65vw, 14px);
+    letter-spacing: -0.3px;
+}
+.emoji-game-page #emojiGameModes .darts-nowrap .dice-mode-name,
+.emoji-game-page #emojiGameModes .darts-nowrap .dice-mode-coef {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.emoji-game-page #emojiGameModes .darts-nowrap .dice-mode-coef { margin-left: 1px; }
+.emoji-game-page #emojiGameModes .darts-nowrap .dice-num-icon {
+    width: clamp(14px, 4vw, 22px);
+    height: clamp(14px, 4vw, 22px);
+    flex-shrink: 0;
+}
+@media (max-width: 380px) {
+    .emoji-game-page #emojiGameModes .darts-nowrap { font-size: clamp(8px, 2.45vw, 11px); gap: 2px; }
+    .emoji-game-page #emojiGameModes .darts-nowrap .dice-num-icon { width: 14px; height: 14px; }
+}
