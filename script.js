@@ -239,6 +239,7 @@ window.tg = tg;
 })();
 
 
+const VIP_REQUEST_TIMEOUT_MS = 15000;
 const SUPABASE_URL = 'https://nkovsjhwinbbapsqvpnu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_GVUZWdR9qVSHwL7aL63W8w_g7rtfJkN';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -5156,7 +5157,7 @@ const EMOJI_GAME_CONFIGS = {
             { key: 'bothRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 2, p: [4, 36] },
             { key: 'bothCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 2, p: [1, 36] },
             { key: 'bothWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 2, p: [4, 36] },
-            { key: 'bothRed', name: 'Сектор/Центр', icon: 'dartsred1.tgs', attempts: 2, p: [9, 36] },
+            { key: 'bothRed', name: 'Сектор/Центр', icon: 'dartsred2.tgs', attempts: 2, p: [9, 36] },
             { key: 'bothWhite', name: 'Сектор/Мимо', icon: 'dartswhite1.tgs', attempts: 2, p: [9, 36] },
             { key: 'bothAnySector', name: 'Любой сектор', attempts: 2, p: [16, 36] },
             { key: 'noBounce', name: 'Без промахов', attempts: 2, p: [25, 36] },
@@ -5171,7 +5172,7 @@ const EMOJI_GAME_CONFIGS = {
             { key: 'threeRedSector', name: 'Сектор', icon: 'dartsred1.tgs', attempts: 3, p: [8, 216] },
             { key: 'threeCenter', name: 'Центр', icon: 'dartscenter.tgs', attempts: 3, p: [1, 216] },
             { key: 'threeWhiteSector', name: 'Сектор', icon: 'dartswhite1.tgs', attempts: 3, p: [8, 216] },
-            { key: 'threeRed', name: 'Сектор/Центр', icon: 'dartsred1.tgs', attempts: 3, p: [27, 216] },
+            { key: 'threeRed', name: 'Сектор/Центр', icon: 'dartsred2.tgs', attempts: 3, p: [27, 216] },
             { key: 'threeWhite', name: 'Сектор/Мимо', icon: 'dartswhite1.tgs', attempts: 3, p: [27, 216] },
             { key: 'threeAnySector', name: 'Любой сектор', attempts: 3, p: [64, 216], full: true },
             { key: 'threeSame', name: 'Три одинаково', attempts: 3, p: [6, 216] },
@@ -5456,15 +5457,21 @@ async function handleEmojiGamePlay() {
     const amountText = win ? "+" + winAmount.toFixed(2) + "$" : "-" + bet.toFixed(2) + "$";
     try {
         if (window.EmojiGameStage) {
-            for (let i = 0; i < passes.length; i++) {
-                const isFinal = i === passes.length - 1;
-                const pass = passes[i];
+            const totalRolls = cfg.slots ? passes.length : rolls.length;
+            for (let i = 0; i < totalRolls; i++) {
+                const isFinal = i === totalRolls - 1;
+                const verdict = emojiGame.key === 'darts'
+                    ? (isFinal ? (win ? 'win' : 'lose') : (srv.verdicts?.[i] || 'pending'))
+                    : (passes[i] ? 'win' : 'lose');
+                const pending = verdict === 'pending';
+                const pass = verdict !== 'lose';
                 const roll = cfg.slots ? null : rolls[i];
                 const roundTag = attempts > 1 ? " (" + (i + 1) + "/" + attempts + ")" : "";
-                const title = (pass ? "Ставка зашла" : "Ставка не зашла") + roundTag;
+                const title = (pending ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла")) + roundTag;
                 await window.EmojiGameStage.playAttempt({
                     roll,
                     win: pass,
+                    pending,
                     title,
                     amountText: isFinal ? amountText : "",
                     symbols: cfg.slots ? ((srv.symbols && srv.symbols[i]) || []).map(k => EMOJI_SLOT_SYMBOLS[k] || k) : null,
@@ -5778,14 +5785,15 @@ const MIN_WITHDRAW_UI = 2;
 let walletBusy = false;
 let depositWatchTimer = null;
 
-async function walletCall(fn, body) {
-    const _p = _walletCallRaw(fn, body);
+async function walletCall(fn, body, signal) {
+    const _p = _walletCallRaw(fn, body, signal);
     return fn === 'wallet-history' ? _p : netBar.track(_p);
 }
-async function _walletCallRaw(fn, body) {
+async function _walletCallRaw(fn, body, signal) {
     try {
         const res = await fetch(WALLET_FN_URL + fn, {
             method: 'POST',
+            signal,
             headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
             body: JSON.stringify(Object.assign({ init_data: tg?.initData || '' }, body || {}))
         });
@@ -6292,36 +6300,82 @@ function renderVipPage() {
 }
 
 
-const WXS_VIP_CSS = "\n*{box-sizing:border-box}body{margin:0;background:#09090b;color:#f8f8fa;font:16px system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:680px;margin:auto;padding:24px 18px 80px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:25px}header h1{margin:0;font-size:27px}.tag{color:#c9a35c;border:1px solid #6d542b;border-radius:999px;padding:6px 10px;font-size:12px}.hero{border:1px solid #806236;border-radius:32px;padding:26px 20px 25px;background:radial-gradient(circle at 0 0,#60431985,transparent 48%),radial-gradient(circle at 100% 100%,#36304070,transparent 45%),linear-gradient(130deg,#231b14,#111115 60%,#201d25);box-shadow:0 16px 50px #0009,inset 0 1px #ffffff22;text-align:center}.crown{font-size:68px;filter:drop-shadow(0 5px 12px #d8953566)}.rank{font-size:33px;font-weight:850;letter-spacing:-1px;margin-top:4px}.turnover{color:#a7a3ae;margin:6px 0 20px}.percent{font-size:36px;font-weight:850;margin:8px}.bar{height:14px;border-radius:20px;background:#302e34;overflow:hidden;border:1px solid #ffffff15}.fill{height:100%;background:linear-gradient(90deg,#f2a516,#ffe078);width:68%;border-radius:20px;transition:width .3s}.milestones{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:18px}.milestone{font-size:13px;color:#c3a16a}.milestone span{display:block;font-size:25px;margin-bottom:3px}.milestone small{display:block;color:#aaa5ad}.label{font-weight:750;font-size:19px;margin:25px 0 14px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{min-height:138px;background:linear-gradient(145deg,#1a1a1e,#111114);border:1px solid #303036;border-radius:23px;padding:17px;text-align:left;color:inherit;cursor:pointer}.card:active{transform:scale(.99)}.cardtop{display:flex;align-items:center;justify-content:space-between;color:#d7a84f;font-size:27px}.cardtop i{font-style:normal;color:#77717f;font-size:25px}.cardname{color:#a9a5af;font-size:14px;margin-top:11px}.cardvalue{font-size:24px;font-weight:800;margin-top:3px}.ranks{display:flex;flex-wrap:wrap;gap:8px}.ranks button{background:#1d1b20;border:1px solid #39343d;color:#eee;padding:10px 12px;border-radius:14px;font-weight:700}.ranks button.active{background:#3b2b12;border-color:#d3a33e;color:#ffd473}.muted{color:#8d8994;font-size:13px;line-height:1.5}.shade{position:fixed;inset:0;background:#050508b8;backdrop-filter:blur(9px);z-index:20;display:none}.shade.open{display:block}.sheet{position:absolute;bottom:0;left:0;right:0;max-width:680px;margin:auto;background:linear-gradient(#29272d,#17171b);border:1px solid #4b454e;border-radius:30px 30px 0 0;padding:12px 25px max(32px,env(safe-area-inset-bottom));box-shadow:0 -15px 70px #000a;touch-action:pan-y}.handle{width:54px;height:6px;border-radius:10px;background:#77727b;margin:0 auto 25px}.sheet h2{margin:0 0 12px;font-size:24px}.sheet p{color:#c6c2cb;line-height:1.6}.close{background:#37343b;border:0;border-radius:13px;color:#fff;padding:13px 20px;width:100%;font-weight:750;margin-top:12px}@media(max-width:360px){.card{padding:13px;min-height:128px}.cardvalue{font-size:21px}.wrap{padding-left:12px;padding-right:12px}}\n\n/* VIP visual refinement */\n:root{color-scheme:dark;--gold:#f3c66a;--surface:#18171b}\nhtml{background:#09090c}body{background:radial-gradient(ellipse 95% 36% at 50% -12%,#59401e52,transparent 80%),#09090c;min-height:100dvh}\n*,*::before,*::after{-webkit-tap-highlight-color:transparent}\nbutton{appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;outline:none}\nbutton:focus{outline:none}button:focus-visible{outline:2px solid #f1c367;outline-offset:3px}\n.wrap{padding-top:30px}.tag{background:#271f13;color:#f0c97e;letter-spacing:.04em}\nheader h1{letter-spacing:-.7px;font-weight:850}\n.hero{position:relative;overflow:hidden;padding:29px 22px 20px;background:radial-gradient(ellipse 95% 80% at 0% 0%,#a6762850,transparent 75%),radial-gradient(ellipse 75% 80% at 100% 100%,#45405558,transparent 85%),linear-gradient(120deg,#2a2017,#151419 55%,#1e1b24);box-shadow:0 24px 55px #0009,inset 0 1px #fff5;border-color:#a17b3c}\n.hero:before{content:'';position:absolute;right:-70px;top:-140px;width:360px;height:280px;border:60px solid #ffffff08;border-radius:50%;transform:rotate(-35deg);pointer-events:none}\n.crown{height:103px;display:grid;place-items:center;position:relative;filter:drop-shadow(0 10px 18px #d38c3866)}\n.rank,.percent,.turnover,.bar,.milestones,.hero-foot{position:relative}\n.rank{font-size:35px;text-shadow:0 2px 12px #0006}.turnover{font-size:15px;margin-bottom:24px}.percent{font-size:40px;margin-bottom:13px}\n.bar{height:15px;box-shadow:inset 0 2px 5px #0007}.fill{box-shadow:0 0 15px #ffc75a60}\n.milestones{margin-top:21px}.milestone{font-weight:800;font-size:12px;line-height:1.4}.milestone small{font-size:14px;font-weight:800;color:#fff;margin-top:4px}.gift-icon{display:grid!important;place-items:center;height:37px}.gift-icon svg{width:29px;height:29px;color:#efbb60}\n.hero-foot{display:flex;justify-content:space-between;gap:10px;margin-top:24px;padding-top:13px;border-top:1px solid #ffffff18;color:#ad9c80;font-size:10px;font-weight:800;letter-spacing:.07em}\n.label{display:flex;align-items:center;justify-content:space-between;gap:8px;letter-spacing:-.3px}.label-sub{font-size:11px;font-weight:500;color:#77717c;letter-spacing:0}\n.cards{gap:12px}.card{position:relative;overflow:hidden;min-height:143px;background:linear-gradient(145deg,#232125,#141317 72%);border:1px solid #38343a;box-shadow:inset 0 1px #ffffff0b,0 9px 24px #0004;transition:background .2s,border-color .2s,transform .15s}\n.card:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 0 0,#b7812c16,transparent 65%);pointer-events:none}\n.card:active{transform:scale(.985);border-color:#c89b50;background:#29231b}.cardtop{position:relative}.cardicon{width:35px;height:35px;display:grid;place-items:center;color:#e7b75e}.cardicon svg{width:32px;height:32px}.cardtop i{font-size:31px;font-weight:300}.cardname{font-size:15px}.cardvalue{font-size:25px;letter-spacing:-.5px}\n.ranks button{border-radius:13px;transition:background .2s,border-color .2s}.ranks button:active{background:#4b381c}.ranks button.active{box-shadow:inset 0 1px #ffe7a53a,0 0 18px #d2a3411a}\n.shade{background:#030305a6;backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);animation:fadein .2s ease}\n@keyframes fadein{from{opacity:0}to{opacity:1}}\n.sheet{background:radial-gradient(circle at 50% -20%,#5c48283b,transparent 58%),linear-gradient(#262329,#141316);border-color:#645443;box-shadow:0 -15px 75px #000d;animation:sheetup .28s cubic-bezier(.2,.85,.2,1);padding-top:0}\n@keyframes sheetup{from{transform:translateY(45px);opacity:.6}to{transform:translateY(0);opacity:1}}\n.handle-zone{height:46px;display:flex;align-items:flex-start;justify-content:center;padding-top:12px;touch-action:pan-y}.handle{margin:0;background:#938d93;width:49px;height:5px}\n.sheet-symbol{display:grid;place-items:center;width:62px;height:62px;border:1px solid #b98d4d55;border-radius:20px;background:linear-gradient(140deg,#4a351b,#262126);color:#f4c46d;margin-bottom:16px;box-shadow:0 8px 22px #0006}.sheet-symbol svg{width:36px;height:36px}\n.sheet h2{font-size:26px;letter-spacing:-.6px}.sheet p{font-size:15px;line-height:1.7;color:#bdb7bf}.close{background:linear-gradient(120deg,#f5c45e,#d99530);color:#201508;font-weight:850;min-height:48px}\n.close:active{filter:brightness(.9)}\n@media(max-width:360px){.wrap{padding:20px 12px 65px}.hero{padding:23px 13px 17px}.card{padding:14px}.cardvalue{font-size:22px}.milestone{font-size:11px}.label-sub{font-size:10px}}\n@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}\n\n*{-webkit-tap-highlight-color:transparent}button{touch-action:manipulation}button:focus{outline:none}button:focus-visible{outline:2px solid #d6a85c;outline-offset:3px}\n";
-const WXS_VIP_JS = "\nconst icons={refresh:'<svg viewBox=\"0 0 32 32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M26 12A11 11 0 1 0 27 18\"/><path d=\"M26 4v9h-9\"/></svg>',gift:'<svg viewBox=\"0 0 32 32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"13\" width=\"22\" height=\"15\" rx=\"2\"/><path d=\"M3 10h26v6H3zM16 10v18M16 10C4 9 7 1 12 4c2 1 4 6 4 6Zm0 0c12-1 9-9 4-6-2 1-4 6-4 6Z\"/></svg>',star:'<svg viewBox=\"0 0 32 32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linejoin=\"round\"><path d=\"m16 3 4 8 9 1.4-6.5 6.4 1.5 9-8-4.2-8 4.2 1.5-9L3 12.4 12 11Z\"/></svg>',bolt:'<svg viewBox=\"0 0 32 32\" fill=\"currentColor\"><path d=\"M19 2 6 18h9l-2 12 13-17h-9z\"/></svg>'};const tiers=[{name:'Без ранга',min:0,max:100,daily:.1},{name:'Дерево',min:100,max:500,daily:.15},{name:'Серебро',min:500,max:1250,daily:.2},{name:'Золото',min:1250,max:2000,daily:.25},{name:'Платина',min:2000,max:3000,daily:.3},{name:'Легенда',min:3000,max:5555.56,daily:.35},{name:'Бог',min:5555.56,max:null,daily:.4}];const gifts={'Дерево':[.35,.6,.9],'Серебро':[1.15,1.4,1.75],'Золото':[2,2.5,3],'Платина':[3.65,4.35,5.05],'Легенда':[6,7,8]};const details={rake:['Рейкбек','По описанию программы: 1.5% от подходящих ставок с коэффициентом выше ×1.35. Этот макет не рассчитывает и не начисляет возврат.'],cash:['Кешбек','По описанию программы: 5% от проигранной суммы за последние 48 часов с возможностью получения раз в два дня. Здесь показаны только условия.'],daily:['Ежедневка','Размер ежедневного бонуса зависит от ранга: от 0.10 $ до 0.40 $. В демонстрации начисления отключены.'],boost:['Буст','Дополнительный множитель к ежедневному бонусу за ранг. Конкретные значения множителя не указаны, поэтому в макете они не придуманы.']};document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icons[el.dataset.icon]);let active=0;let actualTurnover=0;const fmt=n=>n.toFixed(2);function render(){let t=tiers[active],val=actualTurnover,p=t.max===null?100:Math.max(0,Math.min(100,Math.round((val-t.min)/(t.max-t.min)*100)));document.getElementById('rank').textContent=t.name;document.getElementById('turnover').textContent='Оборот: '+fmt(val)+' $';document.getElementById('pct').textContent=p+'%';document.getElementById('fill').style.width=p+'%';document.getElementById('daily').textContent=fmt(t.daily)+' $';document.getElementById('nextTier').textContent=t.max===null?'Высший ранг':'Далее: '+tiers[active+1].name;document.getElementById('milestones').innerHTML=t.name==='Без ранга'?'<div style=\"grid-column:1/-1;color:#aaa\">Без наград</div>':t.name==='Бог'?'<div style=\"grid-column:1/-1;color:#d6b676\">Максимальный ранг</div>':[0,1,2].map((i)=>'<div class=\"milestone\"><span class=\"gift-icon\">'+icons.gift+'</span>'+t.name+' '+['I','II','III'][i]+'<small>'+(gifts[t.name]?fmt(gifts[t.name][i])+' $':'Ступень '+(i+1))+'</small></div>').join('');document.getElementById('ranks').innerHTML=tiers.map((r,i)=>'<button class=\"'+(i===active?'active':'')+'\" data-rank=\"'+i+'\">'+r.name+'</button>').join('');document.querySelectorAll('[data-rank]').forEach(b=>b.onclick=()=>{active=Number(b.dataset.rank);render()})}render();const shade=document.getElementById('shade'),sheet=document.getElementById('sheet');function close(){shade.classList.remove('open');document.body.style.overflow=''}document.querySelectorAll('[data-info]').forEach(b=>b.onclick=()=>{let d=details[b.dataset.info];document.getElementById('sheetSymbol').innerHTML=icons[b.dataset.info==='rake'?'refresh':b.dataset.info==='cash'?'gift':b.dataset.info==='daily'?'star':'bolt'];document.getElementById('sheetTitle').textContent=d[0];document.getElementById('sheetBody').textContent=d[1];shade.classList.add('open');document.body.style.overflow='hidden'});document.getElementById('close').onclick=close;shade.addEventListener('click',e=>{if(e.target===shade)close()});document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});let sy=0;sheet.addEventListener('touchstart',e=>{sy=e.touches[0].clientY},{passive:true});sheet.addEventListener('touchend',e=>{if(e.changedTouches[0].clientY-sy>90)close()},{passive:true});\n\nwindow.addEventListener('message',event=>{\n if(event.data?.type!=='WXS_VIP_TURNOVER')return;\n const n=Number(event.data.turnover);\n if(!Number.isFinite(n)||n<0)return;\n actualTurnover=n;\n active=tiers.reduce((idx,t,i)=>n>=t.min?i:idx,0);\n render();\n});\n";
-function mountWxsVip() {
-    const frame = document.getElementById('wxsVipFrame');
-    const markup = document.getElementById('wxsVipMarkup');
-    if (!frame || !markup) return;
-    if (frame.dataset.mounted === 'yes') return;
-    frame.dataset.mounted = 'yes';
-    frame.addEventListener('load', () => {
-        frame.contentWindow?.postMessage({
-            type:'WXS_VIP_TURNOVER',
-            turnover:Math.max(0, Number(currentTurnover)||0)
-        }, '*');
-    });
-    frame.srcdoc = markup.innerHTML.replace('</head>',
-        '<style>' + WXS_VIP_CSS + '</style></head>')
-        .replace('</body>', '<script>' + WXS_VIP_JS + '<\\/script></body>');
+let vipRequestBusy = false;
+
+function postVipMessage(message) {
+    document.getElementById('wxsVipFrame')?.contentWindow?.postMessage(message, location.origin);
 }
 
+async function loadVipRewards(milestoneKey) {
+    if (vipRequestBusy) return;
+    if (!tg?.initData) {
+        postVipMessage({ type: 'WXS_VIP_ERROR', message: 'Откройте приложение через Telegram, чтобы загрузить награды.' });
+        return;
+    }
+    const claiming = typeof milestoneKey === 'string';
+    if (claiming && (emojiGame.busy || diceGame.busy || footballGame.busy || !lockEconomy())) {
+        postVipMessage({ type: 'WXS_VIP_ERROR', message: 'Дождитесь завершения текущей операции.' });
+        return;
+    }
+    vipRequestBusy = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), VIP_REQUEST_TIMEOUT_MS);
+    try {
+        const result = await walletCall('vip_rewards', claiming
+            ? { action: 'claim', milestone_key: milestoneKey }
+            : { action: 'state' }, controller.signal);
+        if (!result?.ok || !Array.isArray(result.state?.milestones) || !Number.isFinite(Number(result.state?.turnover))) {
+            throw new Error(result?.error === 'NETWORK' ? 'Не удалось загрузить награды. Проверьте соединение и повторите.' : (result?.error || 'Не удалось загрузить VIP-награды.'));
+        }
+        if (claiming) {
+            if (!Number.isFinite(Number(result.balance))) throw new Error('Не удалось обновить баланс. Повторно откройте VIP.');
+            setUIBalance(Number(result.balance));
+        }
+        postVipMessage({ type: 'WXS_VIP_STATE', state: result.state,
+            message: claiming ? 'Награда зачислена: +' + Number(result.reward_amount).toFixed(2) + ' $' : '' });
+    } catch (error) {
+        postVipMessage({ type: 'WXS_VIP_ERROR', message: error.message || 'Не удалось загрузить VIP-награды.' });
+    } finally {
+        clearTimeout(timeout);
+        vipRequestBusy = false;
+        if (claiming) unlockEconomy();
+    }
+}
+
+window.addEventListener('message', event => {
+    const frame = document.getElementById('wxsVipFrame');
+    if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin) return;
+    if (event.data?.type === 'WXS_VIP_READY') {
+        postVipMessage({ type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0) });
+        loadVipRewards();
+    } else if (event.data?.type === 'WXS_VIP_CLAIM' && typeof event.data.key === 'string' && event.data.key.length <= 80) {
+        loadVipRewards(event.data.key);
+    }
+});
+
+function resizeVipFrame() {
+    const frame = document.getElementById('wxsVipFrame');
+    if (!frame || document.getElementById('vipPage')?.classList.contains('hidden')) return;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const nav = document.getElementById('bottomNav');
+    const navTop = nav && nav.getBoundingClientRect().height ? nav.getBoundingClientRect().top : viewportHeight;
+    frame.style.height = Math.max(120, Math.min(viewportHeight, navTop) - frame.getBoundingClientRect().top - 12) + 'px';
+}
+window.addEventListener('resize', resizeVipFrame);
+window.visualViewport?.addEventListener('resize', resizeVipFrame);
+
 function openVip() {
-    mountWxsVip();
     showPage('vipPage');
     updateNav('home');
+    requestAnimationFrame(resizeVipFrame);
     const frame = document.getElementById('wxsVipFrame');
-    if (frame) {
-        const sync = () => frame.contentWindow?.postMessage({
-            type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0)
-        }, '*');
-        frame.addEventListener('load', sync, { once: true });
-        sync();
+    if (!frame) return;
+    if (frame.dataset.mounted !== 'yes') {
+        frame.dataset.mounted = 'yes';
+        frame.src = 'vip.html';
+    } else {
+        postVipMessage({ type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0) });
+        loadVipRewards();
     }
 }
 
@@ -10354,13 +10408,14 @@ function playRoll(anim, totalMs) {
         setTimeout(() => { if (!res.classList.contains('show')) res.innerHTML = ''; }, 650);
     }
 
-    function showResult(win, amountText, title) {
+    function showResult(win, amountText, title, pending) {
         const res = $('emojiGameResult');
         if (!res) return;
         res.style.transition = 'none';
         res.classList.remove('show', 'hide-up');
         res.innerHTML = resultHtml(win, amountText, title);
-        res.classList.toggle('win', !!win);
+        res.classList.toggle('win', !!win && (key !== 'darts' || !!pending));
+        res.classList.toggle('counted', !!win && key === 'darts' && !pending);
         res.classList.toggle('lose', !win);
         reflow(res);
         res.style.transition = '';
@@ -10371,7 +10426,7 @@ function playRoll(anim, totalMs) {
     // превью (или прошлый итог) уплывает вверх → бросок заезжает сбоку и играет
     // в 60 FPS → уходит → итог (галочка/крестик, искры, текст).
     // Итог показывается после КАЖДОГО раунда, как в кубе.
-    async function playAttempt({ roll: rollNumber, win, title, amountText, symbols }) {
+    async function playAttempt({ roll: rollNumber, win, pending = false, title, amountText, symbols }) {
         const prev = $('emojiGamePreview');
         const res = $('emojiGameResult');
         const slots = $('emojiSlotsLayer');
@@ -10400,7 +10455,7 @@ function playRoll(anim, totalMs) {
             if (!alive()) return;
 
             if (slots) slots.classList.remove('show');   // барабаны плавно гаснут, итог плавно появляется
-            showResult(win, amountText, title);
+            showResult(win, amountText, title, pending);
             await waitResultAnimationEnd(res, 1050);
             if (!alive()) return;
             await wait(300);
@@ -10451,7 +10506,7 @@ function playRoll(anim, totalMs) {
 
         /* ----- 4) бросок уходит, появляется итог ----- */
         rollEl.classList.add('away');
-        showResult(win, amountText, title);
+        showResult(win, amountText, title, pending);
         await waitResultAnimationEnd(res, 1050);
         if (!alive()) return;
         if (preBox && preBox.parentNode) preBox.parentNode.removeChild(preBox);
