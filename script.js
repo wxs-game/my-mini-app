@@ -6360,12 +6360,9 @@ async function loadVipRewards(milestoneKey) {
 window.addEventListener('message', event => {
     const frame = document.getElementById('wxsVipFrame');
     if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin) return;
-    if (event.data?.type === 'WXS_VIP_HEIGHT') {
-        const height = Math.ceil(Number(event.data.height));
-        if (Number.isFinite(height) && height >= 120 && height <= 5000) {
-            frame.dataset.contentHeight = String(height);
-            frame.style.height = height + 'px';
-        }
+    if (event.data?.type === 'WXS_VIP_SHEET') {
+        document.body.classList.toggle('vip-sheet-open', !!event.data.open);
+        requestAnimationFrame(resizeVipFrame);
     } else if (event.data?.type === 'WXS_VIP_READY') {
         postVipMessage({ type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0) });
         loadVipRewards();
@@ -6377,14 +6374,11 @@ window.addEventListener('message', event => {
 function resizeVipFrame() {
     const frame = document.getElementById('wxsVipFrame');
     if (!frame || document.getElementById('vipPage')?.classList.contains('hidden')) return;
-    const contentHeight = Number(frame.dataset.contentHeight);
-    if (Number.isFinite(contentHeight) && contentHeight >= 120) {
-        frame.style.height = Math.ceil(contentHeight) + 'px';
-        return;
-    }
     const viewportHeight = window.visualViewport?.height || window.innerHeight;
     const nav = document.getElementById('bottomNav');
-    const navTop = nav && nav.getBoundingClientRect().height ? nav.getBoundingClientRect().top : viewportHeight;
+    const navTop = document.body.classList.contains('vip-sheet-open')
+        ? viewportHeight
+        : (nav && nav.getBoundingClientRect().height ? nav.getBoundingClientRect().top : viewportHeight);
     frame.style.height = Math.max(120, Math.min(viewportHeight, navTop) - frame.getBoundingClientRect().top - 12) + 'px';
 }
 window.addEventListener('resize', resizeVipFrame);

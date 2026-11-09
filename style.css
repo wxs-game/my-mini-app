@@ -4497,6 +4497,15 @@ body.anim-page .top {
     overflow: hidden;
     box-shadow: 0 16px 38px rgba(0, 0, 0, 0.32);
 }
+body.vip-sheet-open {
+    overflow: hidden !important;
+    touch-action: none !important;
+}
+body.vip-sheet-open .bottom-nav {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(120%);
+}
 .vip-hero {
     position: relative;
     overflow: hidden;
