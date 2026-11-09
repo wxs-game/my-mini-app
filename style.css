@@ -5044,3 +5044,4 @@ img.img-pending { opacity: 0; }
 #emojiGameModes .dart-mode-icon svg { display: block; width: 100% !important; height: 100% !important; }
 
 /* VIP embedded screen styles are scoped to its isolated document to preserve game UI. */
+.vip-page .vip-crown{display:flex;width:54px;height:42px;align-items:center;justify-content:center;margin:8px 0 0;filter:drop-shadow(0 5px 10px rgba(255,171,24,.24))}.vip-page .vip-crown svg{width:48px;height:38px;fill:#ffc653;stroke:#ffe19a;stroke-width:1.2}.vip-card-icon img{display:block;width:23px;height:23px;object-fit:contain}.vip-milestone.reached{border-color:rgba(255,202,91,.52);background:rgba(95,64,13,.24)}.vip-milestone>span{font-size:15px;color:#ffce63}.vip-milestone small{font-size:11px}.vip-milestone em{white-space:nowrap}

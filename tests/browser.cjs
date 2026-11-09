@@ -45,19 +45,16 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
  if(process.env.BASELINE){assert.deepEqual(errors,['setUIBalance is not defined']);console.log('Confirmed existing baseline error: setUIBalance is not defined');return;}
  await page.evaluate(()=>{openVip()});
  const vip=page;
- await vip.locator('#vipInlineRank').filter({hasText:'Дерево'}).waitFor();
- assert.equal(await vip.locator('.vip-ranks button').count(),7);
+ await vip.locator('#vipInlineRankStage').filter({hasText:'Дерево · I'}).waitFor();
  assert.equal(await vip.locator('.vip-milestone').count(),3);
- assert.equal(await vip.locator('.vip-milestone:enabled').count(),1);
+ assert.equal(await vip.locator('.vip-milestone button').count(),0);
+ assert.equal(await vip.locator('.vip-milestone').first().textContent(),'I0.35 $Доступно');
  await vip.locator('[data-vip-info="rake"]').tap();
  await vip.locator('#vipSheetLayer.open').waitFor();
  assert(await page.locator('body').evaluate(el=>el.classList.contains('vip-sheet-open')));
  await vip.locator('.vip-sheet-backdrop').tap({position:{x:8,y:8}});
  await vip.locator('#vipSheetLayer:not(.open)').waitFor();
- await vip.locator('.vip-milestone:enabled').tap();
- await vip.locator('#vipInlineStatus').filter({hasText:'Награда зачислена'}).waitFor();
- assert.equal(claimCount,1);
- assert.equal(await vip.locator('.vip-milestone:enabled').count(),0);
+ assert.equal(claimCount,0);
  for(const width of [320,390,600]){
   await page.setViewportSize({width,height:844});
   assert(await vip.locator('body').evaluate(el=>el.scrollWidth<=innerWidth),`VIP overflow at ${width}`);

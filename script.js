@@ -6329,10 +6329,12 @@ let vipInlineClaiming = false;
 function renderVipInline(message, error) {
     const info = getVipTier();
     const tier = info.tier;
-    const rank = document.getElementById('vipInlineRank');
+    const rank = document.getElementById('vipInlineRankStage');
     if (!rank) return;
     const percent = info.next ? Math.max(0, Math.min(100, Math.round((info.turnover - tier.min) / (info.next.min - tier.min) * 100))) : 100;
-    document.getElementById('vipInlineRank').textContent = tier.name;
+    const rankRewards = vipInlineRewards.filter(item => item.rank_name === tier.name);
+    const stage = Math.max(1, Math.min(3, rankRewards.filter(item => item.reached || item.claimed).length));
+    document.getElementById('vipInlineRankStage').textContent = tier.name + ' · ' + ['I', 'II', 'III'][stage - 1];
     document.getElementById('vipInlineTurnover').textContent = 'Оборот: ' + info.turnover.toFixed(2) + ' $';
     document.getElementById('vipInlinePercent').textContent = percent + '%';
     document.getElementById('vipInlineFill').style.width = percent + '%';
@@ -6343,17 +6345,13 @@ function renderVipInline(message, error) {
     if (status && message) status.textContent = message;
     if (retry) retry.hidden = !error;
     const milestones = document.getElementById('vipInlineMilestones');
-    if (milestones) milestones.replaceChildren(...vipInlineRewards.filter(item => item.rank_name === tier.name).map(item => {
-        const button = document.createElement('button');
-        button.className = 'vip-milestone';
-        button.disabled = vipInlineClaiming || item.claimed || !item.reached;
-        button.innerHTML = '<span>Подарок ' + item.milestone + '</span><small>' + Number(item.reward_amount).toFixed(2) + ' $</small><em>' +
-            (item.claimed ? 'Получено' : item.reached ? 'Забрать' : 'Оборот ' + Number(item.threshold).toFixed(2) + ' $') + '</em>';
-        button.onclick = () => loadVipRewards(item.key);
-        return button;
+    if (milestones) milestones.replaceChildren(...rankRewards.map(item => {
+        const card = document.createElement('div');
+        card.className = 'vip-milestone' + (item.reached || item.claimed ? ' reached' : '');
+        card.innerHTML = '<span>' + ['I', 'II', 'III'][Math.max(0, Number(item.milestone) - 1)] + '</span><small>' + Number(item.reward_amount).toFixed(2) + ' $</small><em>' +
+            (item.claimed ? 'Получено' : item.reached ? 'Доступно' : 'от ' + Number(item.threshold).toFixed(0) + ' $') + '</em>';
+        return card;
     }));
-    const ranks = document.getElementById('vipInlineRanks');
-    if (ranks) ranks.innerHTML = VIP_TIERS.map((item, index) => '<button class="vip-rank' + (index === info.index ? ' active' : '') + '" type="button">' + item.name + '</button>').join('');
 }
 
 function openVipSheet(key) {

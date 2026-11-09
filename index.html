@@ -1058,7 +1058,8 @@
         <section class="vip-screen">
             <section class="vip-hero">
                 <div class="vip-kicker">WXS GAME · VIP</div>
-                <h2 id="vipInlineRank">Без ранга</h2>
+                <div class="vip-crown" aria-hidden="true"><svg viewBox="0 0 64 48"><path d="M7 11l13 11L32 5l12 17 13-11-5 27H12z"/><path d="M12 40h40v5H12z"/></svg></div>
+                <h2 id="vipInlineRankStage">Без ранга · I</h2>
                 <p id="vipInlineTurnover">Оборот: 0.00 $</p>
                 <div class="vip-progress-label"><span>Прогресс ранга</span><strong id="vipInlinePercent">0%</strong></div>
                 <div class="vip-progress-track"><i id="vipInlineFill"></i></div>
@@ -1069,13 +1070,11 @@
             </section>
             <p class="vip-section-title">Привилегии <span>Нажми, чтобы узнать подробнее</span></p>
             <section class="vip-cards">
-                <button class="vip-card" data-vip-info="rake" type="button"><span class="vip-card-icon">↻</span><small>Рейкбек</small><b>1.5%</b><i>›</i></button>
-                <button class="vip-card" data-vip-info="cash" type="button"><span class="vip-card-icon">✦</span><small>Кешбек</small><b>5%</b><i>›</i></button>
-                <button class="vip-card" data-vip-info="daily" type="button"><span class="vip-card-icon">★</span><small>Ежедневка</small><b id="vipInlineDaily">0.20 $</b><i>›</i></button>
-                <button class="vip-card" data-vip-info="boost" type="button"><span class="vip-card-icon">ϟ</span><small>Буст</small><b>VIP</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="rake" type="button"><span class="vip-card-icon"><img src="images/ui/vip-rake.svg" alt=""></span><small>Рейкбек</small><b>1.5%</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="cash" type="button"><span class="vip-card-icon"><img src="images/ui/vip-cashback.svg" alt=""></span><small>Кешбек</small><b>5%</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="daily" type="button"><span class="vip-card-icon"><img src="images/ui/vip-daily.svg" alt=""></span><small>Ежедневка</small><b id="vipInlineDaily">0.20 $</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="boost" type="button"><span class="vip-card-icon"><img src="images/ui/vip-boost.svg" alt=""></span><small>Буст</small><b>VIP</b><i>›</i></button>
             </section>
-            <p class="vip-section-title">Все ранги</p>
-            <div class="vip-ranks" id="vipInlineRanks"></div>
         </section>
     </main>
 
