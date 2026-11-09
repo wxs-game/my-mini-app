@@ -4483,7 +4483,7 @@ function loadDiceTgsText(urls) {
 }
 
 // Монтирует .tgs в контейнер; если файла нет или Lottie недоступен — ставит png.
-async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
+async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml, options = {}) {
     if (!el) return;
     const fallback = () => {
         if (!el.isConnected) return;
@@ -4505,7 +4505,7 @@ async function mountDiceTgsIcon(el, urls, fallbackPng, imgClass, fallbackHtml) {
         holder.style.opacity = "0";
         el.appendChild(holder);
         const anim = lottie.loadAnimation({
-            container: holder, renderer: "svg", loop: false, autoplay: true,
+            container: holder, renderer: "svg", loop: options.loop === true, autoplay: true,
             animationData: data,
             rendererSettings: { preserveAspectRatio: "xMidYMid meet", ...(el.classList.contains("dart-mode-icon") ? { wxsKeepSvg: true } : {}) }
         });
@@ -6388,6 +6388,13 @@ function closeVipSheet() {
 document.querySelectorAll('[data-vip-info]').forEach(button => {
     button.addEventListener('click', () => openVipSheet(button.dataset.vipInfo));
 });
+function mountVipTileAnimations() {
+    document.querySelectorAll('.vip-tgs-icon').forEach(icon => {
+        if (icon.dataset.mounted === 'yes') return;
+        icon.dataset.mounted = 'yes';
+        mountDiceTgsIcon(icon, ['images/ui/' + icon.dataset.vipTgs], null, null, null, { loop: true });
+    });
+}
 document.getElementById('vipSheetLayer')?.addEventListener('click', event => {
     if (!document.getElementById('vipSheet')?.contains(event.target)) closeVipSheet();
 });
@@ -6461,6 +6468,7 @@ function openVip() {
     showPage('vipPage');
     updateNav('home');
     renderVipInline('Загрузка наград…');
+    requestAnimationFrame(mountVipTileAnimations);
     loadVipRewards();
 }
 

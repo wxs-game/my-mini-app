@@ -46,6 +46,7 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
  await page.evaluate(()=>{openVip()});
  const vip=page;
  await vip.locator('#vipInlineRankStage').filter({hasText:'Дерево · I'}).waitFor();
+ await page.waitForFunction(()=>document.querySelectorAll('.vip-tgs-icon .dice-tgs-holder').length===4);
  assert.equal(await vip.locator('.vip-milestone').count(),3);
  assert.equal(await vip.locator('.vip-milestone button').count(),0);
  assert.equal(await vip.locator('.vip-milestone').first().textContent(),'Этап IНаграда: 0.35 $Доступно сейчас');
