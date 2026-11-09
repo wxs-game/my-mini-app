@@ -164,10 +164,20 @@ when 'threeAnySector' then 64 when 'threeSame' then 6
 when 'trafficLight' then 24 when 'ascending' then 20
 when 'descending' then 20 when 'thirdCloser' then 55 when 'hasCenter3' then 91 end;
 v_coef := public._emoji_coef(v_wins, v_total, 1);
-for i in 1..p_count loop v_rolls := v_rolls || public._emoji_rand(6); end loop;
-v_pass := public._darts_verdict(p_mode, v_rolls, p_count);
-v_all := v_pass;
+-- В двух режимах сравнения первый бросок иногда уже даёт окончательный
+-- проигрыш: отскок невозможно сделать «точнее», а центр нельзя перебить.
+-- Не генерируем и не возвращаем несуществующий второй бросок.
 for i in 1..p_count loop
+  v_rolls := v_rolls || public._emoji_rand(6);
+  if (p_mode = 'firstCloser' and v_rolls[1] = 1)
+     or (p_mode = 'secondCloser' and v_rolls[1] = 6) then
+    v_all := false;
+    exit;
+  end if;
+end loop;
+v_pass := public._darts_verdict(p_mode, v_rolls, p_count);
+v_all := coalesce(v_pass, false);
+for i in 1..coalesce(array_length(v_rolls, 1), 0) loop
   v_pass := public._darts_verdict(p_mode, v_rolls[1:i], p_count);
   v_passes := v_passes || (v_pass IS DISTINCT FROM false);
   v_verdicts := v_verdicts || CASE WHEN v_pass IS NULL THEN 'pending' WHEN v_pass THEN 'win' ELSE 'lose' END;

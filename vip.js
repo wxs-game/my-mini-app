@@ -35,3 +35,10 @@ window.addEventListener('message',event=>{
 });
 document.getElementById('retryRewards').onclick=()=>parent.postMessage({type:'WXS_VIP_READY'},location.origin);
 parent.postMessage({type:'WXS_VIP_READY'},location.origin);
+
+// Растягиваем same-origin iframe по контенту: прокрутка остаётся одна,
+// на странице приложения, а не конфликтует с жестами во вложенном окне.
+const postHeight=()=>parent.postMessage({type:'WXS_VIP_HEIGHT',height:Math.ceil(document.documentElement.scrollHeight)},location.origin);
+if(window.ResizeObserver)new ResizeObserver(postHeight).observe(document.body);
+window.addEventListener('load',postHeight);
+requestAnimationFrame(postHeight);

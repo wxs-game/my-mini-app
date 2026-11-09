@@ -5256,6 +5256,18 @@ function emojiCompoundCoef(mode, attempts, cfg) {
     return Math.min(9999.99, houseCoef(p[0], p[1], mode.attempts ? 1 : attempts));
 }
 
+// Эти два исхода нельзя изменить вторым дротиком: после отскока первый
+// уже не может быть точнее, а центр невозможно перебить. Обрезаем только
+// отображение устаревшего ответа API: актуальная SQL-функция также не
+// генерирует второй бросок в этих случаях.
+function dartsEarlyLossRollCount(modeKey, rolls) {
+    if (!Array.isArray(rolls) || rolls.length < 1) return rolls?.length || 0;
+    const first = Number(rolls[0]);
+    if ((modeKey === 'firstCloser' && first === 1) ||
+        (modeKey === 'secondCloser' && first === 6)) return 1;
+    return rolls.length;
+}
+
 function openEmojiGame(key) {
     const cfg = EMOJI_GAME_CONFIGS[key];
     if (!cfg) { showMessage("Режим скоро появится"); return; }
@@ -5433,7 +5445,10 @@ async function handleEmojiGamePlay() {
         unlockEconomy();
         return;
     }
-    const rolls = (srv.rolls || []).map(Number);
+    const rawRolls = (srv.rolls || []).map(Number);
+    const rolls = emojiGame.key === 'darts'
+        ? rawRolls.slice(0, dartsEarlyLossRollCount(mode.key, rawRolls))
+        : rawRolls;
     const passes = (srv.passes || []).map(Boolean);
     const win = !!srv.win;
     const winAmount = win ? roundMoney(srv.payout) : 0;
@@ -6345,7 +6360,13 @@ async function loadVipRewards(milestoneKey) {
 window.addEventListener('message', event => {
     const frame = document.getElementById('wxsVipFrame');
     if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin) return;
-    if (event.data?.type === 'WXS_VIP_READY') {
+    if (event.data?.type === 'WXS_VIP_HEIGHT') {
+        const height = Math.ceil(Number(event.data.height));
+        if (Number.isFinite(height) && height >= 120 && height <= 5000) {
+            frame.dataset.contentHeight = String(height);
+            frame.style.height = height + 'px';
+        }
+    } else if (event.data?.type === 'WXS_VIP_READY') {
         postVipMessage({ type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0) });
         loadVipRewards();
     } else if (event.data?.type === 'WXS_VIP_CLAIM' && typeof event.data.key === 'string' && event.data.key.length <= 80) {
@@ -6356,6 +6377,11 @@ window.addEventListener('message', event => {
 function resizeVipFrame() {
     const frame = document.getElementById('wxsVipFrame');
     if (!frame || document.getElementById('vipPage')?.classList.contains('hidden')) return;
+    const contentHeight = Number(frame.dataset.contentHeight);
+    if (Number.isFinite(contentHeight) && contentHeight >= 120) {
+        frame.style.height = Math.ceil(contentHeight) + 'px';
+        return;
+    }
     const viewportHeight = window.visualViewport?.height || window.innerHeight;
     const nav = document.getElementById('bottomNav');
     const navTop = nav && nav.getBoundingClientRect().height ? nav.getBoundingClientRect().top : viewportHeight;

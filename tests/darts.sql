@@ -156,10 +156,17 @@ when 'threeAnySector' then 64 when 'threeSame' then 6
 when 'trafficLight' then 24 when 'ascending' then 20
 when 'descending' then 20 when 'thirdCloser' then 55 when 'hasCenter3' then 91 end;
 v_coef := public._emoji_coef(v_wins, v_total, 1);
-for i in 1..p_count loop v_rolls := v_rolls || p_nums[i]; end loop;
-v_pass := pg_temp._darts_verdict(p_mode, v_rolls, p_count);
-v_all := v_pass;
 for i in 1..p_count loop
+  v_rolls := v_rolls || p_nums[i];
+  if (p_mode = 'firstCloser' and v_rolls[1] = 1)
+     or (p_mode = 'secondCloser' and v_rolls[1] = 6) then
+    v_all := false;
+    exit;
+  end if;
+end loop;
+v_pass := pg_temp._darts_verdict(p_mode, v_rolls, p_count);
+v_all := coalesce(v_pass, false);
+for i in 1..coalesce(array_length(v_rolls, 1), 0) loop
   v_pass := pg_temp._darts_verdict(p_mode, v_rolls[1:i], p_count);
   v_passes := v_passes || (v_pass IS DISTINCT FROM false);
   v_verdicts := v_verdicts || CASE WHEN v_pass IS NULL THEN 'pending' WHEN v_pass THEN 'win' ELSE 'lose' END;
@@ -234,7 +241,7 @@ results AS (SELECT mode,n,expected,rolls,pg_temp.emoji_play_test('', 'darts', mo
 SELECT mode,n,expected,count(*) FILTER(WHERE (r->>'win')::boolean) wins,
 count(*) FILTER(WHERE r->>'ok' <> 'true' OR r->>'ok' IS NULL) errors,
 count(*) FILTER(WHERE r->>'coef' IS DISTINCT FROM public._emoji_coef(expected,power(6,n)::int,1)::text) coef_errors,
-count(*) FILTER(WHERE (r->>'win')::boolean IS DISTINCT FROM ((r->'verdicts'->>(n-1))='win')) verdict_errors
+count(*) FILTER(WHERE (r->>'win')::boolean IS DISTINCT FROM ((r->'verdicts'->>(jsonb_array_length(r->'verdicts')-1))='win')) verdict_errors
 FROM results GROUP BY mode,n,expected ORDER BY n,mode;
 SELECT label, pg_temp._darts_verdict(mode,rolls,n) IS NOT DISTINCT FROM expected AS passed FROM (VALUES
 ('center waits','adjacent',ARRAY[6],2,NULL::boolean),
@@ -250,4 +257,12 @@ SELECT label, pg_temp._darts_verdict(mode,rolls,n) IS NOT DISTINCT FROM expected
 ('third cannot beat center','thirdCloser',ARRAY[6],3,false),
 ('red still pending','threeRed',ARRAY[2,6],3,NULL)
 ) cases(label,mode,rolls,n,expected);
+SELECT label,
+       r->'rolls' = expected_rolls AS rolls_stopped,
+       r->'verdicts' = '["lose"]'::jsonb AS immediate_loss
+FROM (VALUES
+  ('first bounce stops', 'firstCloser', ARRAY[1,6], 2, '[1]'::jsonb),
+  ('second center stops', 'secondCloser', ARRAY[6,1], 2, '[6]'::jsonb)
+) cases(label,mode,rolls,n,expected_rolls)
+CROSS JOIN LATERAL (SELECT pg_temp.emoji_play_test('', 'darts', mode, n, 1, rolls) r) played;
 ROLLBACK;

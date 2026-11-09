@@ -4490,6 +4490,13 @@ body.anim-page .top {
    VIP И ЕЖЕДНЕВНЫЕ ЗАДАНИЯ
 ========================================================== */
 .vip-page, .tasks-page { animation: fadeIn 0.25s ease; margin-top: -6px; }
+.vip-page {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+}
+.vip-page #wxsVipFrame {
+    overflow: hidden;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.32);
+}
 .vip-hero {
     position: relative;
     overflow: hidden;

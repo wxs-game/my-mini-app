@@ -8,7 +8,7 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
  try {
  const context = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
  const page = await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
- let claimed=false, claimCount=0, stateFailure=false;
+ let claimed=false, claimCount=0, stateFailure=false, dartsScenario='normal';
  const state=()=>({turnover:350,balance:100+(claimed?.35:0),milestones:[
   {key:'дерево_1',rank_name:'Дерево',milestone:1,reward_amount:.35,threshold:233.33,reached:true,claimed},
   {key:'дерево_2',rank_name:'Дерево',milestone:2,reward_amount:.6,threshold:366.66,reached:false,claimed:false},
@@ -26,7 +26,13 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
     if(body.action==='claim'){claimCount++;claimed=true;result={ok:true,state:state(),balance:100.35,reward_amount:.35};}
     else result=stateFailure?{ok:false,error:'Тестовая ошибка сети'}:{ok:true,state:state()};
    }else if(url.includes('ensure_player')) result={ok:true,player:{telegram_id:123,nickname:'Test',balance:100,turnover:350,bets_count:0}};
-   else if(url.includes('emoji_play')) result={ok:true,rolls:[6,5],passes:[true,true],verdicts:['pending','win'],win:true,payout:4.38,coef:4.38,balance:103.38};
+   else if(url.includes('emoji_play')) {
+    result=dartsScenario==='firstBounce'
+     ? {ok:true,rolls:[1,6],passes:[false,false],verdicts:['lose','lose'],win:false,payout:0,coef:2.34,balance:99}
+     : dartsScenario==='secondCenter'
+      ? {ok:true,rolls:[6,1],passes:[false,false],verdicts:['lose','lose'],win:false,payout:0,coef:2.34,balance:99}
+      : {ok:true,rolls:[6,5],passes:[true,true],verdicts:['pending','win'],win:true,payout:4.38,coef:4.38,balance:103.38};
+   }
    else if(url.includes('wxs_game'))result={telegram_id:123,nickname:'Test',balance:100,turnover:350,bets_count:0};
    else if(url.includes('/rpc/'))result={ok:false,error:'Offline test'};
    return route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
@@ -75,7 +81,15 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
  await page.evaluate(()=>window.testPlay);
  assert.equal(await page.locator('#emojiGameResult .dice-result-title').textContent(),'Ставка зашла (2/2)');
  assert.equal(await page.locator('#emojiGameResult').evaluate(el=>getComputedStyle(el).getPropertyValue('--disc').trim()),'#2ecc71');
+ for(const [mode,scenario] of [['firstCloser','firstBounce'],['secondCloser','secondCenter']]){
+  dartsScenario=scenario;
+  await page.locator('[data-mode="'+mode+'"]').tap();
+  await page.evaluate(()=>{window.testPlay=handleEmojiGamePlay()});
+  await page.locator('#emojiGameResult.show .dice-result-title').filter({hasText:'Ставка не зашла (1/2)'}).waitFor({timeout:20000});
+  await page.evaluate(()=>window.testPlay);
+  assert.equal(await page.locator('#emojiGameResult .dice-result-title').textContent(),'Ставка не зашла (1/2)');
+ }
  assert.deepEqual(errors,['setUIBalance is not defined']); // Also reproduced on unchanged main; see tests/README.md.
- console.log('PASS: VIP load, ranks, touch sheets, reward claim, retry, 320/390/600px; darts icons and real pending/win animations.');
+ console.log('PASS: VIP load, ranks, touch sheets, reward claim, retry, 320/390/600px; darts icons, pending/win, and two early-loss animations.');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});
