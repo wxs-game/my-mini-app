@@ -6325,6 +6325,7 @@ const VIP_INLINE_DETAILS = {
 };
 let vipInlineRewards = [];
 let vipInlineClaiming = false;
+let vipSheetClosing = false;
 
 function renderVipInline(message, error) {
     const info = getVipTier();
@@ -6348,8 +6349,8 @@ function renderVipInline(message, error) {
     if (milestones) milestones.replaceChildren(...rankRewards.map(item => {
         const card = document.createElement('div');
         card.className = 'vip-milestone' + (item.reached || item.claimed ? ' reached' : '');
-        card.innerHTML = '<span>' + ['I', 'II', 'III'][Math.max(0, Number(item.milestone) - 1)] + '</span><small>' + Number(item.reward_amount).toFixed(2) + ' $</small><em>' +
-            (item.claimed ? 'Получено' : item.reached ? 'Доступно' : 'от ' + Number(item.threshold).toFixed(0) + ' $') + '</em>';
+        card.innerHTML = '<span>Этап ' + ['I', 'II', 'III'][Math.max(0, Number(item.milestone) - 1)] + '</span><small>Награда: ' + Number(item.reward_amount).toFixed(2) + ' $</small><em>' +
+            (item.claimed ? 'Получено' : item.reached ? 'Доступно сейчас' : 'Откроется при ' + Number(item.threshold).toFixed(0) + ' $ оборота') + '</em>';
         return card;
     }));
 }
@@ -6360,23 +6361,35 @@ function openVipSheet(key) {
     document.getElementById('vipSheetIcon').textContent = detail[0];
     document.getElementById('vipSheetTitle').textContent = detail[1];
     document.getElementById('vipSheetBody').textContent = detail[2];
-    document.getElementById('vipSheetLayer').classList.add('open');
+    const layer = document.getElementById('vipSheetLayer');
+    layer.classList.remove('closing');
+    layer.classList.add('open');
     document.getElementById('vipSheetLayer').setAttribute('aria-hidden', 'false');
     document.body.classList.add('vip-sheet-open');
 }
 
 function closeVipSheet() {
-    document.getElementById('vipSheetLayer')?.classList.remove('open');
-    document.getElementById('vipSheetLayer')?.setAttribute('aria-hidden', 'true');
-    document.getElementById('vipSheet').style.transform = '';
-    document.body.classList.remove('vip-sheet-open');
+    if (vipSheetClosing) return;
+    const layer = document.getElementById('vipSheetLayer');
+    const sheet = document.getElementById('vipSheet');
+    if (!layer?.classList.contains('open') || !sheet) return;
+    vipSheetClosing = true;
+    layer.classList.add('closing');
+    sheet.style.transform = 'translateY(105%)';
+    setTimeout(() => {
+        layer.classList.remove('open', 'closing');
+        layer.setAttribute('aria-hidden', 'true');
+        sheet.style.transform = '';
+        document.body.classList.remove('vip-sheet-open');
+        vipSheetClosing = false;
+    }, 280);
 }
 
 document.querySelectorAll('[data-vip-info]').forEach(button => {
     button.addEventListener('click', () => openVipSheet(button.dataset.vipInfo));
 });
-document.getElementById('vipSheetLayer')?.addEventListener('pointerdown', event => {
-    if (event.target === event.currentTarget || event.target.classList.contains('vip-sheet-backdrop')) closeVipSheet();
+document.getElementById('vipSheetLayer')?.addEventListener('click', event => {
+    if (!document.getElementById('vipSheet')?.contains(event.target)) closeVipSheet();
 });
 document.getElementById('vipInlineRetry')?.addEventListener('click', () => loadVipRewards());
 (function initVipSheetDrag() {

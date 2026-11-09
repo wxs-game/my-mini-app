@@ -48,7 +48,7 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
  await vip.locator('#vipInlineRankStage').filter({hasText:'Дерево · I'}).waitFor();
  assert.equal(await vip.locator('.vip-milestone').count(),3);
  assert.equal(await vip.locator('.vip-milestone button').count(),0);
- assert.equal(await vip.locator('.vip-milestone').first().textContent(),'I0.35 $Доступно');
+ assert.equal(await vip.locator('.vip-milestone').first().textContent(),'Этап IНаграда: 0.35 $Доступно сейчас');
  await vip.locator('[data-vip-info="rake"]').tap();
  await vip.locator('#vipSheetLayer.open').waitFor();
  assert(await page.locator('body').evaluate(el=>el.classList.contains('vip-sheet-open')));
