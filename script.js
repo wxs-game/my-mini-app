@@ -6377,6 +6377,9 @@ function closeVipSheet() {
 document.querySelectorAll('[data-vip-info]').forEach(button => {
     button.addEventListener('click', () => openVipSheet(button.dataset.vipInfo));
 });
+document.getElementById('vipSheetLayer')?.addEventListener('pointerdown', event => {
+    if (event.target === event.currentTarget || event.target.classList.contains('vip-sheet-backdrop')) closeVipSheet();
+});
 document.getElementById('vipInlineRetry')?.addEventListener('click', () => loadVipRewards());
 (function initVipSheetDrag() {
     const handle = document.getElementById('vipSheetHandle');
