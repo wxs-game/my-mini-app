@@ -1055,10 +1055,39 @@
             <button class="back-button" aria-label="Назад" onclick="goHome()"></button>
             <h1>VIP</h1><div class="header-space"></div>
         </div>
-        <iframe id="wxsVipFrame" src="about:blank" title="VIP-зона" loading="eager"
-          style="display:block;width:100%;height:120px;min-height:120px;border:0;border-radius:22px;background:#09090b"
-          referrerpolicy="same-origin"></iframe>
+        <section class="vip-screen">
+            <section class="vip-hero">
+                <div class="vip-kicker">WXS GAME · VIP</div>
+                <h2 id="vipInlineRank">Без ранга</h2>
+                <p id="vipInlineTurnover">Оборот: 0.00 $</p>
+                <div class="vip-progress-label"><span>Прогресс ранга</span><strong id="vipInlinePercent">0%</strong></div>
+                <div class="vip-progress-track"><i id="vipInlineFill"></i></div>
+                <div class="vip-next" id="vipInlineNext">Следующий ранг</div>
+                <p class="vip-status" id="vipInlineStatus" role="status">Загрузка наград…</p>
+                <button class="vip-retry" id="vipInlineRetry" type="button" hidden>Повторить загрузку</button>
+                <div class="vip-milestones" id="vipInlineMilestones"></div>
+            </section>
+            <p class="vip-section-title">Привилегии <span>Нажми, чтобы узнать подробнее</span></p>
+            <section class="vip-cards">
+                <button class="vip-card" data-vip-info="rake" type="button"><span class="vip-card-icon">↻</span><small>Рейкбек</small><b>1.5%</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="cash" type="button"><span class="vip-card-icon">✦</span><small>Кешбек</small><b>5%</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="daily" type="button"><span class="vip-card-icon">★</span><small>Ежедневка</small><b id="vipInlineDaily">0.20 $</b><i>›</i></button>
+                <button class="vip-card" data-vip-info="boost" type="button"><span class="vip-card-icon">ϟ</span><small>Буст</small><b>VIP</b><i>›</i></button>
+            </section>
+            <p class="vip-section-title">Все ранги</p>
+            <div class="vip-ranks" id="vipInlineRanks"></div>
+        </section>
     </main>
+
+    <div class="vip-sheet-layer" id="vipSheetLayer" aria-hidden="true">
+        <div class="vip-sheet-backdrop" onclick="closeVipSheet()"></div>
+        <section class="vip-sheet" id="vipSheet" role="dialog" aria-modal="true" aria-labelledby="vipSheetTitle">
+            <button class="vip-sheet-handle-zone" id="vipSheetHandle" type="button" aria-label="Закрыть подробности"><span></span></button>
+            <div class="vip-sheet-icon" id="vipSheetIcon"></div>
+            <h2 id="vipSheetTitle"></h2><p id="vipSheetBody"></p>
+            <button class="vip-sheet-close" type="button" onclick="closeVipSheet()">Закрыть</button>
+        </section>
+    </div>
 
 
     <!-- ==================== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ==================== -->

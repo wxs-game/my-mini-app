@@ -6,7 +6,6 @@ This repository is a static HTML/CSS/JavaScript application. It has no package.j
 
 ```sh
 node --check script.js
-node --check vip.js
 node --check tests/browser.cjs
 git diff --check
 ```

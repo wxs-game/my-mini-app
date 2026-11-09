@@ -6317,22 +6317,106 @@ function renderVipPage() {
 
 let vipRequestBusy = false;
 
-function postVipMessage(message) {
-    document.getElementById('wxsVipFrame')?.contentWindow?.postMessage(message, location.origin);
+const VIP_INLINE_DETAILS = {
+    rake: ['↻', 'Рейкбек', '1.5% от подходящих ставок с коэффициентом выше ×1.35. Начисление рейкбека пока не подключено.'],
+    cash: ['✦', 'Кешбек', '5% от проигранной суммы за последние 48 часов. Получение доступно раз в два дня.'],
+    daily: ['★', 'Ежедневка', 'Размер ежедневного бонуса зависит от ранга: от 0.10 $ до 0.40 $.'],
+    boost: ['ϟ', 'Буст', 'Дополнительный множитель к ежедневному бонусу за ваш ранг.']
+};
+let vipInlineRewards = [];
+let vipInlineClaiming = false;
+
+function renderVipInline(message, error) {
+    const info = getVipTier();
+    const tier = info.tier;
+    const rank = document.getElementById('vipInlineRank');
+    if (!rank) return;
+    const percent = info.next ? Math.max(0, Math.min(100, Math.round((info.turnover - tier.min) / (info.next.min - tier.min) * 100))) : 100;
+    document.getElementById('vipInlineRank').textContent = tier.name;
+    document.getElementById('vipInlineTurnover').textContent = 'Оборот: ' + info.turnover.toFixed(2) + ' $';
+    document.getElementById('vipInlinePercent').textContent = percent + '%';
+    document.getElementById('vipInlineFill').style.width = percent + '%';
+    document.getElementById('vipInlineNext').textContent = info.next ? 'Далее: ' + info.next.name : 'Максимальный ранг достигнут';
+    document.getElementById('vipInlineDaily').textContent = tier.daily.toFixed(2) + ' $';
+    const status = document.getElementById('vipInlineStatus');
+    const retry = document.getElementById('vipInlineRetry');
+    if (status && message) status.textContent = message;
+    if (retry) retry.hidden = !error;
+    const milestones = document.getElementById('vipInlineMilestones');
+    if (milestones) milestones.replaceChildren(...vipInlineRewards.filter(item => item.rank_name === tier.name).map(item => {
+        const button = document.createElement('button');
+        button.className = 'vip-milestone';
+        button.disabled = vipInlineClaiming || item.claimed || !item.reached;
+        button.innerHTML = '<span>Подарок ' + item.milestone + '</span><small>' + Number(item.reward_amount).toFixed(2) + ' $</small><em>' +
+            (item.claimed ? 'Получено' : item.reached ? 'Забрать' : 'Оборот ' + Number(item.threshold).toFixed(2) + ' $') + '</em>';
+        button.onclick = () => loadVipRewards(item.key);
+        return button;
+    }));
+    const ranks = document.getElementById('vipInlineRanks');
+    if (ranks) ranks.innerHTML = VIP_TIERS.map((item, index) => '<button class="vip-rank' + (index === info.index ? ' active' : '') + '" type="button">' + item.name + '</button>').join('');
 }
+
+function openVipSheet(key) {
+    const detail = VIP_INLINE_DETAILS[key];
+    if (!detail) return;
+    document.getElementById('vipSheetIcon').textContent = detail[0];
+    document.getElementById('vipSheetTitle').textContent = detail[1];
+    document.getElementById('vipSheetBody').textContent = detail[2];
+    document.getElementById('vipSheetLayer').classList.add('open');
+    document.getElementById('vipSheetLayer').setAttribute('aria-hidden', 'false');
+    document.body.classList.add('vip-sheet-open');
+}
+
+function closeVipSheet() {
+    document.getElementById('vipSheetLayer')?.classList.remove('open');
+    document.getElementById('vipSheetLayer')?.setAttribute('aria-hidden', 'true');
+    document.getElementById('vipSheet').style.transform = '';
+    document.body.classList.remove('vip-sheet-open');
+}
+
+document.querySelectorAll('[data-vip-info]').forEach(button => {
+    button.addEventListener('click', () => openVipSheet(button.dataset.vipInfo));
+});
+document.getElementById('vipInlineRetry')?.addEventListener('click', () => loadVipRewards());
+(function initVipSheetDrag() {
+    const handle = document.getElementById('vipSheetHandle');
+    const sheet = document.getElementById('vipSheet');
+    if (!handle || !sheet) return;
+    let startY = 0, offsetY = 0, dragging = false;
+    handle.addEventListener('pointerdown', event => {
+        dragging = true; startY = event.clientY; offsetY = 0;
+        sheet.classList.add('dragging');
+        handle.setPointerCapture?.(event.pointerId);
+    });
+    handle.addEventListener('pointermove', event => {
+        if (!dragging) return;
+        offsetY = Math.max(0, event.clientY - startY);
+        sheet.style.transform = 'translateY(' + offsetY + 'px)';
+    });
+    const finish = () => {
+        if (!dragging) return;
+        dragging = false; sheet.classList.remove('dragging');
+        if (offsetY > 80) closeVipSheet(); else sheet.style.transform = '';
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+    handle.addEventListener('click', () => { if (offsetY < 5) closeVipSheet(); });
+})();
 
 async function loadVipRewards(milestoneKey) {
     if (vipRequestBusy) return;
     if (!tg?.initData) {
-        postVipMessage({ type: 'WXS_VIP_ERROR', message: 'Откройте приложение через Telegram, чтобы загрузить награды.' });
+        renderVipInline('Откройте приложение через Telegram, чтобы загрузить награды.', true);
         return;
     }
     const claiming = typeof milestoneKey === 'string';
     if (claiming && (emojiGame.busy || diceGame.busy || footballGame.busy || !lockEconomy())) {
-        postVipMessage({ type: 'WXS_VIP_ERROR', message: 'Дождитесь завершения текущей операции.' });
+        renderVipInline('Дождитесь завершения текущей операции.', true);
         return;
     }
     vipRequestBusy = true;
+    vipInlineClaiming = claiming;
+    renderVipInline('Обновляем VIP-награды…');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), VIP_REQUEST_TIMEOUT_MS);
     try {
@@ -6346,10 +6430,12 @@ async function loadVipRewards(milestoneKey) {
             if (!Number.isFinite(Number(result.balance))) throw new Error('Не удалось обновить баланс. Повторно откройте VIP.');
             setUIBalance(Number(result.balance));
         }
-        postVipMessage({ type: 'WXS_VIP_STATE', state: result.state,
-            message: claiming ? 'Награда зачислена: +' + Number(result.reward_amount).toFixed(2) + ' $' : '' });
+        vipInlineRewards = result.state.milestones;
+        vipInlineClaiming = false;
+        renderVipInline(claiming ? 'Награда зачислена: +' + Number(result.reward_amount).toFixed(2) + ' $' : 'Награды за достигнутые этапы можно забрать один раз.');
     } catch (error) {
-        postVipMessage({ type: 'WXS_VIP_ERROR', message: error.message || 'Не удалось загрузить VIP-награды.' });
+        vipInlineClaiming = false;
+        renderVipInline(error.message || 'Не удалось загрузить VIP-награды.', true);
     } finally {
         clearTimeout(timeout);
         vipRequestBusy = false;
@@ -6357,46 +6443,11 @@ async function loadVipRewards(milestoneKey) {
     }
 }
 
-window.addEventListener('message', event => {
-    const frame = document.getElementById('wxsVipFrame');
-    if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin) return;
-    if (event.data?.type === 'WXS_VIP_SHEET') {
-        document.body.classList.toggle('vip-sheet-open', !!event.data.open);
-        requestAnimationFrame(resizeVipFrame);
-    } else if (event.data?.type === 'WXS_VIP_READY') {
-        postVipMessage({ type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0) });
-        loadVipRewards();
-    } else if (event.data?.type === 'WXS_VIP_CLAIM' && typeof event.data.key === 'string' && event.data.key.length <= 80) {
-        loadVipRewards(event.data.key);
-    }
-});
-
-function resizeVipFrame() {
-    const frame = document.getElementById('wxsVipFrame');
-    if (!frame || document.getElementById('vipPage')?.classList.contains('hidden')) return;
-    const viewportHeight = window.visualViewport?.height || window.innerHeight;
-    const nav = document.getElementById('bottomNav');
-    const navTop = document.body.classList.contains('vip-sheet-open')
-        ? viewportHeight
-        : (nav && nav.getBoundingClientRect().height ? nav.getBoundingClientRect().top : viewportHeight);
-    frame.style.height = Math.max(120, Math.min(viewportHeight, navTop) - frame.getBoundingClientRect().top - 12) + 'px';
-}
-window.addEventListener('resize', resizeVipFrame);
-window.visualViewport?.addEventListener('resize', resizeVipFrame);
-
 function openVip() {
     showPage('vipPage');
     updateNav('home');
-    requestAnimationFrame(resizeVipFrame);
-    const frame = document.getElementById('wxsVipFrame');
-    if (!frame) return;
-    if (frame.dataset.mounted !== 'yes') {
-        frame.dataset.mounted = 'yes';
-        frame.src = 'vip.html';
-    } else {
-        postVipMessage({ type: 'WXS_VIP_TURNOVER', turnover: Math.max(0, Number(currentTurnover) || 0) });
-        loadVipRewards();
-    }
+    renderVipInline('Загрузка наград…');
+    loadVipRewards();
 }
 
 async function claimVipBonus() {
