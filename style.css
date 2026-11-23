@@ -672,6 +672,7 @@ main {
 }
 
 .balance-info small {
+    align-self: flex-start;
     color: #888888;
     font-size: 8px;
     font-weight: 800;
@@ -5239,7 +5240,7 @@ img.img-pending { opacity: 0; }
         box-shadow .16s ease, border-color .16s ease;
 }
 /* Rim highlights stay separate from the refracted backdrop and readable text. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link)::before {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link)::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -5274,7 +5275,7 @@ img.img-pending { opacity: 0; }
         inset 0 2px 5px rgba(0,0,0,.42), inset 0 -1px 1px rgba(255,255,255,.2);
     border-color: rgba(255, 222, 170, .65);
 }
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active::before {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link):not(:disabled):active::before {
     transform: scale(.98) translateY(1px);
     opacity: .65;
 }
@@ -5285,11 +5286,11 @@ img.img-pending { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
     :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link),
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link)::before {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link)::before {
         transition: none;
     }
     :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active,
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active::before {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link):not(:disabled):active::before {
         transform: none;
     }
 }
