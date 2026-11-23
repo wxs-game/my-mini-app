@@ -79,6 +79,83 @@
     };
 })();
 
+const setReleaseScreen = (() => {
+    let timer;
+    let animation;
+    let stickerLoading = false;
+
+    return (visible) => {
+        const screen = document.getElementById('releaseScreen');
+        if (screen.hidden === !visible) return;
+        screen.hidden = !visible;
+        document.getElementById('appShell').hidden = visible;
+        if (!visible) {
+            clearInterval(timer);
+            animation?.pause();
+            return;
+        }
+        document.getElementById('tgBlockScreen').style.display = 'none';
+        document.body.scrollTop = 0;
+        const releaseAt = Date.parse(screen.querySelector('time').dateTime);
+        const digits = ['releaseDays', 'releaseHours', 'releaseMinutes', 'releaseSeconds']
+            .map(id => document.getElementById(id));
+        const tick = () => {
+            const remaining = Math.max(0, Math.ceil((releaseAt - Date.now()) / 1000));
+            const parts = [
+                Math.floor(remaining / 86400),
+                Math.floor(remaining / 3600) % 24,
+                Math.floor(remaining / 60) % 60,
+                remaining % 60
+            ];
+            digits.forEach((digit, i) => {
+                digit.textContent = String(parts[i]).padStart(2, '0');
+            });
+            if (remaining === 0) clearInterval(timer);
+        };
+        timer = setInterval(tick, 250);
+        tick();
+
+        const animate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (animation && animate) animation.play();
+        if (!animation && !stickerLoading && window.TgsCache && window.lottie) {
+            stickerLoading = true;
+            window.TgsCache.load('animations/stickers/vip').then(data => {
+                if (!data) return;
+                const container = document.getElementById('releaseSticker');
+                animation = window.lottie.loadAnimation({
+                    container,
+                    renderer: 'svg',
+                    animationData: data,
+                    loop: animate,
+                    autoplay: animate && !screen.hidden
+                });
+                animation.addEventListener('DOMLoaded', () => {
+                    container.parentElement.classList.add('has-sticker');
+                    if (!animate) animation.goToAndStop(30, true);
+                });
+            }).catch(() => {}).finally(() => { stickerLoading = false; });
+        }
+    };
+})();
+
+function getPublicGamePage(param) {
+    if (param === 'crash' || param === 'freebet') return 'crashPage';
+    if (param === 'upgrader') return 'upgraderPage';
+    return null;
+}
+
+function getStartParam() {
+    const telegramParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+    const hashParam = new URLSearchParams(location.hash.slice(1)).get('tgWebAppStartParam');
+    const queryParam = new URLSearchParams(location.search).get('tgWebAppStartParam');
+    return String(telegramParam || hashParam || queryParam || '').trim().toLowerCase();
+}
+
+function getAppParam() {
+    const param = new URLSearchParams(location.search).get('app')?.trim().toLowerCase();
+    return param === 'crash' || param === 'upgrader' ? param : '';
+}
+
 (function () {
 // ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ TELEGRAM И SUPABASE
@@ -88,9 +165,18 @@ const tg = window.Telegram?.WebApp;
 // (экран "Доступ только через Telegram"), который не зависит от этого файла.
 const isRealTelegramLaunch = !!(tg && typeof tg.initData === 'string' && tg.initData.length > 0);
 if (!isRealTelegramLaunch) {
-    console.warn('Приложение открыто не из Telegram — инициализация остановлена.');
+    if (!getPublicGamePage(getStartParam() || getAppParam())) {
+        document.addEventListener('DOMContentLoaded', () => {
+            setReleaseScreen(true);
+            document.getElementById('appLoader')?.remove();
+        });
+    }
     return;
 }
+
+const PREVIEW_TELEGRAM_ID = '6130985988';
+let fullAppAccess = false;
+let publicGamePage = null;
 
 tg.ready();
 tg.expand();
@@ -636,6 +722,10 @@ async function loadUserData() {
         if (!updateError && updatedUser) data = updatedUser;
     }
 
+    applyPlayerData(data);
+}
+
+function applyPlayerData(data) {
     currentTurnover = Number(data.turnover) || 0;
     currentMaxWin = Number(data.max_win) || 0;
     currentTotalWin = Number(data.total_win) || 0;
@@ -5379,6 +5469,12 @@ function hideAllPages() {
 }
 
 function showPage(id) {
+    if (!fullAppAccess && (!publicGamePage || id !== publicGamePage)) {
+        hideAllPages();
+        setReleaseScreen(true);
+        return false;
+    }
+    setReleaseScreen(false);
     // Если игрок уходит со страницы краша на любую другую — прячем
     // раскрытый SHA-256 ключ обратно. При новом заходе на краш он снова
     // появится только после того, как раунд закрашится.
@@ -5401,6 +5497,7 @@ function showPage(id) {
     window.scrollTo(0, 0);
     document.body.scrollTop = 0;
     if (!alreadyOpen) playPageEnter(page);
+    return true;
 }
 
 // Появление страницы/игры: блоки по очереди «вылетают» снизу (как во вкладке «Топ»).
@@ -5421,8 +5518,7 @@ function playPageEnter(page) {
 }
 
 function goHome() {
-    showPage("homePage");
-    updateNav("home");
+    if (showPage("homePage")) updateNav("home");
 }
 
 function openGamesMenu() {
@@ -7851,6 +7947,40 @@ function saveProfileCustomization() {
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Mini App запущен!");
 
+    const launchParam = getStartParam() || getAppParam();
+    publicGamePage = getPublicGamePage(launchParam);
+    let previewProfile;
+    if (String(tg.initDataUnsafe?.user?.id) === PREVIEW_TELEGRAM_ID) {
+        let deadline;
+        try {
+            const verified = await Promise.race([
+                ensurePlayerSecure(),
+                new Promise(resolve => { deadline = setTimeout(resolve, 8000); })
+            ]);
+            if (String(verified?.data?.telegram_id) === PREVIEW_TELEGRAM_ID) {
+                previewProfile = verified.data;
+                fullAppAccess = true;
+            }
+        } finally {
+            clearTimeout(deadline);
+        }
+    }
+    if (!fullAppAccess && !publicGamePage) {
+        setReleaseScreen(true);
+        document.getElementById('appLoader')?.remove();
+        return;
+    }
+
+    const app = document.getElementById('appShell');
+    app.classList.toggle('release-game-only', !fullAppAccess);
+    if (!fullAppAccess) {
+        hideAllPages();
+        const back = document.getElementById('releaseReturn');
+        back.hidden = false;
+        back.addEventListener('click', () => routeStartParam(launchParam));
+    }
+    app.hidden = false;
+
     let resolveCrashReady;
     const crashReady = new Promise(r => { resolveCrashReady = r; });
     const assetsReady = preloadAppAssets([crashReady]);
@@ -7860,22 +7990,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.Telegram.WebApp.expand();
     }
 
-    console.log('[init] загрузка профиля из Supabase...');
-    // Если Supabase не отвечает — через 8 сек всё равно открываем приложение
-    await Promise.race([
-        loadUserData().catch(e => console.error('[init] loadUserData упала:', e)),
-        new Promise(r => setTimeout(() => { console.warn('[init] Supabase не ответил за 8 сек'); r(); }, 8000))
-    ]);
-    console.log('[init] профиль готов, открываем главную');
+    if (previewProfile) {
+        applyPlayerData(previewProfile);
+    } else {
+        let deadline;
+        try {
+            await Promise.race([
+                loadUserData().catch(e => console.error('[init] loadUserData упала:', e)),
+                new Promise(resolve => {
+                    deadline = setTimeout(() => {
+                        console.warn('[init] Supabase не ответил за 8 сек');
+                        resolve();
+                    }, 8000);
+                })
+            ]);
+        } finally {
+            clearTimeout(deadline);
+        }
+    }
     updateLevelUI();
-    initDailyState();   // фиксируем базовый счётчик ставок/оборота на сегодня
-    goHome();
-    initLiveBetsFeed();
-    iceArena.watching = true;
-    startIceArenaLobby();
+    if (fullAppAccess) {
+        initDailyState();
+        goHome();
+        initLiveBetsFeed();
+        loadIceArenaHistory();
+        iceArena.watching = true;
+        startIceArenaLobby();
+    }
     applyDesign();
-    startCrashEngine().finally(resolveCrashReady);
-    routeStartParam();   // deep link: t.me/бот?startapp=mines → сразу открыть нужную страницу
+    if (fullAppAccess || publicGamePage === 'crashPage') startCrashEngine().finally(resolveCrashReady);
+    else resolveCrashReady();
+    routeStartParam(launchParam);
 
 
     document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -7942,22 +8087,13 @@ const START_ROUTES = {
     withdraw:   () => openBalance('withdraw')
 };
 
-function getStartParam() {
-    let p = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-    if (!p) {
-        // запасной путь: Telegram кладёт параметр в адрес как tgWebAppStartParam
-        const m = (location.hash + '&' + location.search).match(/tgWebAppStartParam=([^&]+)/);
-        if (m) { try { p = decodeURIComponent(m[1]); } catch (e) { p = m[1]; } }
-    }
-    return p ? String(p).trim().toLowerCase() : '';
-}
-
-function routeStartParam() {
-    const param = getStartParam();
+function routeStartParam(param) {
     if (!param) return;
-    const route = START_ROUTES[param];
-    if (!route) { console.warn('[deeplink] неизвестный параметр:', param); return; }
-    try { route(); } catch (e) { console.error('[deeplink] не удалось открыть', param, e); }
+    if (!Object.prototype.hasOwnProperty.call(START_ROUTES, param)) {
+        console.warn('[deeplink] неизвестный параметр:', param);
+        return;
+    }
+    try { START_ROUTES[param](); } catch (e) { console.error('[deeplink] не удалось открыть', param, e); }
 }
 
 /* =========================
@@ -9698,8 +9834,6 @@ function runIceReplayPuckAnimation(field, puck, players, winnerId, onDone) {
     });
 })();
 
-loadIceArenaHistory();
-
 window.openIceArena = openIceArena;
 window.leaveIceArena = leaveIceArena;
 window.placeIceArenaBet = placeIceArenaBet;
@@ -9747,7 +9881,7 @@ window.applyBetMax = applyBetMax;
 
     async function pull() {
         const tgUser = tg?.initDataUnsafe?.user;
-        if (!tgUser || busy || document.visibilityState === 'hidden') return;
+        if (!tgUser || busy || document.visibilityState === 'hidden' || document.getElementById('appShell').hidden) return;
         busy = true;
         const startSeq = seq;
         try {

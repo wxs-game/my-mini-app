@@ -85,6 +85,142 @@ button, input, select, textarea {
     line-height: 1.5;
 }
 
+.release-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    background:
+        radial-gradient(ellipse at 50% 32%, #3a2413 0%, transparent 58%),
+        linear-gradient(160deg, #12100e, #080809 70%);
+}
+
+.release-screen[hidden],
+.release-return[hidden],
+.release-game-only .bottom-nav,
+.release-game-only .balance-add {
+    display: none;
+}
+
+.app.release-game-only {
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.release-game-only .profile-card {
+    pointer-events: none;
+}
+
+.release-content {
+    width: min(100%, 440px);
+    padding: clamp(24px, 7vw, 38px) clamp(14px, 5vw, 30px);
+    border: 1px solid #fac76332;
+    border-radius: 28px;
+    background: linear-gradient(168deg, #25201aec 0%, #141316 55%, #121214);
+    box-shadow: inset 0 1px 0 #fff2cd1c, 0 26px 70px #0008;
+    text-align: center;
+}
+
+.release-emblem {
+    width: 116px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 21px;
+    border-radius: 34px;
+    border: 1px solid #ffc6634a;
+    background: radial-gradient(circle, #a65f2633, #3d2a1940 75%);
+    box-shadow: 0 0 34px #ffaa352a, inset 0 1px 0 #fff7db25;
+}
+
+.release-sticker,
+.release-emblem-fallback {
+    grid-area: 1 / 1;
+}
+
+.release-sticker {
+    width: 88px;
+    height: 88px;
+}
+
+.release-emblem-fallback {
+    color: #ffca70;
+    font-size: 52px;
+}
+
+.release-emblem.has-sticker .release-emblem-fallback {
+    visibility: hidden;
+}
+
+.release-content h1 {
+    font-size: clamp(32px, 10vw, 46px);
+    font-weight: 900;
+    letter-spacing: -0.055em;
+    line-height: 1;
+}
+
+.release-content h1 span,
+.release-date time {
+    color: #ffd07d;
+}
+
+.release-date {
+    margin: 12px 0 24px;
+    color: #e4dcd0;
+    font-size: 15px;
+}
+
+.release-date time {
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.release-countdown {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(4px, 1.6vw, 10px);
+}
+
+.release-countdown > div {
+    padding: 12px 0 10px;
+    border: 1px solid #f0ca8729;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff2dc0f, #fff2dc03);
+    box-shadow: inset 0 1px 0 #fff7db12;
+}
+
+.release-countdown strong {
+    display: block;
+    color: #fff7ea;
+    font-size: clamp(24px, 8vw, 39px);
+    font-variant-numeric: tabular-nums;
+    font-weight: 850;
+    line-height: 1;
+}
+
+.release-countdown span {
+    display: block;
+    margin-top: 8px;
+    color: #c8b9a5;
+    font-size: clamp(10px, 3vw, 12px);
+}
+
+.release-return {
+    margin: 22px auto 0;
+    padding: 10px 16px;
+    border: 1px solid #f9c97550;
+    border-radius: 14px;
+    background: #fac06318;
+    color: #ffd07d;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.release-return:focus-visible {
+    outline: 2px solid #ffd07d;
+    outline-offset: 3px;
+}
+
 /* ==========================================
    ЭКРАН ЗАГРУЗКИ (появляется при заходе в приложение,
    скрывает интерфейс, пока всё не прогрузится)

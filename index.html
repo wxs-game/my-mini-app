@@ -246,7 +246,25 @@
     </div>
 </div>
 
-<div class="app">
+<main id="releaseScreen" class="release-screen" aria-labelledby="releaseTitle" hidden>
+    <div class="release-content">
+        <div class="release-emblem" aria-hidden="true">
+            <span class="release-emblem-fallback">✦</span>
+            <div id="releaseSticker" class="release-sticker"></div>
+        </div>
+        <h1 id="releaseTitle">WXS <span>Game</span></h1>
+        <p class="release-date">Релиз запланирован на <time datetime="2026-11-26T00:00:00+03:00">26.11</time></p>
+        <div class="release-countdown" role="timer" aria-label="До релиза">
+            <div><strong id="releaseDays">00</strong><span>Дни</span></div>
+            <div><strong id="releaseHours">00</strong><span>Часы</span></div>
+            <div><strong id="releaseMinutes">00</strong><span>Минуты</span></div>
+            <div><strong id="releaseSeconds">00</strong><span>Секунды</span></div>
+        </div>
+        <button id="releaseReturn" type="button" class="release-return" hidden>Вернуться в игру</button>
+    </div>
+</main>
+
+<div class="app" id="appShell" hidden>
 
     <header class="top">
         <div class="profile-card" onclick="openProfile()">
