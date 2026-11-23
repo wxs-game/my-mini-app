@@ -546,7 +546,7 @@ main {
 }
 
 /* ==========================================
-   ВЕРХНЯЯ ПАНЕЛЬ ШАПКИ (LIQUID GLASS TOP HEADER)
+   ВЕРХНЯЯ ПАНЕЛЬ
 ========================================== */
 .top {
     position: sticky;
@@ -556,18 +556,14 @@ main {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
-    padding: 8px 12px;
-    border-radius: 30px;
-    
-    /* Liquid Glass Effect */
-    background: linear-gradient(180deg, rgba(36, 28, 18, 0.95), rgba(22, 17, 10, 0.93));
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 
-        0 10px 30px rgba(0, 0, 0, 0.5),
-        inset 0 1px 1px rgba(255, 255, 255, 0.3),
-        inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.top > :is(.profile-card, .balance) {
+    border-radius: 999px;
+    background: linear-gradient(150deg, #252324, #171617);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .profile-card {
@@ -575,10 +571,7 @@ main {
     align-items: center;
     gap: 10px;
     min-width: 0;
-    padding: 4px 10px 4px 4px;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 5px 13px 5px 5px;
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -588,8 +581,8 @@ main {
 }
 
 .avatar-frame {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     flex-shrink: 0;
     padding: 2px;
     border-radius: 50%;
@@ -619,11 +612,10 @@ main {
 
 .profile-info {
     min-width: 0;
-    width: 100px;
+    max-width: 11rem;
 }
 
 .username {
-    max-width: 100px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -635,7 +627,7 @@ main {
 
 .level {
     margin-top: 1px;
-    color: #888888;
+    color: #aaa6a6;
     font-size: 10px;
     font-weight: 600;
 }
@@ -657,23 +649,26 @@ main {
 
 .balance {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 8px;
-    padding: 4px 4px 4px 12px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 9px;
+    padding: 6px 5px 6px 13px;
+}
+
+.release-game-only .balance {
+    padding-inline-end: 13px;
 }
 
 .balance-info {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
+    gap: 2px;
 }
 
 .balance-info small {
-    color: #888888;
-    font-size: 8px;
+    color: #b9b5b5;
+    font-size: 9px;
     font-weight: 800;
     letter-spacing: 0.8px;
     text-transform: uppercase;
@@ -683,16 +678,18 @@ main {
     color: #ffffff;
     font-size: 15px;
     font-weight: 900;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
 .balance-add {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: 50%;
     color: #000000;
     font-size: 22px;
     font-weight: 900;
@@ -2475,7 +2472,7 @@ body.fairness-modal-open {
 ========================================== */
 .page-header {
     display: grid;
-    grid-template-columns: 40px 1fr 40px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
     margin-bottom: 12px;
 }
@@ -2488,29 +2485,33 @@ body.fairness-modal-open {
 }
 
 .back-button {
-    width: 38px;
-    height: 38px;
-    background: #121212;
-    border: 1px solid #222222;
-    border-radius: 12px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    background: #211f20;
+    color: #f8f6f4;
+    cursor: pointer;
 }
 
 .back-button::before {
     content: "";
-    width: 8px;
-    height: 8px;
-    border-left: 2px solid #ffffff;
-    border-bottom: 2px solid #ffffff;
-    transform: rotate(45deg);
-    margin-left: 3px;
+    width: 10px;
+    height: 10px;
+    border-left: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: translateX(2px) rotate(45deg);
 }
 
-.header-space {
-    width: 38px;
+.back-button:active {
+    background: #302b28;
+}
+
+.back-button:focus-visible {
+    outline: 2px solid #ffdb8a;
+    outline-offset: 2px;
 }
 
 /* ==========================================
@@ -2615,8 +2616,6 @@ body.fairness-modal-open {
     
     .top {
         top: 8px;
-        padding: 6px 10px;
-        margin-bottom: 10px;
     }
 
     .hero {
@@ -4484,9 +4483,6 @@ body.anim-page .nav-bg {
 body.anim-page {
     background: #090909;
 }
-body.anim-page .top {
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-}
 
 /* ==========================================================
    ANDROID PERF: SVG-фильтр в backdrop-filter на Android WebView
@@ -5222,7 +5218,7 @@ img.img-pending { opacity: 0; }
 
 
 /* Crash liquid glass: translucent tint and a small, precomputed lens map. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)) {
     --glass-tint: rgba(37, 30, 22, .34);
     position: relative;
     isolation: isolate;
@@ -5239,7 +5235,7 @@ img.img-pending { opacity: 0; }
         box-shadow .16s ease, border-color .16s ease;
 }
 /* Rim highlights stay separate from the refracted backdrop and readable text. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link)::before {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button))::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -5264,17 +5260,17 @@ img.img-pending { opacity: 0; }
 #crashPage .crash-fb-btn { border-style: solid; color: #ffdb8a; }
 #crashPage .crash-fairness-trigger { position: absolute; }
 #crashFairnessModal .copy-btn { border-radius: 9px; min-width: 32px; min-height: 32px; }
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):focus-visible {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):focus-visible {
     outline: 2px solid #ffdb8a;
     outline-offset: 3px;
 }
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active {
     transform: translateY(2px) scale(.965);
     box-shadow: 0 1px 3px rgba(0,0,0,.28),
         inset 0 2px 5px rgba(0,0,0,.42), inset 0 -1px 1px rgba(255,255,255,.2);
     border-color: rgba(255, 222, 170, .65);
 }
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active::before {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active::before {
     transform: scale(.98) translateY(1px);
     opacity: .65;
 }
@@ -5284,24 +5280,24 @@ img.img-pending { opacity: 0; }
     transform: none;
 }
 @media (prefers-reduced-motion: reduce) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link),
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link)::before {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)),
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button))::before {
         transition: none;
     }
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active,
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active::before {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active,
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active::before {
         transform: none;
     }
 }
 
 /* Small, static surfaces only. Browsers without SVG backdrop support keep blur.
    No feTurbulence, animated filter parameters, or full-screen backdrop effects. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)) {
     -webkit-backdrop-filter: blur(2px) saturate(1.12);
     backdrop-filter: blur(2px) saturate(1.12);
 }
 @supports (backdrop-filter: url("#crash-glass-refraction")) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)) {
         backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
     }
 }
@@ -5320,7 +5316,7 @@ img.img-pending { opacity: 0; }
     }
 }
 @media (prefers-reduced-transparency: reduce) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)) {
         --glass-tint: #241e17;
         -webkit-backdrop-filter: none !important;
         backdrop-filter: none !important;
@@ -5332,8 +5328,8 @@ img.img-pending { opacity: 0; }
 #upgFreebetBtn[hidden] { display: none !important; }
 
 /* Draw the glass rim inside each button without changing the original dimensions. */
-#upgraderPage :is(button, .fairness-verify-link) { border-width: 0; }
-#upgraderPage button::after {
+#upgraderPage :is(button, .fairness-verify-link):where(:not(.back-button)) { border-width: 0; }
+#upgraderPage button:where(:not(.back-button))::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -5763,7 +5759,7 @@ img.img-pending { opacity: 0; }
 }
 
 /* Стеклянные кнопки краша/апгрейдера: при нажатии — сильнее линза и «упругий» отклик */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active {
     border-color: rgba(255,255,255,.5);
     box-shadow: 0 2px 8px rgba(0,0,0,.4),
         inset 0 2px 2px rgba(255,255,255,.65),
@@ -5773,7 +5769,7 @@ img.img-pending { opacity: 0; }
     backdrop-filter: blur(1.5px) saturate(1.5) brightness(1.12);
 }
 @supports (backdrop-filter: url("#glass-press-soft")) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active {
         backdrop-filter: url("#glass-press-soft") saturate(1.4) brightness(1.1);
     }
 }
@@ -5849,7 +5845,7 @@ img.img-pending { opacity: 0; }
 }
 
 /* Кнопки: стеклянная «кожа» — ободок и блик поверх любого цвета, цвет и градиент кнопки не трогаем */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled) {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled) {
     box-shadow:
         0 6px 16px rgba(0,0,0,.34),
         inset 0 0 0 1px rgba(255,255,255,.16),
@@ -5857,12 +5853,12 @@ img.img-pending { opacity: 0; }
         inset 0 -1.5px 2px rgba(255,255,255,.12),
         inset 0 0 16px rgba(255,255,255,.05);
 }
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active {
     -webkit-backdrop-filter: blur(.8px) saturate(1.6) brightness(1.14);
     backdrop-filter: blur(.8px) saturate(1.6) brightness(1.14);
 }
 @supports (backdrop-filter: url("#glass-press-soft")) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):where(:not(.back-button)):not(:disabled):active {
         backdrop-filter: url("#glass-press-soft") saturate(1.5) brightness(1.1);
     }
 }

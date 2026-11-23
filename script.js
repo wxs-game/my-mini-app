@@ -5356,7 +5356,7 @@ function toggleUpgraderFreebet() {
     if (window.__lgPressLens) return;
     window.__lgPressLens = true;
     const CLICKABLE = 'button, [role="button"], [onclick], a[href], .pct-btn, .game-card, .nav-item, .bottom-nav a, summary';
-    const SKIP = 'input, textarea, select, .upg-slider-control, .bottom-nav, .wxs-gift-pick, #tgBlockScreen';
+    const SKIP = 'input, textarea, select, .upg-slider-control, .bottom-nav, .back-button, .wxs-gift-pick, #tgBlockScreen';
     const svgOk = !!(window.CSS && CSS.supports && (CSS.supports('backdrop-filter', 'url(#glass-press)') || CSS.supports('-webkit-backdrop-filter', 'url(#glass-press)')));
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     let active = null;
