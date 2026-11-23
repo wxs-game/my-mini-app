@@ -85,6 +85,142 @@ button, input, select, textarea {
     line-height: 1.5;
 }
 
+.release-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    background:
+        radial-gradient(ellipse at 50% 32%, #3a2413 0%, transparent 58%),
+        linear-gradient(160deg, #12100e, #080809 70%);
+}
+
+.release-screen[hidden],
+.release-return[hidden],
+.release-game-only .bottom-nav,
+.release-game-only .balance-add {
+    display: none;
+}
+
+.app.release-game-only {
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.release-game-only .profile-card {
+    pointer-events: none;
+}
+
+.release-content {
+    width: min(100%, 440px);
+    padding: clamp(24px, 7vw, 38px) clamp(14px, 5vw, 30px);
+    border: 1px solid #fac76332;
+    border-radius: 28px;
+    background: linear-gradient(168deg, #25201aec 0%, #141316 55%, #121214);
+    box-shadow: inset 0 1px 0 #fff2cd1c, 0 26px 70px #0008;
+    text-align: center;
+}
+
+.release-emblem {
+    width: 116px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 21px;
+    border-radius: 34px;
+    border: 1px solid #ffc6634a;
+    background: radial-gradient(circle, #a65f2633, #3d2a1940 75%);
+    box-shadow: 0 0 34px #ffaa352a, inset 0 1px 0 #fff7db25;
+}
+
+.release-sticker,
+.release-emblem-fallback {
+    grid-area: 1 / 1;
+}
+
+.release-sticker {
+    width: 88px;
+    height: 88px;
+}
+
+.release-emblem-fallback {
+    color: #ffca70;
+    font-size: 52px;
+}
+
+.release-emblem.has-sticker .release-emblem-fallback {
+    visibility: hidden;
+}
+
+.release-content h1 {
+    font-size: clamp(32px, 10vw, 46px);
+    font-weight: 900;
+    letter-spacing: -0.055em;
+    line-height: 1;
+}
+
+.release-content h1 span,
+.release-date time {
+    color: #ffd07d;
+}
+
+.release-date {
+    margin: 12px 0 24px;
+    color: #e4dcd0;
+    font-size: 15px;
+}
+
+.release-date time {
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.release-countdown {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(4px, 1.6vw, 10px);
+}
+
+.release-countdown > div {
+    padding: 12px 0 10px;
+    border: 1px solid #f0ca8729;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff2dc0f, #fff2dc03);
+    box-shadow: inset 0 1px 0 #fff7db12;
+}
+
+.release-countdown strong {
+    display: block;
+    color: #fff7ea;
+    font-size: clamp(24px, 8vw, 39px);
+    font-variant-numeric: tabular-nums;
+    font-weight: 850;
+    line-height: 1;
+}
+
+.release-countdown span {
+    display: block;
+    margin-top: 8px;
+    color: #c8b9a5;
+    font-size: clamp(10px, 3vw, 12px);
+}
+
+.release-return {
+    margin: 22px auto 0;
+    padding: 10px 16px;
+    border: 1px solid #f9c97550;
+    border-radius: 14px;
+    background: #fac06318;
+    color: #ffd07d;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.release-return:focus-visible {
+    outline: 2px solid #ffd07d;
+    outline-offset: 3px;
+}
+
 /* ==========================================
    ЭКРАН ЗАГРУЗКИ (появляется при заходе в приложение,
    скрывает интерфейс, пока всё не прогрузится)
@@ -1296,6 +1432,14 @@ main {
     transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
     will-change: transform;
 }
+
+/* Выезд при открытии — одноразовый класс (вешается из JS). Раньше анимация была
+   на самом блоке и перезапускалась при каждом снятии .dragging — отсюда «шторка
+   открывается заново» после любого жеста за язычок. */
+.crash-fairness-content.opening {
+    animation: slideUpModal 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
 
 .crash-fairness-content.dragging {
     transition: none;
@@ -3520,8 +3664,8 @@ body.ice-history-modal-open {
     color: #aaaaaa;
     text-align: center;
 }
-.upg-result.win { color: #2ecc71; }
-.upg-result.lose { color: #e74c3c; }
+.upg-result.win { color: #1fe07a; }
+.upg-result.lose { color: #ff4638; }
 .upg-info {
     min-height: 16px;
     margin-top: 2px;
@@ -5045,3 +5189,905 @@ img.img-pending { opacity: 0; }
 
 /* VIP embedded screen styles are scoped to its isolated document to preserve game UI. */
 .vip-page .vip-crown{display:flex;width:54px;height:42px;align-items:center;justify-content:center;margin:8px 0 0;filter:drop-shadow(0 5px 10px rgba(255,171,24,.24))}.vip-page .vip-crown svg{width:48px;height:38px;fill:#ffc653;stroke:#ffe19a;stroke-width:1.2}.vip-card-icon img{display:block;width:23px;height:23px;object-fit:contain}.vip-tgs-icon{overflow:hidden}.vip-tgs-icon .dice-tgs-holder,.vip-tgs-icon .dice-tgs-holder svg{display:block;width:100%!important;height:100%!important}.vip-tgs-icon .tge-spinner{width:15px;height:15px}.vip-milestone.reached{border-color:rgba(255,202,91,.52);background:rgba(95,64,13,.24)}.vip-milestone>span{font-size:11px;color:#ffce63}.vip-milestone small{font-size:10px}.vip-milestone em{margin-top:6px;white-space:normal;line-height:1.25}.vip-sheet{will-change:transform;transition:transform .28s cubic-bezier(.16,1,.3,1)}.vip-sheet-backdrop{cursor:pointer;transition:opacity .2s ease}.vip-sheet-layer.closing .vip-sheet-backdrop{opacity:0}
+
+/* ==========================================
+   ФРИБЕТ (КРАШ)
+   ========================================== */
+.crash-fb-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 200, 0, 0.10);
+    border: 1px dashed rgba(255, 200, 0, 0.55);
+    color: #ffd60a;
+    font-size: 13px;
+    font-weight: 800;
+    transition: all 0.15s ease;
+}
+
+.crash-fb-btn.on {
+    background: #ffd60a;
+    border-style: solid;
+    color: #000000;
+}
+
+.crash-fb-btn:active {
+    transform: scale(0.98);
+}
+
+
+/* Crash liquid glass: translucent tint and a small, precomputed lens map. */
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+    --glass-tint: rgba(37, 30, 22, .34);
+    position: relative;
+    isolation: isolate;
+    background: var(--glass-tint);
+    border: 1px solid rgba(255, 255, 255, .18);
+    box-shadow: 0 5px 12px rgba(0, 0, 0, .32),
+        inset 0 1px 1px rgba(255, 255, 255, .34),
+        inset 0 -1px 1px rgba(0, 0, 0, .5);
+    color: #f4eee5;
+    opacity: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: transform .16s cubic-bezier(.2,.8,.2,1),
+        box-shadow .16s ease, border-color .16s ease;
+}
+/* Rim highlights stay separate from the refracted backdrop and readable text. */
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 18% 0%, rgba(255,255,255,.16), transparent 58%),
+        radial-gradient(ellipse at 95% 110%, rgba(255,205,140,.10), transparent 55%),
+        linear-gradient(170deg, rgba(255,255,255,.08), transparent 48%, rgba(0,0,0,.12));
+    transition: transform .16s ease, opacity .16s ease;
+}
+#crashPage #crashActionBtn,
+#upgraderPage #upgPlayBtn,
+#upgraderPage #upgFreebetBtn.on,
+#upgraderPage .pct-btn.active,
+#crashPage .crash-fb-btn.on,
+#crashFairnessModal .fairness-verify-link {
+    --glass-tint: rgba(171, 104, 14, .42);
+    border-color: rgba(255, 211, 137, .52);
+    color: #fff6df;
+}
+#crashPage .crash-fb-btn { border-style: solid; color: #ffdb8a; }
+#crashPage .crash-fairness-trigger { position: absolute; }
+#crashFairnessModal .copy-btn { border-radius: 9px; min-width: 32px; min-height: 32px; }
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):focus-visible {
+    outline: 2px solid #ffdb8a;
+    outline-offset: 3px;
+}
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+    transform: translateY(2px) scale(.965);
+    box-shadow: 0 1px 3px rgba(0,0,0,.28),
+        inset 0 2px 5px rgba(0,0,0,.42), inset 0 -1px 1px rgba(255,255,255,.2);
+    border-color: rgba(255, 222, 170, .65);
+}
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active::before {
+    transform: scale(.98) translateY(1px);
+    opacity: .65;
+}
+:is(#crashPage, #crashFairnessModal, #upgraderPage) button:disabled {
+    opacity: .45;
+    cursor: default;
+    transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link),
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link)::before {
+        transition: none;
+    }
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active,
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active::before {
+        transform: none;
+    }
+}
+
+/* Small, static surfaces only. Browsers without SVG backdrop support keep blur.
+   No feTurbulence, animated filter parameters, or full-screen backdrop effects. */
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+    -webkit-backdrop-filter: blur(2px) saturate(1.12);
+    backdrop-filter: blur(2px) saturate(1.12);
+}
+@supports (backdrop-filter: url("#crash-glass-refraction")) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+        backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
+    }
+}
+/* The scene behind this button changes every frame: enable its lens on press. */
+#crashPage .crash-fairness-trigger {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+#crashPage .crash-fairness-trigger:not(:disabled):active {
+    -webkit-backdrop-filter: blur(2px) saturate(1.12);
+    backdrop-filter: blur(2px) saturate(1.12);
+}
+@supports (backdrop-filter: url("#crash-glass-refraction")) {
+    #crashPage .crash-fairness-trigger:not(:disabled):active {
+        backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
+        --glass-tint: #241e17;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+    }
+}
+
+
+#upgraderPage input { font-size: 16px; }
+#upgFreebetBtn[hidden] { display: none !important; }
+
+/* Draw the glass rim inside each button without changing the original dimensions. */
+#upgraderPage :is(button, .fairness-verify-link) { border-width: 0; }
+#upgraderPage button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid;
+    border-color: inherit;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+/* Upgrader: graphite dial, red probability sector and a compositor-driven gold pointer. */
+#upgraderPage .upg-card {
+    position: relative;
+    background: radial-gradient(ellipse at 50% 12%, rgba(240,72,84,.065), transparent 60%), #0d0c10;
+    border-color: #29252c;
+    box-shadow: 0 18px 44px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.04);
+    animation: upgEnter .4s ease both;
+}
+.upg-stage-heading {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 4px 0;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #9a929e;
+}
+.upg-live-dot { width: 5px; height: 5px; border-radius: 50%; background: #ff4757; box-shadow: 0 0 9px #f0485470; }
+.upg-stage-mark { margin-left: auto; color: #5d5663; letter-spacing: 1.4px; }
+.upg-stack { isolation: isolate; }
+.upg-center {
+    position: absolute;
+    left: 50%;
+    top: 43.75%;
+    transform: translate(-50%,-50%);
+    width: 46%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.upg-emblem { display: block; width: 31%; height: auto; margin-bottom: 6px; }
+.upg-center-value { font-size: clamp(28px, 9.8vw, 43px); line-height: 1.05; font-weight: 950; letter-spacing: -1.8px; color: #fff; }
+.upg-center-coef { margin-top: 5px; font-size: clamp(15px,4.5vw,21px); line-height: 1.2; font-weight: 900; color: #ffd000; }
+.upg-center-caption { margin-top: 12px; font-size: clamp(7px,1.9vw,9px); letter-spacing: 1.35px; color: #8c8493; font-weight: 800; }
+.upg-center.is-result .upg-center-value { font-size: clamp(23px,7vw,31px); letter-spacing: -.7px; }
+.upg-center.is-win .upg-center-value { color: #6eeb8c; }
+.upg-rotor {
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 43.75%;
+    pointer-events: none;
+    backface-visibility: hidden;
+}
+.upg-rotor svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.upg-stack.is-spinning .upg-rotor { will-change: transform; }
+.upg-stack .upg-layer-hot { transition: opacity .45s ease; }
+.upg-stack.is-spinning .upg-center { animation: upgCenterBreathe 1.6s ease-in-out infinite; }
+.upg-stack.is-win .upg-emblem { animation: upgEmblemWin .5s ease both; }
+.upg-slider-card {
+    border: 1px solid #32272d;
+    border-radius: 16px;
+    padding: 12px 14px 9px;
+    background: linear-gradient(140deg, rgba(240,72,84,.055), rgba(255,255,255,.018));
+    box-shadow: inset 0 1px rgba(255,255,255,.035);
+}
+.upg-slider-heading { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #a49aa9; }
+.upg-slider-heading output { color: #ff6570; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+#upgraderPage .upg-slider {
+    --upg-progress: 55.056%;
+    display: block;
+    width: 100%;
+    height: 42px;
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: pointer;
+    touch-action: pan-y;
+}
+.upg-slider::-webkit-slider-runnable-track { height: 8px; border-radius: 99px; background: linear-gradient(90deg, #ff4757 var(--upg-progress), #2c252e var(--upg-progress)); box-shadow: inset 0 1px 2px #0006; }
+.upg-slider::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 26px; height: 26px; margin-top: -9px; border: 3px solid #21171c; border-radius: 50%; background: linear-gradient(145deg,#ff9197,#ff4757 58%,#c01c2e); box-shadow: 0 0 0 1px #f0485460,0 2px 8px #0008; transition: box-shadow .15s ease; }
+.upg-slider:active::-webkit-slider-thumb { box-shadow: 0 0 0 5px #f0485426,0 2px 8px #0008; }
+.upg-slider::-moz-range-track { height: 8px; border-radius: 99px; background: #2c252e; }
+.upg-slider::-moz-range-progress { height: 8px; border-radius: 99px; background: #ff4757; }
+.upg-slider::-moz-range-thumb { width: 20px; height: 20px; border: 3px solid #21171c; border-radius: 50%; background: #ff4757; box-shadow: 0 0 0 1px #f0485460; }
+.upg-slider:focus-visible { outline: 1px solid #ff6570; outline-offset: 3px; border-radius: 9px; }
+.upg-slider:disabled { opacity: .4; cursor: wait; }
+.upg-slider-limits { display: flex; justify-content: space-between; margin-top: -2px; color: #706673; font-size: 9px; }
+#upgraderPage .upg-result { transition: opacity .2s ease; }
+#upgraderPage .upg-result.win { animation: upgResultReveal .35s ease both; }
+@keyframes upgEnter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes upgCenterBreathe { 0%,100% { opacity: 1; } 50% { opacity: .75; } }
+@keyframes upgEmblemWin { from { transform: translateY(4px) scale(.9); } to { transform: translateY(0) scale(1); } }
+@keyframes upgResultReveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+    #upgraderPage .upg-card, .upg-stack.is-spinning .upg-center,
+    .upg-stack.is-win .upg-emblem, #upgraderPage .upg-result.win { animation: none; }
+    .upg-stack .upg-layer-hot { transition: none; }
+}
+
+/* Reference dial layout: double frame, flat annulus and an inward-pointing needle. */
+#upgraderPage .upg-card {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    animation: none;
+}
+.upg-wheel-frame {
+    position: relative;
+    margin: 0 -8px 16px;
+    padding: 12px 0 4px;
+    border: 1px solid #3d3727;
+    border-radius: 25px;
+    background: radial-gradient(ellipse at 50% 80%,rgba(100,48,12,.12),transparent 65%),#0e0e0e;
+    box-shadow: 0 0 0 3px #090909,0 0 0 4px #29271f,inset 0 0 28px #0007;
+}
+.upg-wheel-frame::before {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border: 1px solid rgba(125,110,65,.16);
+    border-radius: 20px;
+    pointer-events: none;
+}
+.upg-wheel-frame .upg-stage-heading {
+    position: absolute;
+    z-index: 3;
+    top: 9px;
+    right: 10px;
+    padding: 7px 9px;
+    border: 1px solid #37332a;
+    border-radius: 13px;
+    background: linear-gradient(150deg,#29261eaf,#151410d9);
+    color: #a09b8c;
+    font-size: 7px;
+    letter-spacing: .65px;
+}
+.upg-wheel-frame .upg-live-dot { width: 4px; height: 4px; background: #c2a04c; box-shadow: none; }
+.upg-rotor { transform-origin: 50% 50%; }
+.upg-center { top: 52.7%; width: 48%; }
+.upg-emblem { width: 34%; margin-bottom: 5px; }
+.upg-center-value {
+    font-family: "Arial Black",Arial,sans-serif;
+    font-size: clamp(34px,11.2vw,49px);
+    font-style: italic;
+    font-weight: 950;
+    letter-spacing: -2.5px;
+    line-height: 1;
+}
+.upg-center-coef { margin-top: 5px; font-size: clamp(19px,5.6vw,25px); font-weight: 950; letter-spacing: -.6px; }
+.upg-center-caption { margin-top: 12px; font-size: clamp(7px,1.9vw,9px); letter-spacing: 1.7px; color: #8b8b8d; }
+.upg-center.is-result .upg-center-value { font-style: normal; }
+
+/* Apple-like liquid glass slider: transparent capsule, edge refraction and red fill. */
+.upg-slider-card {
+    padding: 10px 15px 5px;
+    border: 1px solid rgba(255,255,255,.13);
+    border-radius: 24px;
+    background: linear-gradient(165deg,rgba(255,255,255,.065),rgba(255,255,255,.018) 40%,rgba(0,0,0,.25));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 #0009,0 8px 24px #0004;
+    -webkit-backdrop-filter: blur(12px) saturate(1.35);
+    backdrop-filter: blur(12px) saturate(1.35);
+}
+.upg-slider-heading { color: #a4a4a8; font-size: 10px; letter-spacing: .1px; }
+.upg-slider-heading output { color: #f0646e; font-size: 12px; }
+.upg-slider-control { position: relative; height: 48px; }
+.upg-slider-visual { position: absolute; inset: 0 18px; pointer-events: none; }
+.upg-glass-rail {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% - 4px);
+    height: 8px;
+    border-radius: 99px;
+    background: #2d2d31;
+    box-shadow: inset 0 1px 3px #0008,0 1px rgba(255,255,255,.06);
+    overflow: hidden;
+}
+.upg-glass-rail i { display: block; width: var(--upg-progress); height: 100%; background: linear-gradient(90deg,#d72e40,#ff626b); border-radius: inherit; }
+.upg-liquid-thumb {
+    position: absolute;
+    top: 50%;
+    left: var(--upg-progress);
+    transform: translate(-50%,-50%);
+    width: 42px;
+    height: 29px;
+    border: 1px solid rgba(255,255,255,.62);
+    border-radius: 18px;
+    background: linear-gradient(155deg,rgba(255,255,255,.3),rgba(240,240,245,.1) 38%,rgba(255,255,255,.18));
+    -webkit-backdrop-filter: blur(3px) saturate(1.9) brightness(1.16);
+    backdrop-filter: blur(3px) saturate(1.9) brightness(1.16);
+    box-shadow: 0 3px 8px #0009,inset 0 1px 1px rgba(255,255,255,.8),inset 0 -1px 1px rgba(255,255,255,.25);
+    transition: transform .16s ease,box-shadow .16s ease;
+}
+.upg-liquid-thumb::before { content: ""; position: absolute; inset: 2px; border-radius: inherit; border-top: 1px solid #fff9; border-bottom: 1px solid #ffffff24; background: radial-gradient(ellipse at 25% 0%,#ffffff35,transparent 65%); }
+.upg-slider-control:active .upg-liquid-thumb { transform: translate(-50%,-50%) scale(1.12,1.08); box-shadow: 0 4px 12px #0009,inset 0 1px 2px #fffd; }
+#upgraderPage .upg-slider-control .upg-slider { position: absolute; inset: 0; width: 100%; height: 48px; opacity: 0; cursor: ew-resize; }
+.upg-slider-control .upg-slider::-webkit-slider-thumb { width: 36px; height: 36px; }
+.upg-slider-control .upg-slider::-moz-range-thumb { width: 30px; height: 30px; }
+.upg-slider-control:focus-within .upg-slider-visual { outline: 1px solid #ffffff54; outline-offset: 7px; border-radius: 10px; }
+.upg-locked .upg-slider-visual { opacity: .4; }
+@media (prefers-reduced-transparency: reduce) {
+    .upg-slider-card { -webkit-backdrop-filter: none; backdrop-filter: none; background: #1c1c1f; }
+    .upg-liquid-thumb { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(145deg,#e9e9ed,#97979d); }
+}
+
+/* Player tiles: the header's warm glass, with a lighter transparent body.
+   One pressed row gets a backdrop lens; idle/scrolling lists have no filters. */
+#crashPage .crash-players-box {
+    background: linear-gradient(180deg, rgba(36, 28, 18, .20), rgba(22, 17, 10, .12));
+    border-color: rgba(255, 255, 255, .12);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, .10);
+}
+#crashPage .crash-players-header { color: #a49c91; }
+#crashPage .crash-players-list { padding: 3px; }
+#crashPage .crash-player-row {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(180deg, rgba(36, 28, 18, .28), rgba(22, 17, 10, .16));
+    border-color: rgba(255, 255, 255, .16);
+    box-shadow: 0 3px 7px rgba(0, 0, 0, .18),
+        inset 0 1px 1px rgba(255, 255, 255, .24),
+        inset 0 -1px 1px rgba(0, 0, 0, .26);
+    touch-action: pan-y;
+    transition: transform .16s cubic-bezier(.2,.8,.2,1),
+        border-color .16s ease, box-shadow .16s ease;
+}
+#crashPage .crash-player-row::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 16% 0%, rgba(255,255,255,.12), transparent 62%),
+        radial-gradient(ellipse at 94% 100%, rgba(255,211,151,.06), transparent 55%);
+}
+#crashPage .crash-player-row-user {
+    background: linear-gradient(180deg, rgba(138, 100, 27, .20), rgba(62, 43, 14, .12));
+    border-color: rgba(255, 208, 115, .44);
+}
+#crashPage .crash-player-row-bet { color: #b0a89e; }
+#crashPage .crash-player-status {
+    background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.16), inset 0 -1px 1px rgba(0,0,0,.14);
+}
+#crashPage .crash-player-row.is-glass-pressed {
+    transform: translateY(1px) scale(.985);
+    border-color: rgba(255, 228, 186, .45);
+    box-shadow: 0 1px 2px rgba(0,0,0,.14), inset 0 2px 4px rgba(0,0,0,.24),
+        inset 0 -1px 1px rgba(255,255,255,.18);
+    -webkit-backdrop-filter: blur(2px) saturate(1.12);
+    backdrop-filter: blur(2px) saturate(1.12);
+}
+#crashPage .crash-player-row.is-glass-pressed::before {
+    background: radial-gradient(ellipse at var(--player-press-x, 50%) var(--player-press-y, 50%),
+        rgba(255,255,255,.20), transparent 65%),
+        linear-gradient(170deg, rgba(255,255,255,.07), transparent 50%, rgba(255,211,151,.08));
+}
+@supports (backdrop-filter: url("#crash-glass-refraction")) {
+    #crashPage .crash-player-row.is-glass-pressed {
+        backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    #crashPage .crash-player-row { transition: none; }
+    #crashPage .crash-player-row.is-glass-pressed { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+    #crashPage :is(.crash-players-box, .crash-player-row, .crash-player-status) {
+        background: #1c1914;
+    }
+    #crashPage .crash-player-row.is-glass-pressed {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+
+
+/* =====================================================
+   АПГРЕЙДЕР: золотое колесо как на макете
+===================================================== */
+.upg-wheel-frame {
+    background: radial-gradient(ellipse at 50% 88%, rgba(255,140,0,.17), transparent 62%),
+                radial-gradient(ellipse at 50% 0%, rgba(255,205,0,.07), transparent 55%), #0b0b0c;
+    border-color: #50431f;
+}
+.upg-center { top: 53.4%; width: 50%; }
+.upg-emblem { width: 31%; margin-bottom: 7px; filter: drop-shadow(0 0 9px rgba(255,205,0,.4)); }
+.upg-center-value {
+    font-family: "Montserrat","Arial Black",Arial,sans-serif;
+    font-style: normal; font-weight: 800;
+    font-size: clamp(32px,10.4vw,46px);
+    letter-spacing: -1px; line-height: 1; color: #f6f6f6;
+}
+.upg-center-coef {
+    font-family: "Montserrat",Arial,sans-serif; font-weight: 800;
+    font-size: clamp(16px,4.7vw,21px); letter-spacing: .3px; margin-top: 7px; color: #f2c919;
+}
+.upg-center-caption {
+    font-family: "Montserrat",Arial,sans-serif; font-weight: 700;
+    font-size: clamp(8px,2.15vw,10px); letter-spacing: .2em; margin-top: 13px; color: #8e8e93;
+}
+.upg-center.is-result .upg-center-value { font-style: normal; font-size: clamp(24px,7.4vw,32px); letter-spacing: -.5px; }
+.upg-rotor svg { filter: drop-shadow(0 0 7px rgba(255,205,0,.65)); }
+
+/* ---- слайдер: без backdrop-filter и без пересчёта layout при движении ---- */
+.upg-slider-card {
+    background: linear-gradient(165deg, rgba(255,200,0,.07), rgba(255,255,255,.02) 45%, rgba(0,0,0,.25));
+    border-color: rgba(255,210,60,.2);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.upg-slider-heading output { color: #ffd60a; font-size: 13px; }
+.upg-slider-visual { contain: layout paint; }
+.upg-glass-rail { background: linear-gradient(90deg,#ffd60a,#ff9a1a 62%,#ff3d22); }
+.upg-glass-rail i {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 100%;
+    background: #2a2a2e; border-radius: 0;
+    transform-origin: 100% 50%;
+    transform: scaleX(calc(1 - var(--upg-p, .4382)));
+    will-change: transform;
+}
+.upg-liquid-thumb {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    background: linear-gradient(155deg, rgba(255,255,255,.62), rgba(255,236,170,.34) 45%, rgba(255,255,255,.46));
+    will-change: left;
+}
+#upgraderPage .upg-slider-control .upg-slider { touch-action: pan-y; }
+
+
+/* ---- правка 2: центр компактнее (внутри диска), крупная стрелка, золотой ползунок ---- */
+.upg-center { top: 52.2%; width: 44%; }
+.upg-emblem { width: 25%; margin-bottom: 5px; }
+.upg-center-value { font-size: clamp(26px,8.2vw,38px); }
+.upg-center-coef { font-size: clamp(13px,3.9vw,17px); margin-top: 5px; }
+.upg-center-caption { font-size: clamp(7px,1.9vw,9px); margin-top: 9px; letter-spacing: .18em; }
+.upg-center.is-result .upg-center-value { font-size: clamp(20px,6vw,27px); }
+.upg-liquid-thumb {
+    background: linear-gradient(155deg, #fff3b5, #f0c93c 55%, #ffe98a);
+    border-color: rgba(255,240,170,.9);
+    box-shadow: 0 3px 10px #000a, 0 0 12px rgba(255,200,0,.35), inset 0 1px 1px #fff;
+}
+
+
+/* =====================================================
+   ПРАВКА 3: только колесо, центр 1:1 с референсом, рабочий слайдер
+===================================================== */
+.upg-wheel-frame {
+    margin: 0 0 14px; padding: 0;
+    border: 0; border-radius: 0; background: none; box-shadow: none;
+}
+.upg-wheel-frame::before { display: none; }
+.upg-wheel-frame .upg-stage-heading { display: none; }
+
+.upg-stack { container-type: inline-size; }
+.upg-center {
+    position: absolute; inset: 0; left: 0; top: 0; width: auto;
+    transform: none; display: block; text-align: center;
+}
+.upg-center > * { position: absolute; margin: 0; left: 0; right: 0; text-align: center; line-height: 1; white-space: nowrap; }
+.upg-emblem { left: 43.15cqw; right: auto; top: 36.6cqw; width: 13.7cqw; height: auto; margin: 0; }
+.upg-center-value { top: 49.8cqw; font-size: 9cqw; letter-spacing: -.02em; }
+.upg-center-coef { top: 60.4cqw; font-size: 4.2cqw; letter-spacing: .01em; margin: 0; color: #eac31a; }
+.upg-center-caption { top: 66.5cqw; font-size: 2.5cqw; letter-spacing: .14em; margin: 0; color: #8c8c91; }
+.upg-center.is-result .upg-center-value { top: 51.2cqw; font-size: 6.4cqw; }
+.upg-center.is-result .upg-center-caption { font-size: 2.1cqw; letter-spacing: .1em; }
+.upg-rotor svg { filter: drop-shadow(0 0 4px rgba(255,200,0,.3)); }
+
+/* слайдер: ввод целиком у нас, нативный input только для клавиатуры/доступности */
+.upg-slider-control { touch-action: none; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+#upgraderPage .upg-slider-control .upg-slider { pointer-events: none; }
+.upg-slider-visual { contain: none; }
+.upg-slider-control.is-drag .upg-liquid-thumb { transform: translate(-50%,-50%) scale(1.12,1.08); }
+
+
+/* победа: кольцо становится ярче и мягко пульсирует, форма не меняется */
+@keyframes upgHotPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+.upg-stack.is-win .upg-layer-hot { animation: upgHotPulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .upg-stack.is-win .upg-layer-hot { animation: none; } }
+
+
+/* проигрыш: сектор красно-серый, новый раунд — мягко возвращается к жёлтому */
+.upg-stack .upg-layer-lose { opacity: 0; transition: opacity .7s ease; }
+.upg-stack.is-lose .upg-layer-lose { opacity: 1; transition-duration: .5s; }
+@media (prefers-reduced-motion: reduce) { .upg-stack .upg-layer-lose { transition: none; } }
+
+
+
+
+/* =====================================================
+   LIQUID GLASS 2.0 — живое преломление при нажатии (вся игра)
+===================================================== */
+.lg-press-lens {
+    position: fixed;
+    z-index: 2147483000;
+    pointer-events: none;
+    box-sizing: border-box;
+    opacity: 0;
+    will-change: transform, opacity;
+    border: 1px solid rgba(255,255,255,.55);
+    background:
+        radial-gradient(ellipse 70% 45% at 28% 6%, rgba(255,255,255,.38), transparent 62%),
+        radial-gradient(ellipse 60% 40% at 80% 104%, rgba(255,214,150,.22), transparent 60%),
+        linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.02) 50%, rgba(255,255,255,.08));
+    box-shadow:
+        0 10px 26px rgba(0,0,0,.45),
+        inset 0 1.5px 1px rgba(255,255,255,.75),
+        inset 0 -2px 3px rgba(255,255,255,.18),
+        inset 0 0 14px rgba(255,255,255,.14);
+    -webkit-backdrop-filter: blur(1.2px) brightness(1.16) saturate(1.5);
+    backdrop-filter: blur(1.2px) brightness(1.16) saturate(1.5);
+}
+/* Настоящее преломление: линза с картой смещения (где браузер умеет SVG в backdrop-filter) */
+@supports (backdrop-filter: url("#glass-press")) {
+    .lg-press-lens.lg-svg {
+        -webkit-backdrop-filter: url("#glass-press") brightness(1.1) saturate(1.4);
+        backdrop-filter: url("#glass-press") brightness(1.1) saturate(1.4);
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .lg-press-lens { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(255,255,255,.12); }
+}
+
+/* Стеклянные кнопки краша/апгрейдера: при нажатии — сильнее линза и «упругий» отклик */
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+    border-color: rgba(255,255,255,.5);
+    box-shadow: 0 2px 8px rgba(0,0,0,.4),
+        inset 0 2px 2px rgba(255,255,255,.65),
+        inset 0 -2px 4px rgba(255,255,255,.16),
+        inset 0 0 18px rgba(255,255,255,.12);
+    -webkit-backdrop-filter: blur(1.5px) saturate(1.5) brightness(1.12);
+    backdrop-filter: blur(1.5px) saturate(1.5) brightness(1.12);
+}
+@supports (backdrop-filter: url("#glass-press-soft")) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+        backdrop-filter: url("#glass-press-soft") saturate(1.4) brightness(1.1);
+    }
+}
+
+/* Ползунок шанса: пока тянем — стекло настоящее, с преломлением */
+.upg-slider-control.is-drag .upg-liquid-thumb {
+    -webkit-backdrop-filter: blur(1px) saturate(1.7) brightness(1.15);
+    backdrop-filter: blur(1px) saturate(1.7) brightness(1.15);
+    box-shadow: 0 6px 16px #000a, 0 0 14px rgba(255,255,255,.28), inset 0 2px 2px #fffe, inset 0 -2px 4px #ffffff40;
+}
+@supports (backdrop-filter: url("#glass-press")) {
+    .upg-slider-control.is-drag .upg-liquid-thumb {
+        backdrop-filter: url("#glass-press") saturate(1.5) brightness(1.1);
+    }
+}
+
+/* Строка «Коэффициент … · при победе …» удалена; пустую плашку не показываем */
+.upg-info:empty { display: none; }
+
+/* =====================================================
+   Рамка вокруг кольца апгрейдера — как у ракетки
+===================================================== */
+.upg-wheel-frame {
+    position: relative;
+    margin: 16px 0;
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(180deg, #10131a 0%, #05060a 100%);
+    box-shadow: none;
+    overflow: hidden;
+}
+
+
+/* =====================================================
+   LIQUID GLASS 3.0 — как нижняя панель: тонкий светлый ободок,
+   чистый центр, сильный изгиб у края + дисперсия (Apple-стиль)
+===================================================== */
+.lg-press-lens {
+    border: 0;
+    background:
+        radial-gradient(ellipse 65% 38% at 30% 4%, rgba(255,255,255,.30), transparent 65%),
+        radial-gradient(ellipse 55% 35% at 78% 106%, rgba(255,255,255,.16), transparent 62%),
+        rgba(255,255,255,.035);
+    box-shadow:
+        0 12px 30px rgba(0,0,0,.5),
+        0 2px 6px rgba(0,0,0,.35),
+        inset 0 0 22px rgba(255,255,255,.10),
+        inset 0 1px 1px rgba(255,255,255,.55),
+        inset 0 -1px 2px rgba(255,255,255,.22);
+    -webkit-backdrop-filter: blur(.6px) brightness(1.14) saturate(1.55);
+    backdrop-filter: blur(.6px) brightness(1.14) saturate(1.55);
+}
+.lg-press-lens::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    background: conic-gradient(from -40deg,
+        rgba(255,255,255,.95) 0deg, rgba(255,255,255,.18) 80deg,
+        rgba(255,255,255,.8) 175deg, rgba(255,255,255,.14) 265deg, rgba(255,255,255,.95) 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+@supports (backdrop-filter: url("#glass-press")) {
+    .lg-press-lens.lg-svg {
+        -webkit-backdrop-filter: url("#glass-press") brightness(1.08) saturate(1.5);
+        backdrop-filter: url("#glass-press") brightness(1.08) saturate(1.5);
+    }
+}
+
+/* Кнопки: стеклянная «кожа» — ободок и блик поверх любого цвета, цвет и градиент кнопки не трогаем */
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled) {
+    box-shadow:
+        0 6px 16px rgba(0,0,0,.34),
+        inset 0 0 0 1px rgba(255,255,255,.16),
+        inset 0 1.5px 1px rgba(255,255,255,.5),
+        inset 0 -1.5px 2px rgba(255,255,255,.12),
+        inset 0 0 16px rgba(255,255,255,.05);
+}
+:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+    -webkit-backdrop-filter: blur(.8px) saturate(1.6) brightness(1.14);
+    backdrop-filter: blur(.8px) saturate(1.6) brightness(1.14);
+}
+@supports (backdrop-filter: url("#glass-press-soft")) {
+    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
+        backdrop-filter: url("#glass-press-soft") saturate(1.5) brightness(1.1);
+    }
+}
+
+
+/* Апгрейдер: игра максимально вверх, без пустоты под шапкой профиля */
+#upgraderPage { padding-top: 4px; }
+#upgraderPage > .upg-card { margin-top: 0; padding-top: 0; }
+#upgraderPage .upg-wheel-frame { margin-top: 0; }
+
+
+/* =====================================================
+   АПГРЕЙДЕР: РЕЖИМ ПОДАРКОВ (тот же интерфейс, что и у $)
+===================================================== */
+.wxs-upg-switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+.wxs-seg {
+    display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.18), 0 6px 16px rgba(0,0,0,.3);
+    -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4);
+}
+.wxs-seg button {
+    font: 800 13px/1 "Montserrat", Arial, sans-serif; letter-spacing: .02em; color: #9a98a1;
+    background: transparent; border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer;
+    box-shadow: none !important; transition: color .2s, background .25s, box-shadow .25s;
+}
+.wxs-seg button[aria-pressed="true"] {
+    color: #151208;
+    background: linear-gradient(180deg, #ffe477, #f2c919);
+    box-shadow: 0 2px 10px rgba(242,201,25,.35), inset 0 1px 1px rgba(255,255,255,.6) !important;
+}
+.wxs-inv-btn {
+    font: 800 13px/1 "Montserrat", Arial, sans-serif; color: #f1efe9; cursor: pointer;
+    padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14);
+    background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+}
+.wxs-inv-btn[hidden] { display: none; }
+.wxs-inv-btn b { margin-left: 4px; padding: 2px 7px; border-radius: 999px; background: #f2c919; color: #151208; font-size: 11px; }
+
+/* центр колеса: выбор подарка */
+.upg-center > .wxs-gift-pick {
+    display: none; position: absolute; left: 50%; right: auto; top: 36.5cqw;
+    width: 19cqw; height: 19cqw; transform: translate(-50%, -50%);
+    padding: 0; margin: 0; border: 0; background: none; color: #a9a9ae; cursor: pointer; pointer-events: auto;
+    --wxs-hole: #1b1b20; -webkit-tap-highlight-color: transparent; box-shadow: none !important;
+}
+#upgraderPage.gift-mode .upg-center > .wxs-gift-pick { display: block; }
+#upgraderPage.gift-mode .upg-emblem { display: none !important; }
+.wxs-gift-pick .wxs-gift-svg { width: 100%; height: 100%; display: none; }
+.wxs-gift-art { position: absolute; inset: 0; display: block; border-radius: 50%; overflow: hidden;
+    box-shadow: 0 0 0 1.5px rgba(242,201,25,.7), 0 0 14px rgba(242,201,25,.35), inset 0 0 8px rgba(0,0,0,.5);
+    background: radial-gradient(circle at 50% 35%, #2c2a31, #141418 72%); }
+.wxs-gift-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wxs-gift-art .wxs-gift-fallback { display: grid; place-items: center; width: 100%; height: 100%; font-size: 8cqw; }
+.upg-center.gift-empty > .wxs-gift-pick { top: 50cqw; width: 33cqw; height: 33cqw; }
+.upg-center.gift-empty .wxs-gift-svg { display: block; transition: color .2s, transform .2s; }
+.upg-center.gift-empty .wxs-gift-art { display: none; }
+.upg-center.gift-empty .wxs-gift-pick:active .wxs-gift-svg { color: #f2c919; transform: scale(.94); }
+#upgraderPage.gift-mode .upg-center.gift-empty .upg-center-value,
+#upgraderPage.gift-mode .upg-center.gift-empty .upg-center-coef,
+#upgraderPage.gift-mode .upg-center.gift-empty .upg-center-caption { visibility: hidden; }
+#upgraderPage.gift-mode .upg-center-coef { overflow: hidden; text-overflow: ellipsis; padding: 0 22%; box-sizing: border-box; }
+#upgraderPage.gift-mode #upgFreebetBtn { display: none !important; }
+
+/* каталог / инвентарь — стеклянная шторка */
+.wxs-sheet {
+    box-sizing: border-box; width: min(100%, 520px); max-width: 100%; max-height: 86vh; margin: auto auto 0; padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
+    border: 1px solid rgba(255,255,255,.12); border-bottom: 0; border-radius: 26px 26px 0 0; color: #f5f4f0;
+    background: linear-gradient(180deg, rgba(34,33,40,.96), rgba(12,12,15,.98));
+    box-shadow: 0 -20px 50px rgba(0,0,0,.6), inset 0 1px 1px rgba(255,255,255,.18);
+    overflow: hidden auto; overscroll-behavior: contain;
+}
+.wxs-sheet:not([open]) { display: none; }
+.wxs-sheet[open] { display: block; animation: wxsSheetIn .32s cubic-bezier(.2,.9,.25,1.05); }
+.wxs-sheet::backdrop { background: rgba(0,0,0,.62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+@keyframes wxsSheetIn { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.wxs-sheet-grip { width: 40px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.22); margin: 2px auto 10px; }
+.wxs-sheet header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.wxs-sheet h2 { margin: 0; font: 800 20px/1.1 "Montserrat", Arial, sans-serif; }
+.wxs-sheet header p { margin: 5px 0 0; font-size: 12px; color: #9a98a1; }
+.wxs-sheet header button {
+    flex: none; width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1; color: #ddd; cursor: pointer; padding: 0;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+}
+.wxs-sheet input[type="search"] {
+    box-sizing: border-box; width: 100%; margin-bottom: 12px; padding: 12px 14px; border-radius: 14px; font: 600 14px "Montserrat", Arial, sans-serif; color: #fff;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); outline: none;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.4);
+}
+.wxs-sheet input[type="search"]:focus { border-color: rgba(242,201,25,.6); }
+.wxs-sheet input[hidden] { display: none; }
+.wxs-gift-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.wxs-gift-card {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px 10px; cursor: pointer; min-width: 0;
+    font: inherit; color: #f1efe9; text-align: center; border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    border: 1px solid rgba(255,255,255,.1);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.14), 0 6px 14px rgba(0,0,0,.28);
+}
+.wxs-gift-card.is-static { cursor: default; }
+.wxs-gift-card.is-selected { border-color: rgba(242,201,25,.8); box-shadow: 0 0 0 1px rgba(242,201,25,.5), 0 0 18px rgba(242,201,25,.22), inset 0 1px 1px rgba(255,255,255,.2); }
+.wxs-gift-card.is-dim { opacity: .5; }
+.wxs-gift-img { display: block; width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
+    background: radial-gradient(circle at 50% 30%, #2b2a31, #131317 75%); }
+.wxs-gift-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wxs-gift-fallback { display: grid; place-items: center; width: 100%; height: 100%; font-size: 30px; }
+.wxs-gift-card strong { max-width: 100%; font-size: 11px; font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wxs-gift-card em { font-style: normal; font-size: 12px; font-weight: 800; color: #151208; padding: 3px 9px; border-radius: 999px;
+    background: linear-gradient(180deg, #ffe477, #f2c919); }
+.wxs-gift-card i { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9a98a1; }
+.wxs-gift-empty { display: grid; justify-items: center; gap: 4px; padding: 36px 0 26px; color: #8e8c95; }
+.wxs-gift-empty[hidden] { display: none; }
+.wxs-gift-empty span { font-size: 54px; filter: grayscale(.5); }
+.wxs-gift-empty p { margin: 0; font-weight: 700; }
+
+/* Переключатель режима: перебиваем общий «стеклянный» скин кнопок апгрейдера */
+#upgraderPage .wxs-seg button {
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: #9a98a1;
+}
+#upgraderPage .wxs-seg button[aria-pressed="true"] {
+    color: #151208 !important;
+    background: linear-gradient(180deg, #ffe477, #f2c919) !important;
+    box-shadow: 0 2px 10px rgba(242,201,25,.35), inset 0 1px 1px rgba(255,255,255,.6) !important;
+}
+#upgraderPage .wxs-inv-btn { min-height: 0; }
+
+/* Центр колеса: только подарок в кружке — без рамки, свечения и liquid glass */
+#upgraderPage .upg-center > .wxs-gift-pick,
+#upgraderPage .upg-center > .wxs-gift-pick:active,
+#upgraderPage .upg-center > .wxs-gift-pick:focus,
+#upgraderPage .upg-center > .wxs-gift-pick:focus-visible {
+    background: none !important; border: 0 !important; outline: 0 !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-radius: 50% !important;
+    transform: translate(-50%, -50%) !important; filter: none !important;
+}
+.wxs-gift-art { box-shadow: none !important; background: none !important; border-radius: 50%; overflow: hidden; }
+.wxs-gift-art img { border-radius: 50%; }
+#wxsGiftSub:empty { display: none; }
+
+/* Переключатель режима: в одну строку, компактно */
+.wxs-upg-switch { flex-wrap: nowrap; }
+.wxs-seg { flex: none; }
+#upgraderPage .wxs-seg button, #upgraderPage .wxs-inv-btn {
+    white-space: nowrap; width: auto; height: auto; min-width: 0; min-height: 0; line-height: 1;
+}
+#upgraderPage .wxs-seg button { padding: 10px 14px; font-size: 13px; }
+#upgraderPage .wxs-inv-btn { padding: 10px 12px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+#upgraderPage .wxs-inv-btn b { margin: 0; line-height: 1; }
+
+/* Иконка выбора подарка: никакого стекла — ни слоёв-обводок, ни подсветки */
+#upgraderPage .upg-center > .wxs-gift-pick::before,
+#upgraderPage .upg-center > .wxs-gift-pick::after { content: none !important; display: none !important; }
+#upgraderPage .upg-center > .wxs-gift-pick { background-image: none !important; overflow: visible; }
+
+/* =====================================================
+   Подарок как ставка, карточка подарка в инвентаре
+===================================================== */
+.wxs-stake-btn[hidden], .wxs-stake-box[hidden], .wxs-item[hidden], .wxs-sheet-back[hidden], .wxs-gift-grid[hidden] { display: none !important; }
+#upgraderPage .wxs-stake-btn {
+    flex: none; width: 46px; height: 46px; min-height: 0; padding: 0; margin: 0 8px;
+    display: inline-grid; place-items: center; border-radius: 50%; color: #d9d6cf; cursor: pointer;
+}
+#upgraderPage .wxs-stake-btn svg { width: 24px; height: 24px; }
+#upgraderPage .wxs-stake-btn.is-active { color: #151208; background: linear-gradient(180deg, #ffe477, #f2c919) !important; }
+
+/* когда ставка — подарок: поле суммы и ½/x2/MAX скрыты, шанс считается сам */
+#upgraderPage.gift-stake #upgBetHeader .card-input-wrap,
+#upgraderPage.gift-stake #upgBetBtns { display: none; }
+#upgraderPage.gift-stake .upg-slider-card,
+#upgraderPage.gift-stake .upg-chance-row,
+#upgraderPage.gift-stake .upg-panel .mines-bet-header:not(#upgBetHeader),
+#upgraderPage.gift-stake .upg-panel .ctrl-btns-row:not(#upgBetBtns) { opacity: .42; pointer-events: none; }
+
+.wxs-stake-box {
+    position: relative; display: flex; align-items: stretch; justify-content: center; gap: 8px;
+    margin: 12px 0 4px; padding: 14px 10px 10px; border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.015));
+    border: 1px solid rgba(255,255,255,.1);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.12);
+}
+.wxs-stake-slot {
+    flex: 1 1 0; min-width: 0; display: grid; justify-items: center; align-content: start; gap: 5px;
+    padding: 0; background: none !important; border: 0 !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: #f1efe9; font: inherit; cursor: pointer;
+}
+.wxs-stake-slot small { font-size: 9px; font-weight: 800; letter-spacing: .14em; color: #8e8c95; }
+.wxs-stake-img {
+    display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; overflow: hidden;
+    background: radial-gradient(circle at 50% 30%, #2b2a31, #131317 75%); font-size: 26px; color: #8e8c95;
+}
+.wxs-stake-slot.is-empty .wxs-stake-img { border: 1.5px dashed rgba(255,255,255,.28); background: none; }
+.wxs-stake-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wxs-stake-slot strong { max-width: 100%; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wxs-stake-slot em { font-style: normal; font-size: 12px; font-weight: 800; color: #f2c919; min-height: 14px; }
+.wxs-stake-arrow { align-self: center; margin-top: 8px; font-size: 22px; font-weight: 800; color: #f2c919; }
+#upgraderPage .wxs-stake-clear {
+    position: absolute; top: 6px; right: 8px; width: 24px; height: 24px; min-height: 0; padding: 0; border-radius: 50%;
+    font-size: 16px; line-height: 1; color: #bdbac3; cursor: pointer;
+}
+
+/* шторка: кнопка «назад» и карточка подарка */
+.wxs-sheet header { align-items: center; }
+.wxs-sheet-title { flex: 1; min-width: 0; }
+.wxs-sheet-back { flex: none; width: 34px; height: 34px; border-radius: 50%; font-size: 24px; line-height: 1; color: #ddd; cursor: pointer; padding: 0;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
+.wxs-item { display: grid; justify-items: center; gap: 12px; padding: 6px 0 4px; text-align: center; }
+.wxs-item-img { width: min(58vw, 230px); aspect-ratio: 1; border-radius: 28px; overflow: hidden;
+    background: radial-gradient(circle at 50% 30%, #2b2a31, #131317 75%); box-shadow: 0 14px 30px rgba(0,0,0,.45); }
+.wxs-item-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wxs-item h3 { margin: 4px 0 0; font: 800 20px/1.1 "Montserrat", Arial, sans-serif; }
+.wxs-item-price { font: 800 18px/1 "Montserrat", Arial, sans-serif; color: #151208; padding: 6px 14px; border-radius: 999px;
+    background: linear-gradient(180deg, #ffe477, #f2c919); }
+.wxs-item-btn {
+    width: 100%; padding: 15px 16px; border-radius: 16px; font: 800 15px/1 "Montserrat", Arial, sans-serif; color: #f1efe9; cursor: pointer;
+    background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03)); border: 1px solid rgba(255,255,255,.14);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.2), 0 6px 16px rgba(0,0,0,.3);
+}
+.wxs-item-btn.is-gold { color: #151208; background: linear-gradient(180deg, #ffe477, #f2c919); border-color: rgba(255,228,119,.6); }
+.wxs-item-btn:disabled { opacity: .5; }
+
+.wxs-gift-card.is-unquoted { opacity: .45; filter: grayscale(.6); }
+
+/* след за стрелкой: призраки без filter, чтобы вращение шло на композиторе без перерисовок */
+.upg-rotor.upg-ghost { opacity: 0; }
+.upg-rotor.upg-ghost svg { filter: none; }
+.upg-stack.is-spinning .upg-ghost { will-change: transform, opacity; }
