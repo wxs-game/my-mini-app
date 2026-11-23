@@ -117,23 +117,40 @@ const setReleaseScreen = (() => {
 
         const animate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (animation && animate) animation.play();
-        if (!animation && !stickerLoading && window.TgsCache && window.lottie) {
+        if (!animation && !stickerLoading) {
+            const container = document.getElementById('releaseSticker');
+            const emblem = container.parentElement;
+            const showFallback = () => {
+                animation?.destroy();
+                animation = null;
+                emblem.classList.remove('has-sticker');
+                emblem.classList.add('sticker-failed');
+            };
+            if (!window.TgsCache || !window.lottie) {
+                showFallback();
+                return;
+            }
             stickerLoading = true;
-            window.TgsCache.load('animations/stickers/vip').then(data => {
-                if (!data) return;
-                const container = document.getElementById('releaseSticker');
+            emblem.classList.remove('sticker-failed');
+            window.TgsCache.load('animations/stickers/wxs').then(data => {
+                if (!data) {
+                    showFallback();
+                    return;
+                }
                 animation = window.lottie.loadAnimation({
                     container,
                     renderer: 'svg',
+                    rendererSettings: { wxsKeepSvg: true },
                     animationData: data,
                     loop: animate,
                     autoplay: animate && !screen.hidden
                 });
                 animation.addEventListener('DOMLoaded', () => {
-                    container.parentElement.classList.add('has-sticker');
+                    emblem.classList.add('has-sticker');
                     if (!animate) animation.goToAndStop(30, true);
                 });
-            }).catch(() => {}).finally(() => { stickerLoading = false; });
+                animation.addEventListener('data_failed', showFallback);
+            }).catch(showFallback).finally(() => { stickerLoading = false; });
         }
     };
 })();
