@@ -134,22 +134,33 @@ button, input, select, textarea {
 }
 
 .release-sticker,
-.release-emblem-fallback {
+.release-emblem-fallback,
+.release-emblem > .tge-spinner {
     grid-area: 1 / 1;
 }
 
 .release-sticker {
     width: 88px;
     height: 88px;
+    visibility: hidden;
 }
 
 .release-emblem-fallback {
+    display: none;
     color: #ffca70;
     font-size: 52px;
 }
 
-.release-emblem.has-sticker .release-emblem-fallback {
-    visibility: hidden;
+.release-emblem.has-sticker .release-sticker {
+    visibility: visible;
+}
+
+.release-emblem.sticker-failed .release-emblem-fallback {
+    display: block;
+}
+
+.release-emblem:is(.has-sticker, .sticker-failed) > .tge-spinner {
+    display: none;
 }
 
 .release-content h1 {
