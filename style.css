@@ -127,10 +127,7 @@ button, input, select, textarea {
     display: grid;
     place-items: center;
     margin: 0 auto 21px;
-    border-radius: 34px;
-    border: 1px solid #ffc6634a;
-    background: radial-gradient(circle, #a65f2633, #3d2a1940 75%);
-    box-shadow: 0 0 34px #ffaa352a, inset 0 1px 0 #fff7db25;
+    background: radial-gradient(ellipse, #a65f2633, transparent 72%);
 }
 
 .release-sticker,

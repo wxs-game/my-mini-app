@@ -140,6 +140,7 @@ const setReleaseScreen = (() => {
                 animation = window.lottie.loadAnimation({
                     container,
                     renderer: 'svg',
+                    rendererSettings: { wxsKeepSvg: true },
                     animationData: data,
                     loop: animate,
                     autoplay: animate && !screen.hidden
