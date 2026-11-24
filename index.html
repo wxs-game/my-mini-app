@@ -357,7 +357,7 @@
                 <button type="button" data-upg-mode="balance" aria-pressed="true">Баланс $</button>
                 <button type="button" data-upg-mode="gifts" aria-pressed="false">Подарки</button>
             </div>
-            <button type="button" id="wxsGiftInventory" class="wxs-inv-btn" aria-haspopup="dialog" hidden>Инвентарь <b id="wxsGiftCount">0</b></button>
+            <button type="button" id="wxsGiftInventory" class="wxs-inv-btn" aria-haspopup="dialog" hidden>Инвентарь <b id="wxsGiftCount">—</b></button>
         </div>
         <div class="upg-wheel-frame">
             <div class="upg-stage-heading"><span class="upg-live-dot" aria-hidden="true"></span><span id="upgStateLabel">ГОТОВ К АПГРЕЙДУ</span></div>
@@ -409,16 +409,17 @@
             </div>
 
             <button id="upgFreebetBtn" class="crash-fb-btn" onclick="toggleUpgraderFreebet()" hidden></button>
-            <button class="mines-main-btn" id="upgPlayBtn" onclick="playUpgrader()" style="margin-top: 14px; width: 100%;">ИГРАТЬ</button>
+            <button type="button" class="mines-main-btn" id="upgPlayBtn" onclick="playUpgrader()">ИГРАТЬ</button>
         </div>
     </section>
     <dialog id="wxsGiftDialog" class="wxs-sheet" aria-labelledby="wxsGiftTitle">
         <div class="wxs-sheet-grip" aria-hidden="true"></div>
         <header>
             <button type="button" id="wxsGiftBack" class="wxs-sheet-back" aria-label="Назад" hidden>‹</button>
-            <div class="wxs-sheet-title"><h2 id="wxsGiftTitle"></h2><p id="wxsGiftSub"></p></div>
+            <div class="wxs-sheet-title"><h2 id="wxsGiftTitle"></h2><p id="wxsGiftSub" role="status"></p></div>
             <button type="button" id="wxsGiftClose" aria-label="Закрыть">×</button>
         </header>
+        <button type="button" id="wxsGiftRetry" hidden>Обновить инвентарь</button>
         <input type="search" id="wxsGiftSearch" placeholder="Поиск по названию" aria-label="Поиск по названию" autocomplete="off">
         <div id="wxsGiftItem" class="wxs-item" hidden></div>
         <div id="wxsGiftList" class="wxs-gift-grid"></div>
