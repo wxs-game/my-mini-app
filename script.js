@@ -7968,16 +7968,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     publicGamePage = getPublicGamePage(launchParam);
     let previewProfile;
     if (String(tg.initDataUnsafe?.user?.id) === PREVIEW_TELEGRAM_ID) {
-        let deadline;
+        const controller = new AbortController();
+        const deadline = setTimeout(() => controller.abort(), 12000);
         try {
-            const verified = await Promise.race([
-                ensurePlayerSecure(),
-                new Promise(resolve => { deadline = setTimeout(resolve, 8000); })
-            ]);
-            if (String(verified?.data?.telegram_id) === PREVIEW_TELEGRAM_ID) {
-                previewProfile = verified.data;
+            // Та же серверная проверка подписи и доступа, что у игровых RPC.
+            const { data, error } = await supabase.rpc('release_ensure_player', { p_init: tg.initData })
+                .abortSignal(controller.signal);
+            if (!error && String(data?.telegram_id) === PREVIEW_TELEGRAM_ID) {
+                previewProfile = data;
                 fullAppAccess = true;
+            } else {
+                console.warn('[preview] Сессия владельца не подтверждена:', error?.code || 'PROFILE_MISMATCH');
             }
+        } catch {
+            console.warn('[preview] Не удалось проверить сессию владельца');
         } finally {
             clearTimeout(deadline);
         }
