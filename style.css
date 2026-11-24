@@ -502,9 +502,6 @@ button, input, select, textarea {
     transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.promo-apply-btn:active {
-    transform: scale(0.96);
-}
 
 .promo-apply-btn:disabled {
     background: rgba(255, 255, 255, 0.08);
@@ -591,7 +588,6 @@ main {
 }
 
 .profile-card:active {
-    transform: scale(0.97);
     border-color: rgba(255, 170, 0, 0.3);
 }
 
@@ -710,9 +706,6 @@ main {
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.balance-add:active {
-    transform: scale(0.9);
-}
 
 /* ==========================================
    HERO БАННЕР ГЛАВНОЙ (HERO SECTION)
@@ -782,9 +775,6 @@ main {
     transition: transform 0.15s ease;
 }
 
-.bonus-button:active {
-    transform: scale(0.95);
-}
 
 .money-orb {
     position: absolute;
@@ -1016,12 +1006,6 @@ main {
     transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
-.action:active {
-    transform: scale(0.94);
-    border-color: #ffaa00;
-    background: #181818;
-}
-
 .action-icon {
     width: 48px;
     height: 48px;
@@ -1096,11 +1080,6 @@ main {
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-}
-
-.game:active {
-    transform: scale(0.96);
-    border-color: rgba(255, 170, 0, 0.5);
 }
 
 .game-image {
@@ -1240,9 +1219,6 @@ main {
     border-color: rgba(255, 200, 0, 0.3);
 }
 
-.mine-tile:active:not(.disabled) {
-    transform: scale(0.92);
-}
 
 /* Открытый алмаз */
 .mine-tile.revealed-gem {
@@ -1329,12 +1305,6 @@ main {
     transition: all 0.2s ease;
 }
 
-.mines-count-btn.active {
-    background: #281d09;
-    border-color: #ffc800;
-    color: #ffc800;
-}
-
 .mines-actions {
     display: grid;
     grid-template-columns: 2fr 1fr;
@@ -1353,9 +1323,6 @@ main {
     transition: transform 0.15s ease;
 }
 
-.mines-main-btn:active {
-    transform: scale(0.96);
-}
 
 .mines-auto-btn {
     background: #1f1f1f;
@@ -1406,11 +1373,6 @@ main {
     z-index: 25;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     transition: transform 0.15s ease, background-color 0.2s ease;
-}
-
-.crash-fairness-trigger:active {
-    transform: scale(0.92);
-    background: rgba(255, 215, 0, 0.2);
 }
 
 /* Нижнее закругленное меню (Bottom Sheet) */
@@ -1565,7 +1527,6 @@ body.fairness-modal-open {
 
 .copy-btn:active {
     opacity: 1;
-    transform: scale(0.9);
 }
 
 /* Иконка внутри кнопки копирования — тот же размер, что был у эмодзи 📋 */
@@ -1597,9 +1558,6 @@ body.fairness-modal-open {
     box-shadow: 0 4px 15px rgba(255, 140, 0, 0.25);
 }
 
-.fairness-verify-link:active {
-    transform: scale(0.98);
-}
 
 /* ==========================================
    СТРАНИЦА ПРОФИЛЯ (PROFILE PAGE)
@@ -1779,9 +1737,6 @@ body.fairness-modal-open {
     transition: transform 0.15s ease;
 }
 
-.p-deposit-btn:active {
-    transform: scale(0.95);
-}
 
 /* ==========================================
    СТРАНИЦА БАЛАНСА (BALANCE PAGE)
@@ -1838,12 +1793,6 @@ body.fairness-modal-open {
     justify-content: center;
     gap: 6px;
     transition: all 0.2s ease;
-}
-
-.mode-btn.active {
-    background: linear-gradient(135deg, #ffc800, #ff9000);
-    color: #000000;
-    box-shadow: 0 4px 15px rgba(255, 160, 0, 0.25);
 }
 
 .form-box {
@@ -2009,9 +1958,6 @@ body.fairness-modal-open {
     transition: transform 0.15s ease;
 }
 
-.main-action-btn:active {
-    transform: scale(0.97);
-}
 
 /* ==========================================
    СТРАНИЦА БОНУСОВ (BONUS PAGE)
@@ -2114,9 +2060,6 @@ body.fairness-modal-open {
     letter-spacing: 0.6px;
 }
 
-.share-preview-inline-btn:active {
-    transform: scale(0.98);
-}
 
 .share-invite-hint {
     margin: 14px 0 0;
@@ -2195,11 +2138,6 @@ body.fairness-modal-open {
     font-weight: 800;
     text-align: center;
     transition: all 0.15s ease;
-}
-
-.pct-btn:active {
-    background: #ffc800;
-    color: #000000;
 }
 
 /* ==========================================
@@ -2378,6 +2316,7 @@ body.fairness-modal-open {
 }
 
 .nav-item {
+    --button-press-shadow: none;
     position: relative;
     z-index: 1;
     display: flex;
@@ -2408,7 +2347,7 @@ body.fairness-modal-open {
 .nav-item.on .nav-icon .sh { fill-opacity: 1; }
 .nav-item.on .nav-icon .dt { stroke: #4a4a4f; }
 .nav-item.on .nav-icon .dtf { fill: #4a4a4f; }
-.bottom-nav.pressing .nav-item.on .nav-icon { transform: translateY(-1px) scale(1.06); }
+.bottom-nav.dragging .nav-item.on .nav-icon { transform: translateY(-1px) scale(1.06); }
 
 .nav-item small {
     font-size: 10px;
@@ -2552,9 +2491,8 @@ body.fairness-modal-open {
 }
 
 .color-option.active {
-    border-color: #ffffff;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
-    transform: scale(1.05);
+    border-color: #c6b9a8;
+    box-shadow: var(--button-raised);
 }
 
 .emoji-picker-row {
@@ -2576,13 +2514,6 @@ body.fairness-modal-open {
     font-size: 20px;
     cursor: pointer;
     transition: all 0.2s ease;
-}
-
-.emoji-option.active {
-    border-color: #f39c12;
-    background: #2a2215;
-    box-shadow: 0 0 8px rgba(243, 156, 18, 0.4);
-    transform: scale(1.05);
 }
 
 /* ==========================================
@@ -2747,16 +2678,14 @@ body.fairness-modal-open {
 
 /* Кнопки + и - */
 .stepper-btn {
-  transition: color 0.2s ease, transform 0.1s ease;
+    min-width: 30px;
+    min-height: 30px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 900;
 }
 
-.stepper-btn:hover {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-.stepper-btn:active {
-  transform: scale(0.9);
-       }
 
 /* ================================================================
    АЙС АРЕНА (Ice Arena) — PvP-банк: чем больше ставка, тем выше шанс
@@ -2773,9 +2702,6 @@ body.fairness-modal-open {
     align-items: center;
     justify-content: center;
     gap: 6px;
-    background:
-        radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 55%),
-        linear-gradient(150deg, #1a4dff 0%, #6a2ff7 55%, #a53bff 100%);
 }
 
 .ice-arena-tile-icon {
@@ -3014,7 +2940,6 @@ body.fairness-modal-open {
 }
 
 .ice-history-chip:active {
-    transform: scale(0.92);
     background: rgba(255, 255, 255, 0.12);
 }
 
@@ -3039,7 +2964,6 @@ body.fairness-modal-open {
 
 .ice-history-open-btn:active {
     background: rgba(255, 255, 255, 0.1);
-    transform: scale(0.98);
 }
 
 .ice-history-open-icon {
@@ -3174,7 +3098,7 @@ body.ice-history-modal-open {
     transition: background 0.15s ease, transform 0.12s ease;
 }
 
-.ice-history-row:active { background: #171717; transform: scale(0.99); }
+.ice-history-row:active { background: #171717; }
 
 .ice-history-row-top {
     display: flex;
@@ -3315,7 +3239,6 @@ body.ice-history-modal-open {
     transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
-.ice-history-replay-btn:active { transform: translate(-50%, -50%) scale(0.94); }
 
 .ice-history-replay-btn.ice-replay-hidden {
     opacity: 0;
@@ -3697,11 +3620,6 @@ body.ice-history-modal-open {
     gap: 6px;
     margin-top: 10px;
 }
-.upg-chance-row .pct-btn.active {
-    background: rgba(255, 200, 0, 0.14);
-    color: #ffc800;
-    box-shadow: inset 0 0 0 1px rgba(255, 200, 0, 0.5);
-}
 .upg-locked .upg-panel .pct-btn,
 .upg-locked .upg-panel .card-input-wrap {
     opacity: 0.55;
@@ -3807,7 +3725,6 @@ input, textarea {
    без теней, градиентов и фильтров (меньше перерисовок = нет лагов).
 ========================================================== */
 .tge-page {
-    --tge-amber: #ff9d00;
     --tge-title-font: 'Russo One', 'Arial Black', Impact, sans-serif; /* поменяй здесь, если найдёшь точнее шрифт */
 }
 
@@ -3826,17 +3743,9 @@ input, textarea {
     gap: 8px;
     padding: 10px 10px 12px;
     border-radius: 24px;
-    border: 3px solid var(--tge-amber);
-    background: transparent;      /* фон плитки убран */
-    box-shadow: none;
     color: #ffffff;
     text-align: center;
     contain: layout style;        /* paint-containment с rounded-углами заставлял GPU маскировать плитку каждый кадр */
-}
-
-.tge-tile:active {
-    transform: scale(0.97);
-    border-color: #ffc800;
 }
 
 .tge-title {
@@ -3897,10 +3806,6 @@ input, textarea {
    Шрифт, размеры и обводка — как у остальных плиток приложения
    (см. .mines-count-btn: тёмная плитка, тонкая рамка, жёлтый актив).
 ========================================================== */
-.dice-page {
-    --dice-yellow: #ffc800;
-}
-
 .dice-tile {
     display: flex;
     align-items: center;
@@ -3918,7 +3823,7 @@ input, textarea {
     white-space: nowrap;           /* название и коэффициент всегда в одну строку */
     transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
-.dice-tile:active { transform: scale(0.96); }
+
 
 /* 1 куб / 2 куба / 3 куба */
 .dice-count-row {
@@ -3942,14 +3847,6 @@ input, textarea {
     font-weight: 700;
 }
 
-/* Выбранная / активная плитка — жёлтая */
-.dice-tile.selected,
-.dice-count-btn.active {
-    background: #281d09;
-    border-color: var(--dice-yellow);
-    color: var(--dice-yellow);
-    box-shadow: 0 0 14px rgba(255, 200, 0, 0.35);
-}
 .dice-tile.selected .dice-mode-coef { opacity: 1; }
 
 /* Сцена: превью → выпавший кубик → результат */
@@ -4232,7 +4129,7 @@ input, textarea {
     transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease,
                 box-shadow 0.25s ease, transform 0.2s cubic-bezier(0.3, 1.5, 0.5, 1);
 }
-.lb-chip:active { transform: scale(0.95); }
+
 .lb-chip.active {
     background: linear-gradient(135deg, #ffc800, #ff8c00);
     border-color: transparent;
@@ -4655,7 +4552,7 @@ body.vip-sheet-open .bottom-nav {
     transform: translateY(120%);
 }
 /* VIP: единая страница приложения, без iframe и отдельного CSS. */
-.vip-page .vip-screen{max-width:680px;margin:0 auto;padding:4px 14px 28px}.vip-page .vip-hero{overflow:hidden;position:relative;padding:20px 16px 16px;border:1px solid rgba(255,191,44,.32);border-radius:22px;background:radial-gradient(circle at 12% 0,rgba(255,154,0,.19),transparent 40%),linear-gradient(145deg,#1d160b,#111113 62%,#14100a);box-shadow:inset 0 1px rgba(255,255,255,.07),0 12px 28px rgba(0,0,0,.32);text-align:left}.vip-kicker{color:#ffc74c;font-size:11px;font-weight:900;letter-spacing:.12em}.vip-page .vip-hero h2{margin:6px 0 2px;font-size:28px;letter-spacing:-.6px}.vip-page .vip-hero p{margin:0}#vipInlineTurnover,.vip-status{color:#a7a7ad;font-size:13px;font-weight:650}.vip-progress-label{display:flex;justify-content:space-between;margin-top:16px;color:#a6a6aa;font-size:11px;font-weight:800;text-transform:uppercase}.vip-progress-label strong{color:#ffc740;font-size:13px}.vip-progress-track{height:10px;margin-top:7px;overflow:hidden;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:#080808}.vip-progress-track i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff8b00,#ffd646);box-shadow:0 0 14px rgba(255,166,0,.45);transition:width .28s ease}.vip-next{margin-top:12px;color:#d2b57c;font-size:12px;font-weight:750}.vip-status{min-height:20px;margin-top:12px!important;line-height:1.4}.vip-retry{width:100%;margin-top:8px;min-height:42px;border:1px solid rgba(255,194,49,.42);border-radius:12px;background:#17130c;color:#ffca4c;font-weight:850}.vip-milestones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:13px}.vip-milestone{min-height:82px;padding:9px 5px;border:1px solid rgba(255,202,91,.25);border-radius:13px;background:rgba(0,0,0,.24);color:#fff0c9;font-size:11px;font-weight:800}.vip-milestone:disabled{opacity:.5}.vip-milestone span,.vip-milestone small{display:block}.vip-milestone small{margin-top:5px;color:#fbc553}.vip-milestone em{display:block;margin-top:5px;color:#9e9ea4;font-size:9px;font-style:normal}.vip-section-title{display:flex;justify-content:space-between;gap:8px;margin:21px 2px 10px;color:#fff;font-size:17px;font-weight:850}.vip-section-title span{align-self:end;color:#85858b;font-size:10px;font-weight:650}.vip-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.vip-card{position:relative;min-height:124px;padding:13px;overflow:hidden;border:1px solid #29292d;border-radius:18px;background:linear-gradient(145deg,#18181b,#101012);color:#fff;text-align:left;box-shadow:inset 0 1px rgba(255,255,255,.04)}.vip-card:active{transform:scale(.98);border-color:#6f5428}.vip-card-icon{display:grid;width:34px;height:34px;place-items:center;border:1px solid rgba(255,193,64,.3);border-radius:11px;background:#251c0d;color:#ffc653;font-size:23px;font-weight:900}.vip-card small,.vip-card b{display:block}.vip-card small{margin-top:12px;color:#a5a5aa;font-size:12px;font-weight:700}.vip-card b{margin-top:3px;font-size:21px}.vip-card i{position:absolute;right:13px;bottom:12px;color:#7e7e83;font-size:22px;font-style:normal}.vip-ranks{display:flex;flex-wrap:wrap;gap:7px}.vip-rank{min-height:40px;padding:8px 11px;border:1px solid #2d2d31;border-radius:12px;background:#141416;color:#c2c2c5;font-size:12px;font-weight:800}.vip-rank.active{border-color:rgba(255,196,67,.5);background:#251b0c;color:#ffd26a}.vip-sheet-layer{position:fixed;inset:0;z-index:99999;display:none}.vip-sheet-layer.open{display:block}.vip-sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}.vip-sheet{position:absolute;right:0;bottom:0;left:0;padding:0 20px max(24px,env(safe-area-inset-bottom));border:1px solid rgba(255,255,255,.13);border-bottom:0;border-radius:28px 28px 0 0;background:#141414;box-shadow:0 -12px 40px rgba(0,0,0,.65);animation:slideUpModal .25s cubic-bezier(.1,.9,.2,1);touch-action:none}.vip-sheet.dragging{animation:none;transition:none}.vip-sheet-handle-zone{display:flex;width:100%;height:47px;align-items:flex-start;justify-content:center;padding-top:15px;border:0;background:transparent;touch-action:none}.vip-sheet-handle-zone span{width:36px;height:4px;border-radius:9px;background:rgba(255,255,255,.34)}.vip-sheet-icon{display:grid;width:54px;height:54px;place-items:center;border:1px solid rgba(255,193,64,.3);border-radius:16px;background:#251c0d;color:#ffca56;font-size:30px}.vip-sheet h2{margin:17px 0 10px;font-size:25px;letter-spacing:-.5px}.vip-sheet p{margin:0;color:#bcbcc0;font-size:15px;font-weight:550;line-height:1.55}.vip-sheet-close{width:100%;min-height:50px;margin-top:22px;border:0;border-radius:14px;background:linear-gradient(135deg,#ffd700,#ff8c00);color:#0c0c0c;font-size:16px;font-weight:900}
+.vip-page .vip-screen{max-width:680px;margin:0 auto;padding:4px 14px 28px}.vip-page .vip-hero{overflow:hidden;position:relative;padding:20px 16px 16px;border:1px solid rgba(255,191,44,.32);border-radius:22px;background:radial-gradient(circle at 12% 0,rgba(255,154,0,.19),transparent 40%),linear-gradient(145deg,#1d160b,#111113 62%,#14100a);box-shadow:inset 0 1px rgba(255,255,255,.07),0 12px 28px rgba(0,0,0,.32);text-align:left}.vip-kicker{color:#ffc74c;font-size:11px;font-weight:900;letter-spacing:.12em}.vip-page .vip-hero h2{margin:6px 0 2px;font-size:28px;letter-spacing:-.6px}.vip-page .vip-hero p{margin:0}#vipInlineTurnover,.vip-status{color:#a7a7ad;font-size:13px;font-weight:650}.vip-progress-label{display:flex;justify-content:space-between;margin-top:16px;color:#a6a6aa;font-size:11px;font-weight:800;text-transform:uppercase}.vip-progress-label strong{color:#ffc740;font-size:13px}.vip-progress-track{height:10px;margin-top:7px;overflow:hidden;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:#080808}.vip-progress-track i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ff8b00,#ffd646);box-shadow:0 0 14px rgba(255,166,0,.45);transition:width .28s ease}.vip-next{margin-top:12px;color:#d2b57c;font-size:12px;font-weight:750}.vip-status{min-height:20px;margin-top:12px!important;line-height:1.4}.vip-retry{width:100%;margin-top:8px;min-height:42px;border:1px solid rgba(255,194,49,.42);border-radius:12px;background:#17130c;color:#ffca4c;font-weight:850}.vip-milestones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:13px}.vip-milestone{min-height:82px;padding:9px 5px;border:1px solid rgba(255,202,91,.25);border-radius:13px;background:rgba(0,0,0,.24);color:#fff0c9;font-size:11px;font-weight:800}.vip-milestone:disabled{opacity:.5}.vip-milestone span,.vip-milestone small{display:block}.vip-milestone small{margin-top:5px;color:#fbc553}.vip-milestone em{display:block;margin-top:5px;color:#9e9ea4;font-size:9px;font-style:normal}.vip-section-title{display:flex;justify-content:space-between;gap:8px;margin:21px 2px 10px;color:#fff;font-size:17px;font-weight:850}.vip-section-title span{align-self:end;color:#85858b;font-size:10px;font-weight:650}.vip-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.vip-card{position:relative;min-height:124px;padding:13px;overflow:hidden;border:1px solid #29292d;border-radius:18px;background:linear-gradient(145deg,#18181b,#101012);color:#fff;text-align:left;box-shadow:inset 0 1px rgba(255,255,255,.04)}.vip-card:active{border-color:#6f5428}.vip-card-icon{display:grid;width:34px;height:34px;place-items:center;border:1px solid rgba(255,193,64,.3);border-radius:11px;background:#251c0d;color:#ffc653;font-size:23px;font-weight:900}.vip-card small,.vip-card b{display:block}.vip-card small{margin-top:12px;color:#a5a5aa;font-size:12px;font-weight:700}.vip-card b{margin-top:3px;font-size:21px}.vip-card i{position:absolute;right:13px;bottom:12px;color:#7e7e83;font-size:22px;font-style:normal}.vip-ranks{display:flex;flex-wrap:wrap;gap:7px}.vip-rank{min-height:40px;padding:8px 11px;border:1px solid #2d2d31;border-radius:12px;background:#141416;color:#c2c2c5;font-size:12px;font-weight:800}.vip-rank.active{border-color:rgba(255,196,67,.5);background:#251b0c;color:#ffd26a}.vip-sheet-layer{position:fixed;inset:0;z-index:99999;display:none}.vip-sheet-layer.open{display:block}.vip-sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}.vip-sheet{position:absolute;right:0;bottom:0;left:0;padding:0 20px max(24px,env(safe-area-inset-bottom));border:1px solid rgba(255,255,255,.13);border-bottom:0;border-radius:28px 28px 0 0;background:#141414;box-shadow:0 -12px 40px rgba(0,0,0,.65);animation:slideUpModal .25s cubic-bezier(.1,.9,.2,1);touch-action:none}.vip-sheet.dragging{animation:none;transition:none}.vip-sheet-handle-zone{display:flex;width:100%;height:47px;align-items:flex-start;justify-content:center;padding-top:15px;border:0;background:transparent;touch-action:none}.vip-sheet-handle-zone span{width:36px;height:4px;border-radius:9px;background:rgba(255,255,255,.34)}.vip-sheet-icon{display:grid;width:54px;height:54px;place-items:center;border:1px solid rgba(255,193,64,.3);border-radius:16px;background:#251c0d;color:#ffca56;font-size:30px}.vip-sheet h2{margin:17px 0 10px;font-size:25px;letter-spacing:-.5px}.vip-sheet p{margin:0;color:#bcbcc0;font-size:15px;font-weight:550;line-height:1.55}.vip-sheet-close{width:100%;min-height:50px;margin-top:22px;border:0;border-radius:14px;background:linear-gradient(135deg,#ffd700,#ff8c00);color:#0c0c0c;font-size:16px;font-weight:900}
 .vip-hero {
     position: relative;
     overflow: hidden;
@@ -4799,7 +4696,7 @@ body.vip-sheet-open .bottom-nav {
     box-shadow: 0 5px 14px rgba(255, 160, 0, 0.22);
     transition: transform 0.15s ease, opacity 0.2s ease;
 }
-.task-claim:active { transform: scale(0.95); }
+
 .task-claim:disabled { opacity: 0.42; box-shadow: none; color: #d7d7d7; background: #252525; }
 .task-claim.done { opacity: 0.55; color: #ffc800; background: #221d0c; }
 .task-card.completed { border-color: rgba(255, 200, 0, 0.24); }
@@ -5210,163 +5107,16 @@ img.img-pending { opacity: 0; }
     margin-top: 10px;
     padding: 10px 12px;
     border-radius: 12px;
-    background: rgba(255, 200, 0, 0.10);
-    border: 1px dashed rgba(255, 200, 0, 0.55);
-    color: #ffd60a;
+    border: 1px solid transparent;
     font-size: 13px;
     font-weight: 800;
     transition: all 0.15s ease;
 }
 
-.crash-fb-btn.on {
-    background: #ffd60a;
-    border-style: solid;
-    color: #000000;
-}
-
-.crash-fb-btn:active {
-    transform: scale(0.98);
-}
-
-
-/* Crash liquid glass: translucent tint and a small, precomputed lens map. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
-    --glass-tint: rgba(37, 30, 22, .34);
-    position: relative;
-    isolation: isolate;
-    background: var(--glass-tint);
-    border: 1px solid rgba(255, 255, 255, .18);
-    box-shadow: 0 5px 12px rgba(0, 0, 0, .32),
-        inset 0 1px 1px rgba(255, 255, 255, .34),
-        inset 0 -1px 1px rgba(0, 0, 0, .5);
-    color: #f4eee5;
-    opacity: 1;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: transform .16s cubic-bezier(.2,.8,.2,1),
-        box-shadow .16s ease, border-color .16s ease;
-}
-/* Rim highlights stay separate from the refracted backdrop and readable text. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link)::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    pointer-events: none;
-    background: radial-gradient(ellipse at 18% 0%, rgba(255,255,255,.16), transparent 58%),
-        radial-gradient(ellipse at 95% 110%, rgba(255,205,140,.10), transparent 55%),
-        linear-gradient(170deg, rgba(255,255,255,.08), transparent 48%, rgba(0,0,0,.12));
-    transition: transform .16s ease, opacity .16s ease;
-}
-#crashPage #crashActionBtn,
-#upgraderPage #upgFreebetBtn.on,
-#upgraderPage .pct-btn.active,
-#crashPage .crash-fb-btn.on,
-#crashFairnessModal .fairness-verify-link {
-    --glass-tint: rgba(171, 104, 14, .42);
-    border-color: rgba(255, 211, 137, .52);
-    color: #fff6df;
-}
-#crashPage .crash-fb-btn { border-style: solid; color: #ffdb8a; }
-#crashPage .crash-fairness-trigger { position: absolute; }
 #crashFairnessModal .copy-btn { border-radius: 9px; min-width: 32px; min-height: 32px; }
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):focus-visible {
-    outline: 2px solid #ffdb8a;
-    outline-offset: 3px;
-}
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
-    transform: translateY(2px) scale(.965);
-    box-shadow: 0 1px 3px rgba(0,0,0,.28),
-        inset 0 2px 5px rgba(0,0,0,.42), inset 0 -1px 1px rgba(255,255,255,.2);
-    border-color: rgba(255, 222, 170, .65);
-}
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link):not(:disabled):active::before {
-    transform: scale(.98) translateY(1px);
-    opacity: .65;
-}
-:is(#crashPage, #crashFairnessModal, #upgraderPage) button:disabled {
-    opacity: .45;
-    cursor: default;
-    transform: none;
-}
-@media (prefers-reduced-motion: reduce) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link),
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link)::before {
-        transition: none;
-    }
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active,
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button:where(:not(.back-button)), .fairness-verify-link):not(:disabled):active::before {
-        transform: none;
-    }
-}
-
-/* Small, static surfaces only. Browsers without SVG backdrop support keep blur.
-   No feTurbulence, animated filter parameters, or full-screen backdrop effects. */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
-    -webkit-backdrop-filter: blur(2px) saturate(1.12);
-    backdrop-filter: blur(2px) saturate(1.12);
-}
-@supports (backdrop-filter: url("#crash-glass-refraction")) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
-        backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
-    }
-}
-/* The scene behind this button changes every frame: enable its lens on press. */
-#crashPage .crash-fairness-trigger {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-}
-#crashPage .crash-fairness-trigger:not(:disabled):active {
-    -webkit-backdrop-filter: blur(2px) saturate(1.12);
-    backdrop-filter: blur(2px) saturate(1.12);
-}
-#upgraderPage #upgPlayBtn {
-    display: block;
-    width: 100%;
-    min-height: 48px;
-    margin-top: 14px;
-    background: linear-gradient(135deg, #ffdc46, #ffa61c);
-    border-color: #ffd878;
-    color: #211503;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-}
-#upgraderPage #upgPlayBtn::before { content: none; }
-#upgraderPage #upgPlayBtn:disabled {
-    opacity: 1;
-    background: #493820;
-    border-color: #866a40;
-    color: #ffe5b3;
-}
-@supports (backdrop-filter: url("#crash-glass-refraction")) {
-    #crashPage .crash-fairness-trigger:not(:disabled):active {
-        backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
-    }
-}
-@media (prefers-reduced-transparency: reduce) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link) {
-        --glass-tint: #241e17;
-        -webkit-backdrop-filter: none !important;
-        backdrop-filter: none !important;
-    }
-}
-
-
+#upgPlayBtn { display: block; width: 100%; min-height: 48px; margin-top: 14px; }
 #upgraderPage input { font-size: 16px; }
 #upgFreebetBtn[hidden] { display: none !important; }
-
-/* Draw the glass rim inside each button without changing the original dimensions. */
-#upgraderPage :is(button, .fairness-verify-link) { border-width: 0; }
-#upgraderPage button::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border: 1px solid;
-    border-color: inherit;
-    border-radius: inherit;
-    pointer-events: none;
-}
 
 /* Upgrader: graphite dial, red probability sector and a compositor-driven gold pointer. */
 #upgraderPage .upg-card {
@@ -5586,9 +5336,6 @@ img.img-pending { opacity: 0; }
     box-shadow: 0 3px 7px rgba(0, 0, 0, .18),
         inset 0 1px 1px rgba(255, 255, 255, .24),
         inset 0 -1px 1px rgba(0, 0, 0, .26);
-    touch-action: pan-y;
-    transition: transform .16s cubic-bezier(.2,.8,.2,1),
-        border-color .16s ease, box-shadow .16s ease;
 }
 #crashPage .crash-player-row::before {
     content: "";
@@ -5609,38 +5356,11 @@ img.img-pending { opacity: 0; }
     background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
     box-shadow: inset 0 1px 1px rgba(255,255,255,.16), inset 0 -1px 1px rgba(0,0,0,.14);
 }
-#crashPage .crash-player-row.is-glass-pressed {
-    transform: translateY(1px) scale(.985);
-    border-color: rgba(255, 228, 186, .45);
-    box-shadow: 0 1px 2px rgba(0,0,0,.14), inset 0 2px 4px rgba(0,0,0,.24),
-        inset 0 -1px 1px rgba(255,255,255,.18);
-    -webkit-backdrop-filter: blur(2px) saturate(1.12);
-    backdrop-filter: blur(2px) saturate(1.12);
-}
-#crashPage .crash-player-row.is-glass-pressed::before {
-    background: radial-gradient(ellipse at var(--player-press-x, 50%) var(--player-press-y, 50%),
-        rgba(255,255,255,.20), transparent 65%),
-        linear-gradient(170deg, rgba(255,255,255,.07), transparent 50%, rgba(255,211,151,.08));
-}
-@supports (backdrop-filter: url("#crash-glass-refraction")) {
-    #crashPage .crash-player-row.is-glass-pressed {
-        backdrop-filter: url("#crash-glass-refraction") saturate(1.12);
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    #crashPage .crash-player-row { transition: none; }
-    #crashPage .crash-player-row.is-glass-pressed { transform: none; }
-}
 @media (prefers-reduced-transparency: reduce) {
     #crashPage :is(.crash-players-box, .crash-player-row, .crash-player-status) {
         background: #1c1914;
     }
-    #crashPage .crash-player-row.is-glass-pressed {
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-    }
 }
-
 
 
 /* =====================================================
@@ -5751,68 +5471,11 @@ img.img-pending { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .upg-stack .upg-layer-lose { transition: none; } }
 
 
-
-
-/* =====================================================
-   LIQUID GLASS 2.0 — живое преломление при нажатии (вся игра)
-===================================================== */
-.lg-press-lens {
-    position: fixed;
-    z-index: 2147483000;
-    pointer-events: none;
-    box-sizing: border-box;
-    opacity: 0;
-    will-change: transform, opacity;
-    border: 1px solid rgba(255,255,255,.55);
-    background:
-        radial-gradient(ellipse 70% 45% at 28% 6%, rgba(255,255,255,.38), transparent 62%),
-        radial-gradient(ellipse 60% 40% at 80% 104%, rgba(255,214,150,.22), transparent 60%),
-        linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.02) 50%, rgba(255,255,255,.08));
-    box-shadow:
-        0 10px 26px rgba(0,0,0,.45),
-        inset 0 1.5px 1px rgba(255,255,255,.75),
-        inset 0 -2px 3px rgba(255,255,255,.18),
-        inset 0 0 14px rgba(255,255,255,.14);
-    -webkit-backdrop-filter: blur(1.2px) brightness(1.16) saturate(1.5);
-    backdrop-filter: blur(1.2px) brightness(1.16) saturate(1.5);
-}
-/* Настоящее преломление: линза с картой смещения (где браузер умеет SVG в backdrop-filter) */
-@supports (backdrop-filter: url("#glass-press")) {
-    .lg-press-lens.lg-svg {
-        -webkit-backdrop-filter: url("#glass-press") brightness(1.1) saturate(1.4);
-        backdrop-filter: url("#glass-press") brightness(1.1) saturate(1.4);
-    }
-}
-@media (prefers-reduced-transparency: reduce) {
-    .lg-press-lens { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(255,255,255,.12); }
-}
-
-/* Стеклянные кнопки краша/апгрейдера: при нажатии — сильнее линза и «упругий» отклик */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
-    border-color: rgba(255,255,255,.5);
-    box-shadow: 0 2px 8px rgba(0,0,0,.4),
-        inset 0 2px 2px rgba(255,255,255,.65),
-        inset 0 -2px 4px rgba(255,255,255,.16),
-        inset 0 0 18px rgba(255,255,255,.12);
-    -webkit-backdrop-filter: blur(1.5px) saturate(1.5) brightness(1.12);
-    backdrop-filter: blur(1.5px) saturate(1.5) brightness(1.12);
-}
-@supports (backdrop-filter: url("#glass-press-soft")) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
-        backdrop-filter: url("#glass-press-soft") saturate(1.4) brightness(1.1);
-    }
-}
-
 /* Ползунок шанса: пока тянем — стекло настоящее, с преломлением */
 .upg-slider-control.is-drag .upg-liquid-thumb {
     -webkit-backdrop-filter: blur(1px) saturate(1.7) brightness(1.15);
     backdrop-filter: blur(1px) saturate(1.7) brightness(1.15);
     box-shadow: 0 6px 16px #000a, 0 0 14px rgba(255,255,255,.28), inset 0 2px 2px #fffe, inset 0 -2px 4px #ffffff40;
-}
-@supports (backdrop-filter: url("#glass-press")) {
-    .upg-slider-control.is-drag .upg-liquid-thumb {
-        backdrop-filter: url("#glass-press") saturate(1.5) brightness(1.1);
-    }
 }
 
 /* Строка «Коэффициент … · при победе …» удалена; пустую плашку не показываем */
@@ -5830,66 +5493,6 @@ img.img-pending { opacity: 0; }
     background: linear-gradient(180deg, #10131a 0%, #05060a 100%);
     box-shadow: none;
     overflow: hidden;
-}
-
-
-/* =====================================================
-   LIQUID GLASS 3.0 — как нижняя панель: тонкий светлый ободок,
-   чистый центр, сильный изгиб у края + дисперсия (Apple-стиль)
-===================================================== */
-.lg-press-lens {
-    border: 0;
-    background:
-        radial-gradient(ellipse 65% 38% at 30% 4%, rgba(255,255,255,.30), transparent 65%),
-        radial-gradient(ellipse 55% 35% at 78% 106%, rgba(255,255,255,.16), transparent 62%),
-        rgba(255,255,255,.035);
-    box-shadow:
-        0 12px 30px rgba(0,0,0,.5),
-        0 2px 6px rgba(0,0,0,.35),
-        inset 0 0 22px rgba(255,255,255,.10),
-        inset 0 1px 1px rgba(255,255,255,.55),
-        inset 0 -1px 2px rgba(255,255,255,.22);
-    -webkit-backdrop-filter: blur(.6px) brightness(1.14) saturate(1.55);
-    backdrop-filter: blur(.6px) brightness(1.14) saturate(1.55);
-}
-.lg-press-lens::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1.5px;
-    pointer-events: none;
-    background: conic-gradient(from -40deg,
-        rgba(255,255,255,.95) 0deg, rgba(255,255,255,.18) 80deg,
-        rgba(255,255,255,.8) 175deg, rgba(255,255,255,.14) 265deg, rgba(255,255,255,.95) 360deg);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-}
-@supports (backdrop-filter: url("#glass-press")) {
-    .lg-press-lens.lg-svg {
-        -webkit-backdrop-filter: url("#glass-press") brightness(1.08) saturate(1.5);
-        backdrop-filter: url("#glass-press") brightness(1.08) saturate(1.5);
-    }
-}
-
-/* Кнопки: стеклянная «кожа» — ободок и блик поверх любого цвета, цвет и градиент кнопки не трогаем */
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled) {
-    box-shadow:
-        0 6px 16px rgba(0,0,0,.34),
-        inset 0 0 0 1px rgba(255,255,255,.16),
-        inset 0 1.5px 1px rgba(255,255,255,.5),
-        inset 0 -1.5px 2px rgba(255,255,255,.12),
-        inset 0 0 16px rgba(255,255,255,.05);
-}
-:is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
-    -webkit-backdrop-filter: blur(.8px) saturate(1.6) brightness(1.14);
-    backdrop-filter: blur(.8px) saturate(1.6) brightness(1.14);
-}
-@supports (backdrop-filter: url("#glass-press-soft")) {
-    :is(#crashPage, #crashFairnessModal, #upgraderPage) :is(button, .fairness-verify-link):not(:disabled):active {
-        backdrop-filter: url("#glass-press-soft") saturate(1.5) brightness(1.1);
-    }
 }
 
 
@@ -5913,20 +5516,15 @@ img.img-pending { opacity: 0; }
 .wxs-seg button {
     font: 800 13px/1 "Montserrat", Arial, sans-serif; letter-spacing: .02em; color: #9a98a1;
     background: transparent; border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer;
-    box-shadow: none !important; transition: color .2s, background .25s, box-shadow .25s;
-}
-.wxs-seg button[aria-pressed="true"] {
-    color: #151208;
-    background: linear-gradient(180deg, #ffe477, #f2c919);
-    box-shadow: 0 2px 10px rgba(242,201,25,.35), inset 0 1px 1px rgba(255,255,255,.6) !important;
+    transition: color .2s, background .25s, box-shadow .25s;
 }
 .wxs-inv-btn {
     font: 800 13px/1 "Montserrat", Arial, sans-serif; color: #f1efe9; cursor: pointer;
     padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14);
     background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
 }
-.wxs-inv-btn[hidden] { display: none; }
-.wxs-inv-btn b { margin-left: 4px; padding: 2px 7px; border-radius: 999px; background: #f2c919; color: #151208; font-size: 11px; }
+#upgraderPage .wxs-inv-btn[hidden] { display: none; }
+.wxs-inv-btn b { margin-left: 4px; padding: 2px 7px; border-radius: 999px; background: #41382f; color: #eee2d1; font-size: 11px; }
 
 /* центр колеса: выбор подарка */
 .upg-center > .wxs-gift-pick {
@@ -5946,7 +5544,7 @@ img.img-pending { opacity: 0; }
 .upg-center.gift-empty > .wxs-gift-pick { top: 50cqw; width: 33cqw; height: 33cqw; }
 .upg-center.gift-empty .wxs-gift-svg { display: block; transition: color .2s, transform .2s; }
 .upg-center.gift-empty .wxs-gift-art { display: none; }
-.upg-center.gift-empty .wxs-gift-pick:active .wxs-gift-svg { color: #f2c919; transform: scale(.94); }
+.upg-center.gift-empty .wxs-gift-pick:active .wxs-gift-svg { color: #f2c919; }
 #upgraderPage.gift-mode .upg-center.gift-empty .upg-center-value,
 #upgraderPage.gift-mode .upg-center.gift-empty .upg-center-coef,
 #upgraderPage.gift-mode .upg-center.gift-empty .upg-center-caption { visibility: hidden; }
@@ -5996,8 +5594,8 @@ img.img-pending { opacity: 0; }
 .wxs-gift-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .wxs-gift-fallback { display: grid; place-items: center; width: 100%; height: 100%; font-size: 30px; }
 .wxs-gift-card strong { max-width: 100%; font-size: 11px; font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wxs-gift-card em { font-style: normal; font-size: 12px; font-weight: 800; color: #151208; padding: 3px 9px; border-radius: 999px;
-    background: linear-gradient(180deg, #ffe477, #f2c919); }
+.wxs-gift-card em { font-style: normal; font-size: 12px; font-weight: 800; color: #eee2d1; padding: 3px 9px; border-radius: 999px;
+    background: #41382f; }
 .wxs-gift-card i { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9a98a1; }
 .wxs-gift-empty { display: grid; justify-items: center; gap: 4px; padding: 36px 0 26px; color: #8e8c95; }
 .wxs-gift-empty[hidden] { display: none; }
@@ -6009,18 +5607,6 @@ img.img-pending { opacity: 0; }
     padding: 6px 12px;
     border-radius: 10px;
 }
-
-/* Переключатель режима: перебиваем общий «стеклянный» скин кнопок апгрейдера */
-#upgraderPage .wxs-seg button {
-    background: transparent !important; border: 0 !important; box-shadow: none !important;
-    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: #9a98a1;
-}
-#upgraderPage .wxs-seg button[aria-pressed="true"] {
-    color: #151208 !important;
-    background: linear-gradient(180deg, #ffe477, #f2c919) !important;
-    box-shadow: 0 2px 10px rgba(242,201,25,.35), inset 0 1px 1px rgba(255,255,255,.6) !important;
-}
-#upgraderPage .wxs-inv-btn { min-height: 0; }
 
 /* Центр колеса: только подарок в кружке — без рамки, свечения и liquid glass */
 #upgraderPage .upg-center > .wxs-gift-pick,
@@ -6059,7 +5645,6 @@ img.img-pending { opacity: 0; }
     display: inline-grid; place-items: center; border-radius: 50%; color: #d9d6cf; cursor: pointer;
 }
 #upgraderPage .wxs-stake-btn svg { width: 24px; height: 24px; }
-#upgraderPage .wxs-stake-btn.is-active { color: #151208; background: linear-gradient(180deg, #ffe477, #f2c919) !important; }
 
 /* когда ставка — подарок: поле суммы и ½/x2/MAX скрыты, шанс считается сам */
 #upgraderPage.gift-stake #upgBetHeader .card-input-wrap,
@@ -6078,8 +5663,7 @@ img.img-pending { opacity: 0; }
 }
 .wxs-stake-slot {
     flex: 1 1 0; min-width: 0; display: grid; justify-items: center; align-content: start; gap: 5px;
-    padding: 0; background: none !important; border: 0 !important; box-shadow: none !important;
-    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: #f1efe9; font: inherit; cursor: pointer;
+    padding: 8px 4px; border-radius: 12px; font: inherit; cursor: pointer;
 }
 .wxs-stake-slot small { font-size: 9px; font-weight: 800; letter-spacing: .14em; color: #8e8c95; }
 .wxs-stake-img {
@@ -6106,14 +5690,13 @@ img.img-pending { opacity: 0; }
     background: radial-gradient(circle at 50% 30%, #2b2a31, #131317 75%); box-shadow: 0 14px 30px rgba(0,0,0,.45); }
 .wxs-item-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .wxs-item h3 { margin: 4px 0 0; font: 800 20px/1.1 "Montserrat", Arial, sans-serif; }
-.wxs-item-price { font: 800 18px/1 "Montserrat", Arial, sans-serif; color: #151208; padding: 6px 14px; border-radius: 999px;
-    background: linear-gradient(180deg, #ffe477, #f2c919); }
+.wxs-item-price { font: 800 18px/1 "Montserrat", Arial, sans-serif; color: #eee2d1; padding: 6px 14px; border-radius: 999px;
+    background: #41382f; }
 .wxs-item-btn {
     width: 100%; padding: 15px 16px; border-radius: 16px; font: 800 15px/1 "Montserrat", Arial, sans-serif; color: #f1efe9; cursor: pointer;
     background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03)); border: 1px solid rgba(255,255,255,.14);
     box-shadow: inset 0 1px 1px rgba(255,255,255,.2), 0 6px 16px rgba(0,0,0,.3);
 }
-.wxs-item-btn.is-gold { color: #151208; background: linear-gradient(180deg, #ffe477, #f2c919); border-color: rgba(255,228,119,.6); }
 .wxs-item-btn:disabled { opacity: .5; }
 
 .wxs-gift-card.is-unquoted { opacity: .45; filter: grayscale(.6); }
@@ -6122,3 +5705,86 @@ img.img-pending { opacity: 0; }
 .upg-rotor.upg-ghost { opacity: 0; }
 .upg-rotor.upg-ghost svg { filter: none; }
 .upg-stack.is-spinning .upg-ghost { will-change: transform, opacity; }
+
+/* Button surfaces share the muted glass finish of the Rocket controls. */
+:root {
+    --button-neutral: linear-gradient(180deg, #312b25, #1c1916 68%, #171513);
+    --button-primary: linear-gradient(180deg, #60472d, #47311b 64%, #3c2917);
+    --button-selected: linear-gradient(180deg, #493a2b, #31271e);
+    --button-disabled: linear-gradient(180deg, #2d2822, #211d19);
+    --button-edge: rgba(232,218,201,.20);
+    --button-raised: inset 0 1px 2px rgba(255,242,224,.26), 0 3px 7px rgba(0,0,0,.23);
+    --button-depressed: inset 0 3px 7px rgba(0,0,0,.46), inset 0 -1px 1px rgba(255,242,224,.12);
+}
+
+:is(.mines-main-btn, .dice-play-btn, .main-action-btn, .balance-add, .p-deposit-btn,
+    .promo-apply-btn, .bonus-button, .task-claim, .release-return, .fairness-verify-link,
+    .share-preview-inline-btn, .ice-history-replay-btn, .wxs-item-btn.is-gold) {
+    --button-face: var(--button-primary);
+    --button-label: #fff1dc;
+    --button-edge: rgba(234,207,168,.38);
+}
+
+:is(.pct-btn.active, .mines-count-btn.active, .mode-btn.active, .dice-count-btn.active,
+    .dice-tile.selected, .lb-chip.active, .lb-date-btn.active, .crash-fb-btn.on,
+    .wxs-seg [aria-pressed="true"], .wxs-stake-btn.is-active, .wxs-gift-card.is-selected,
+    .emoji-option.active) {
+    --button-face: var(--button-selected);
+    --button-label: #f5dfc0;
+    --button-edge: rgba(234,207,168,.30);
+}
+
+:is(#appShell, #releaseScreen) :is(button, input[type="button"], input[type="submit"],
+    [role="button"], summary, .fairness-verify-link, .profile-card, .custom-select,
+    :where(.select-items) > [onclick], .ice-history-chip, .ice-history-row,
+    .mine-tile, .lb-date-btn, .emoji-option, .nav-pill):not(:where(
+        .nav-item, .vip-sheet-handle-zone, .wxs-gift-pick, .revealed-gem, .revealed-bomb
+    )) {
+    background: var(--button-face, var(--button-neutral));
+    border-color: transparent;
+    color: var(--button-label, #f2eae0);
+    box-shadow: inset 0 0 0 1px var(--button-edge), var(--button-raised);
+}
+
+:is(#appShell, #releaseScreen) :is(button, input[type="button"], input[type="submit"],
+    [role="button"]):is(:disabled, [aria-disabled="true"]) {
+    --button-face: var(--button-disabled);
+    --button-label: #c3b7aa;
+    --button-edge: rgba(232,218,201,.15);
+}
+#upgPlayBtn:disabled { opacity: 1; }
+
+:is(button, input[type="button"], input[type="submit"], [role="button"], summary,
+    .fairness-verify-link, .profile-card, .custom-select, :where(.select-items) > [onclick],
+    .ice-history-chip, .ice-history-row, .mine-tile, .lb-date-btn, .color-option, .emoji-option, .nav-pill) {
+    transition: scale .12s ease-out, translate .12s ease-out, box-shadow .12s ease-out,
+        background-color .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
+}
+
+:is(#appShell, #releaseScreen) :is(button, input[type="button"], input[type="submit"], [role="button"], summary,
+    .fairness-verify-link, .profile-card, .custom-select, :where(.select-items) > [onclick],
+    .ice-history-chip, .ice-history-row, .mine-tile, .lb-date-btn, .color-option, .emoji-option):is(:active, .is-button-pressed):not(:where(
+        :disabled, .disabled, [aria-disabled="true"], .vip-sheet-handle-zone,
+        .custom-select:has(.select-items:active)
+    )),
+#appShell .bottom-nav.pressing:not(.dragging) :is(.nav-pill, .nav-item.on) {
+    translate: 0 1px;
+    scale: .97;
+    box-shadow: var(--button-press-shadow, inset 0 0 0 1px var(--button-edge), var(--button-depressed));
+}
+
+:is(button, input[type="button"], input[type="submit"], [role="button"], summary, .fairness-verify-link):focus-visible {
+    outline: 2px solid #ffda86;
+    outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :is(#appShell, #releaseScreen) :is(button, input[type="button"], input[type="submit"], [role="button"], summary,
+        .fairness-verify-link, .profile-card, .custom-select, :where(.select-items) > [onclick],
+        .ice-history-chip, .ice-history-row, .mine-tile, .lb-date-btn, .color-option, .emoji-option, .nav-pill):is(*, :active, .is-button-pressed),
+    #appShell .bottom-nav.pressing:not(.dragging) :is(.nav-pill, .nav-item.on) {
+        transition: none;
+        translate: none;
+        scale: none;
+    }
+}
