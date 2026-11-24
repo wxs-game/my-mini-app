@@ -4964,7 +4964,15 @@ img.img-pending { opacity: 0; }
 /* ==========================================================
    КУБ: режим «Число» — 6 граней + «Назад»
 ========================================================== */
-.dice-modes.is-numbers { grid-template-columns: repeat(3, 1fr); }
+.dice-modes.is-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#diceModes :is(.dice-mode-name, .dice-mode) { white-space: normal; }
+#diceModes :is(.dice-full, [data-mode="productOver18"]) { grid-column: 1 / -1; }
+#diceModes:is(.is-sum, .is-exact-sums) { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+#diceModes.is-sum .dice-num { grid-column: span 3; }
+#diceModes.is-sum .dice-num:is([data-num="6"], [data-num="7"], [data-num="8"]),
+#diceModes.is-sum .dice-sum-compare,
+#diceModes.is-exact-sums .dice-num { grid-column: span 4; }
+#diceModes.is-exact-sums .dice-num:is([data-num="11"], [data-num="12"]) { grid-column: span 6; }
 /* «Назад»: той же высоты, что «Число»; слово строго по центру, иконка back.tgs слева от слова */
 .dice-mode-back {
     grid-column: 1 / -1;

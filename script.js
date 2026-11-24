@@ -5541,46 +5541,47 @@ window.getDiceCubes = () => diceGame.cubes || 1;
 // Режимы 2/3 куба — компаунд: каждый куб должен попасть в выбранный исход.
 const DICE_MODE_PROB = { high: [3, 6], low: [3, 6], even: [3, 6], odd: [3, 6], center: [2, 6], edges: [2, 6] };   // Центр = грани 3 и 4 (×2.92), Края = 1 и 6 (×2.92)
 const DICE_MODE_ORDER = ["low", "high", "even", "odd", "center", "edges", "number"];
-// 2 куба: Меньше/Больше, Чёт/Нечёт, Одинаковые (любой дубль) и Дубль (конкретные числа)
-const DICE_MODE_ORDER_2 = ["low", "high", "even", "odd", "same", "double"];
-function diceModeOrder(cubes) { return cubes === 2 ? DICE_MODE_ORDER_2 : DICE_MODE_ORDER; }
-// Режим, который включается выбором граней в подменю: «Число» (1/3 куба) или «Дубль» (2 куба)
-function diceNumbersMode(cubes) { return (cubes || 1) === 2 ? "double" : "number"; }
-// Префикс иконок граней: modecubeN (1/3 куба) или mode2cubeN (2 куба)
-function diceNumIconPrefix(cubes) { return (cubes || 1) === 2 ? "mode2cube" : "modecube"; }
-const DICE_MODE_NAMES = { high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", center: "Центр", edges: "Края", number: "Число", same: "Одинаковые", double: "Дубль" };
-const DICE_MAX_NUMBERS = 5;                          // «Число»: можно выбрать от 1 до 5 граней
+const DICE_MODE_ORDER_2 = ["low", "high", "even", "odd", "firstHigher", "secondHigher",
+    "productOver18", "eitherNumber", "double", "sum", "exactSums"];
+const DICE_SUBMENUS = ["number", "eitherNumber", "double", "sum", "exactSums"];
+const DICE_SUM_MODES = [["sumLess", "<"], ["sumEqual", "Ровно"], ["sumGreater", ">"]];
+const DICE_PAIR_WINS = { firstHigher: 15, secondHigher: 15, productOver18: 8 };
+const DICE_TWO_TITLES = { low: "Оба меньше", high: "Оба больше", even: "Оба чётные", odd: "Оба нечётные" };
+const DICE_MODE_NAMES = {
+    high: "Больше", low: "Меньше", even: "Чёт", odd: "Нечёт", center: "Центр", edges: "Края",
+    firstHigher: "Куб 1 > 2", secondHigher: "Куб 2 > 1", productOver18: "Произведение >18",
+    number: "Число", eitherNumber: "Числа", double: "Дубли", sum: "Сумма", exactSums: "Итог"
+};
+const DICE_MAX_NUMBERS = 5;
 const DICE_NUM_IMG_DIR = "images/dice/";             // запасные modecube1.png … modecube6.png, back.png
 const DICE_NUM_TGS_DIR = "animations/dice/";         // modecube1.tgs … modecube6.tgs (если нет — берём png)
 const DICE_BACK_PNG = "images/back.png";                // запасная иконка «Назад», если нет back.tgs
 const DICE_BACK_TGS = "images/ui/back.tgs";          // анимированная иконка «Назад»
 
-// Коэффициент режима: 0.975 / вероятность, округление вниз до сотых.
-// «Число»: k выбранных граней из 6 → вероятность k/6 (на каждый куб).
-function diceCoefFor(mode, cubes, numCount) {
-    const n = cubes || 1;
-    if (mode === "same") return houseCoef(1, 6, 1);          // оба куба одинаковые: 1/6 → ×5.85
-    if (mode === "double") {                                 // конкретный дубль: k/36 → ×35.10 при k=1
-        const k = Math.max(1, Math.min(DICE_MAX_NUMBERS, numCount || 1));
-        return houseCoef(k, 36, 1);
+// Сумма s имеет 6 − |7 − s| исходов из 36 равновероятных пар.
+function diceCoefFor(mode, cubes, nums = []) {
+    const k = nums.length;
+    if (mode === "same") return houseCoef(6, 36, 1);
+    if (mode === "double") return k ? houseCoef(k, 36, 1) : 0;
+    if (mode === "number") return k ? houseCoef(k, 6, cubes) : 0;
+    if (mode === "eitherNumber") return k ? houseCoef(36 - (6 - k) ** 2, 36, 1) : 0;
+    if (mode === "exactSums" || DICE_SUM_MODES.some(([key]) => key === mode)) {
+        const threshold = nums[0];
+        let wins = 0;
+        for (let sum = 2; sum <= 12; sum++) {
+            const matches = mode === "sumLess" ? sum < threshold : mode === "sumGreater" ? sum > threshold : nums.includes(sum);
+            if (matches) wins += 6 - Math.abs(7 - sum);
+        }
+        return wins ? houseCoef(wins, 36, 1) : 0;
     }
-    if (mode === "number") {
-        const k = Math.max(1, Math.min(DICE_MAX_NUMBERS, numCount || 1));
-        return houseCoef(k, 6, n);
-    }
+    if (DICE_PAIR_WINS[mode]) return houseCoef(DICE_PAIR_WINS[mode], 36, 1);
     const p = DICE_MODE_PROB[mode];
-    return p ? houseCoef(p[0], p[1], n) : 0;
-}
-function diceModeTitle(mode) {
-    const c = diceGame.cubes || 1;
-    if (mode === "same" || mode === "double") return DICE_MODE_NAMES[mode];
-    return (c > 1 ? c + " " : "") + DICE_MODE_NAMES[mode];
+    return p ? houseCoef(p[0], p[1], cubes) : 0;
 }
 function diceCoefText(c) { return "×" + c.toFixed(2); }
 function diceCurrentCoef() {
-    return diceGame.mode ? diceCoefFor(diceGame.mode, diceGame.cubes, diceGame.numbers.length) : null;
+    return diceGame.mode ? diceCoefFor(diceGame.mode, diceGame.cubes, diceGame.numbers) : 0;
 }
-
 // Общий загрузчик .tgs-иконок куба (modecube1…6, back). Текст Lottie-JSON кэшируется,
 // а для каждой иконки парсится заново — lottie мутирует данные.
 const _diceTgsText = {};
@@ -5684,9 +5685,6 @@ function mountDiceNumIcon(el, n, prefix) {
     );
 }
 
-// Плитки строятся из состояния diceGame:
-//   view "main"   — Больше / Меньше / Чёт / Нечёт / Число (до ×N)
-//   view "number" — 6 граней (до 5 можно выбрать) + «Назад»
 // animate=true — плавная смена набора плиток.
 function renderDiceModes(animate) {
     const box = document.getElementById("diceModes");
@@ -5710,42 +5708,63 @@ function doRenderDiceModes(animate) {
     if (!box) return;
     const oldH = box.offsetHeight;
     const cubes = diceGame.cubes || 1;
-    const inNumbers = diceGame.view === "number";
+    const view = diceGame.view;
+    const faces = view === "number" || view === "eitherNumber";
+    const sums = view === "sum" || view === "exactSums";
     const enter = animate ? " enter" : "";
+    const label = (name) => '<span class="dice-mode-name">' + name + '</span>';
+    const odds = (coef) => '<span class="dice-mode-coef">(' + diceCoefText(coef) + ')</span>';
     let html = "";
 
-    if (inNumbers) {
-        const coefTxt = diceCoefText(diceCoefFor(diceNumbersMode(cubes), cubes, diceGame.numbers.length));
-        for (let n = 1; n <= 6; n++) {
-            const sel = diceGame.numbers.indexOf(n) !== -1;
-            html += '<button class="dice-tile dice-mode dice-num' + (sel ? " selected" : "") + enter +
-                '" style="--i:' + (n - 1) + '" data-num="' + n + '" onclick="toggleDiceNumber(' + n + ', this)">' +
-                '<span class="dice-num-icon" data-n="' + n + '"></span>' +
-                '<span class="dice-mode-name">' + n + '</span> ' +
-                '<span class="dice-mode-coef">(' + coefTxt + ')</span></button>';
+    if (view === "main") {
+        const keys = cubes === 2 ? DICE_MODE_ORDER_2 : DICE_MODE_ORDER;
+        html = keys.map((k, i) => {
+            const submenu = DICE_SUBMENUS.includes(k);
+            const name = cubes === 2 ? DICE_TWO_TITLES[k] || DICE_MODE_NAMES[k]
+                : (cubes > 1 && !submenu ? cubes + " " : "") + DICE_MODE_NAMES[k];
+            const modeIcon = cubes === 1 ? (k === "center" ? "modecube34" : k === "edges" ? "modecube16" : "") : "";
+            return '<button class="dice-tile dice-mode' + (modeIcon ? ' dice-has-icon' : '') +
+                (diceGame.mode === k ? ' selected' : '') + enter + '" style="--i:' + i + '" data-mode="' + k +
+                '" onclick="' + (submenu ? "openDiceNumbers('" + k + "')" : "selectDiceMode('" + k + "', this)") + '">' +
+                (modeIcon ? '<span class="dice-num-icon" data-icon="' + modeIcon + '"></span>' : '') +
+                label(name + (submenu && cubes === 2 ? " ›" : "")) +
+                (submenu ? (k === "number" ? odds(diceCoefFor(k, cubes, [1])) : "") : odds(diceCoefFor(k, cubes))) + '</button>';
+        }).join("");
+    } else {
+        if (view === "double") {
+            html += '<button class="dice-tile dice-mode dice-full' + (diceGame.mode === "same" ? " selected" : "") +
+                enter + `" data-mode="same" onclick="selectDiceMode('same', this)">` + label("Любой дубль") +
+                odds(diceCoefFor("same", 2)) + '</button>';
+        }
+        const start = sums ? 2 : 1;
+        const end = sums ? 12 : 6;
+        for (let n = start; n <= end; n++) {
+            const selected = diceGame.numbers.includes(n);
+            html += '<button class="dice-tile dice-mode dice-num' + (selected ? " selected" : "") + enter +
+                '" style="--i:' + (n - start) + '" data-num="' + n + '" aria-pressed="' + selected +
+                '" onclick="toggleDiceNumber(' + n + ', this)">' +
+                (faces ? '<span class="dice-num-icon" data-n="' + n + '"></span>' : '') +
+                label(view === "double" ? "Дубль " + n : n) +
+                (view === "double" ? odds(diceCoefFor("double", 2, [n])) :
+                    view === "number" ? odds(diceCoefFor(view, cubes, diceGame.numbers.length ? diceGame.numbers : [n])) : "") +
+                '</button>';
+        }
+        if (view === "sum") {
+            html += DICE_SUM_MODES.map(([key, name]) => {
+                const coef = diceCoefFor(key, 2, diceGame.numbers);
+                return '<button class="dice-tile dice-mode dice-sum-compare' + (diceGame.mode === key ? ' selected' : '') +
+                    '" data-mode="' + key + '" aria-label="' + (key === "sumLess" ? "Меньше" : key === "sumGreater" ? "Больше" : "Ровно") +
+                    ' ' + diceGame.numbers[0] + `" onclick="selectDiceMode('${key}', this)"` + (coef ? "" : " disabled") + '>' +
+                    label(name) + (coef ? odds(coef) : "") + '</button>';
+            }).join("");
         }
         html += '<button class="dice-tile dice-mode dice-mode-back' + enter + '" style="--i:6" onclick="diceNumbersBack()">' +
-            '<span class="dice-back-icon"></span><span class="dice-mode-name">Назад</span></button>';
-    } else {
-        html = diceModeOrder(cubes).map((k, i) => {
-            if (k === "number" || k === "double") {
-                const max = diceCoefFor(k, cubes, 1);
-                return '<button class="dice-tile dice-mode' + enter + '" style="--i:' + i + '" data-mode="' + k + '" onclick="openDiceNumbers()">' +
-                    '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
-                    '<span class="dice-mode-coef">(до ' + diceCoefText(max) + ')</span></button>';
-            }
-            // Центр → modecube34.tgs (грани 3 и 4), Края → modecube16.tgs (грани 1 и 6)
-            const modeIcon = cubes === 1 ? (k === "center" ? "modecube34" : (k === "edges" ? "modecube16" : "")) : "";
-            const hasIcon = !!modeIcon;
-            return '<button class="dice-tile dice-mode' + (hasIcon ? " dice-has-icon" : "") + enter + '" style="--i:' + i + '" data-mode="' + k +
-                '" onclick="selectDiceMode(\'' + k + '\', this)">' +
-                (hasIcon ? '<span class="dice-num-icon" data-icon="' + modeIcon + '"></span>' : '') +
-                '<span class="dice-mode-name">' + diceModeTitle(k) + '</span> ' +
-                '<span class="dice-mode-coef">(' + diceCoefText(diceCoefFor(k, cubes)) + ')</span></button>';
-        }).join("");
+            '<span class="dice-back-icon"></span>' + label("Назад") + '</button>';
     }
 
-    box.classList.toggle("is-numbers", inNumbers);
+    box.classList.toggle("is-numbers", view !== "main");
+    box.classList.toggle("is-sum", view === "sum");
+    box.classList.toggle("is-exact-sums", view === "exactSums");
     box.querySelectorAll(".dice-num-icon, .dice-back-icon").forEach(el => {
         try { el._anim && el._anim.destroy(); } catch (e) {}
     });
@@ -5754,11 +5773,8 @@ function doRenderDiceModes(animate) {
         const nm = el.dataset.icon;   // modecube34 → animations/dice/modecube34.tgs (запасной png)
         mountDiceTgsIcon(el, [DICE_NUM_TGS_DIR + nm + ".tgs", DICE_NUM_IMG_DIR + nm + ".tgs"], DICE_NUM_IMG_DIR + nm + ".png", "dice-num-img");
     });
-    if (inNumbers) {
-        mountDiceBackIcon(box.querySelector(".dice-back-icon"));
-        const iconPrefix = diceNumIconPrefix(cubes);
-        box.querySelectorAll(".dice-num-icon").forEach(el => mountDiceNumIcon(el, +el.dataset.n, iconPrefix));
-    }
+    if (view !== "main") mountDiceBackIcon(box.querySelector(".dice-back-icon"));
+    if (faces) box.querySelectorAll(".dice-num-icon[data-n]").forEach(el => mountDiceNumIcon(el, +el.dataset.n, "modecube"));
 
     // плавное изменение высоты блока, чтобы нижняя часть не прыгала
     if (animate && oldH) {
@@ -5778,10 +5794,10 @@ function resetDiceNumbers() {
     diceGame.numbers = [];
 }
 
-function openDiceNumbers() {
+function openDiceNumbers(view = "number") {
     if (diceGame.busy) return;
-    diceGame.view = "number";
-    diceGame.numbers = [];
+    diceGame.view = view;
+    diceGame.numbers = view === "sum" ? [7] : [];
     diceGame.mode = null;               // режим «Число» активен, когда выбрана хотя бы одна грань
     renderDiceModes(true);
     updateDicePlayLabel();
@@ -5796,27 +5812,42 @@ function diceNumbersBack() {
 }
 
 function toggleDiceNumber(n, btn) {
-    if (diceGame.busy) return;
-    const i = diceGame.numbers.indexOf(n);
-    if (i !== -1) {
-        diceGame.numbers.splice(i, 1);
+    const view = diceGame.view;
+    if (diceGame.busy || view === "main") return;
+    if (view === "sum") {
+        diceGame.numbers = [n];
+        if (!diceCurrentCoef()) diceGame.mode = null;
+        doRenderDiceModes(false);
+    } else if (view === "double") {
+        diceGame.mode = "double";
+        diceGame.numbers = [n];
+        doRenderDiceModes(false);
     } else {
-        if (diceGame.numbers.length >= DICE_MAX_NUMBERS) {
-            showMessage("Можно выбрать не больше " + DICE_MAX_NUMBERS + " чисел");
-            return;
+        const index = diceGame.numbers.indexOf(n);
+        const limit = view === "eitherNumber" ? 2 : DICE_MAX_NUMBERS;
+        if (index >= 0) {
+            diceGame.numbers.splice(index, 1);
+        } else {
+            if (diceGame.numbers.length >= limit) {
+                showMessage("Можно выбрать не больше " + limit + (view === "exactSums" ? " сумм" : " чисел"));
+                return;
+            }
+            diceGame.numbers.push(n);
+            diceGame.numbers.sort((a, b) => a - b);
         }
-        diceGame.numbers.push(n);
-        diceGame.numbers.sort((a, b) => a - b);
+        diceGame.mode = diceGame.numbers.length ? view : null;
+        const selected = diceGame.numbers.includes(n);
+        btn.classList.toggle("selected", selected);
+        btn.setAttribute("aria-pressed", String(selected));
+        const icon = btn.querySelector(".dice-num-icon");
+        try { icon?._anim?.goToAndPlay(0, true); } catch {}
+        if (view === "number") {
+            const coef = diceCoefFor(view, diceGame.cubes, diceGame.numbers.length ? diceGame.numbers : [n]);
+            document.querySelectorAll("#diceModes .dice-num .dice-mode-coef").forEach(el => {
+                el.textContent = "(" + diceCoefText(coef) + ")";
+            });
+        }
     }
-    diceGame.mode = diceGame.numbers.length ? diceNumbersMode(diceGame.cubes) : null;
-    if (btn) {
-        btn.classList.toggle("selected", diceGame.numbers.indexOf(n) !== -1);
-        const ic = btn.querySelector(".dice-num-icon");
-        try { ic && ic._anim && ic._anim.goToAndPlay(0, true); } catch (e) {}
-    }
-    // у всех граней показываем коэффициент при текущем количестве выбранных
-    const txt = "(" + diceCoefText(diceCoefFor(diceNumbersMode(diceGame.cubes), diceGame.cubes, diceGame.numbers.length)) + ")";
-    document.querySelectorAll("#diceModes .dice-num .dice-mode-coef").forEach(el => { el.textContent = txt; });
     updateDicePlayLabel();
 }
 
@@ -5843,10 +5874,15 @@ function updateDicePlayLabel() {
 }
 
 function selectDiceMode(mode, btn) {
-    resetDiceNumbers();                         // другой режим — выбор чисел сбрасывается
+    if (diceGame.busy || !diceCoefFor(mode, diceGame.cubes, diceGame.numbers)) return;
     diceGame.mode = mode;
-    document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
-    if (btn) btn.classList.add("selected");
+    if (diceGame.view === "main") {
+        document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
+        btn?.classList.add("selected");
+    } else {
+        if (mode === "same") diceGame.numbers = [];
+        doRenderDiceModes(false);
+    }
     updateDicePlayLabel();
     // результат (галочка/крестик) остаётся на экране до начала новой игры
 }
@@ -5918,7 +5954,7 @@ function calcDiceWin(bet, coef) {
 async function handleDicePlay() {
     if (diceGame.busy) return;
     if (!diceGame.mode) {
-        showMessage(diceGame.view === "number" ? (diceGame.cubes === 2 ? "Выберите хотя бы один дубль!" : "Выберите хотя бы одно число!") : "Выберите режим ставки!");
+        showMessage("Выберите режим или значение для ставки!");
         return;
     }
     if (!lockEconomy()) return;
@@ -5940,7 +5976,7 @@ async function handleDicePlay() {
     const mode = diceGame.mode;
     const cubes = diceGame.cubes;
     const nums = diceGame.numbers.slice();      // выбранные грани для «Число»
-    const coef = diceCoefFor(mode, cubes, nums.length);
+    const coef = diceCoefFor(mode, cubes, nums);
 
     // --- 1. всё делает сервер: ставка → броски → проверка → выплата ---
     const snapshot = snapshotBalanceState();
@@ -5981,15 +6017,11 @@ async function handleDicePlay() {
         if (window.DiceStage) {
             for (let i = 0; i < rolls.length; i++) {
                 const isFinal = i === rolls.length - 1;
-                const pass = passes[i];
-                const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
-                // Несколько кубов, промежуточный удачный бросок:
-                //  • «Одинаковые» / «Дубль» — первый куб вердикта не выносит → жёлтая галочка «Ставка зачтена»;
-                //  • остальные режимы (чёт, больше, число…) — в первом кубе вердикт есть → зелёная галочка «Ставка зашла».
-                // Выигрыш (включая итоговый бросок и режим на 1 куб) — зелёная галочка; проигрыш — красный крест.
-                const noVerdict = (mode === "same" || mode === "double") && pass && !isFinal;
-                const greenPass = pass && !noVerdict;   // вердикт есть → зелёная галочка; нет (только «Одинаковые»/«Дубль», 1-й куб) → жёлтая
-                const word = noVerdict ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла");
+                const pass = isFinal ? win : passes[i];
+                const nextRoll = isFinal ? null : rolls[i + 1];
+                const pending = !isFinal && pass && srv.verdicts?.[i] !== "win";
+                const greenPass = pass && !pending;
+                const word = pending ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла");
                 const title = cubes > 1 ? word + " (" + (i + 1) + "/" + cubes + ")" : undefined;
 
                 await window.DiceStage.play({
