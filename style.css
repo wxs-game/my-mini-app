@@ -4469,7 +4469,7 @@ body.anim-page .top {
 .emoji-game-page .dice-modes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.emoji-game-page #emojiGameModes .dart-full { grid-column: 1 / -1; }
+.emoji-game-page #emojiGameModes .emoji-mode-full { grid-column: 1 / -1; }
 .emoji-game-page .dice-mode-name { white-space: normal; }
 .emoji-game-page .dice-tile { white-space: normal; }
 .emoji-game-page .dice-count-row.hidden-row { display: none; }

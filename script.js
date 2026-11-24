@@ -6253,15 +6253,39 @@ const EMOJI_GAME_CONFIGS = {
         attemptLabels: ['1 БРОСОК', '2 БРОСКА', '3 БРОСКА'],
         modes: [
             // 1 — отскок, 2 — близко, 3 — застрял, 4 — попал с краем, 5 — чистый гол
-            { key: 'bounce', name: 'Отскок', wins: [1] },
-            { key: 'close', name: 'Близко', wins: [2] },
-            { key: 'stuck', name: 'Застрял', wins: [3] },
-            { key: 'edge', name: 'Попал с краем', wins: [4] },
-            { key: 'clean', name: 'Чистый гол', wins: [5] },
+            { key: 'bounce', name: 'Отскок', attempts: 1, wins: [1] },
+            { key: 'close', name: 'Близко', attempts: 1, wins: [2] },
+            { key: 'stuck', name: 'Застрял', attempts: 1, wins: [3] },
+            { key: 'edge', name: 'Попал с краем', attempts: 1, wins: [4] },
+            { key: 'clean', name: 'Чистый гол', attempts: 1, wins: [5] },
             // Прокрут — мяч крутится по кольцу: либо мимо (2), либо всё же в кольцо (4).
-            { key: 'spin', name: 'Прокрут', wins: [2, 4] },
-            { key: 'anyGoal', name: 'Любой гол', wins: [4, 5] },
-            { key: 'miss', name: 'Промах', wins: [1, 2, 3] }
+            { key: 'spin', name: 'Прокрут', attempts: 1, wins: [2, 4] },
+            { key: 'anyGoal', name: 'Любой гол', attempts: 1, wins: [4, 5] },
+            { key: 'miss', name: 'Промах', attempts: 1, wins: [1, 2, 3] },
+
+            { key: 'twoClean', name: 'Два чистых', attempts: 2, p: [1, 25] },
+            { key: 'twoGoals', name: 'Два гола', attempts: 2, p: [4, 25] },
+            { key: 'bothStuck', name: 'Оба застряли', attempts: 2, p: [1, 25] },
+            { key: 'twoSpins', name: 'Два прокрута', attempts: 2, p: [4, 25] },
+            { key: 'twoBounces', name: 'Два отскока', attempts: 2, p: [1, 25] },
+            { key: 'bothSame', name: 'Оба одинаково', attempts: 2, p: [5, 25] },
+            { key: 'goalMiss', name: 'Гол–промах', attempts: 2, p: [6, 25] },
+            { key: 'missGoal', name: 'Промах–гол', attempts: 2, p: [6, 25] },
+            { key: 'bothMiss', name: 'Оба мимо', attempts: 2, p: [9, 25] },
+            { key: 'oneGoalTwo', name: 'Ровно 1 гол', attempts: 2, p: [12, 25] },
+            { key: 'anyGoalTwo', name: 'Хотя бы 1 гол', attempts: 2, p: [16, 25], full: true },
+
+            { key: 'threeClean', name: '3 чистых', attempts: 3, p: [1, 125] },
+            { key: 'threeSame', name: '3 одинаково', attempts: 3, p: [5, 125] },
+            { key: 'threeStuck', name: '3 застряли', attempts: 3, p: [1, 125] },
+            { key: 'threeGoals', name: '3 гола', attempts: 3, p: [8, 125] },
+            { key: 'threeBounces', name: '3 отскока', attempts: 3, p: [1, 125] },
+            { key: 'threeSpins', name: '3 прокрута', attempts: 3, p: [8, 125] },
+            { key: 'onlyThirdGoal', name: 'Только 3-й гол', attempts: 3, p: [18, 125] },
+            { key: 'threeMiss', name: '3 мимо', attempts: 3, p: [27, 125] },
+            { key: 'exactTwoGoals', name: 'Ровно 2 гола', attempts: 3, p: [36, 125] },
+            { key: 'twoOrThreeGoals', name: '2 или 3 гола', attempts: 3, p: [44, 125] },
+            { key: 'oneGoalThree', name: 'Ровно 1 гол', attempts: 3, p: [54, 125], full: true }
         ]
     },
     darts: {
@@ -6379,9 +6403,13 @@ function emojiModeProb(mode, cfg) {
     return [mode.wins.length, (cfg || emojiGameCfg()).rolls];
 }
 
-// Итоговый коэффициент режима с маржой 2.5%, округление вниз до сотых
+// Комбинации Баскетбола используют коэффициенты из таблицы режимов.
+// Остальные игры используют текущую маржу. Округляем вниз до сотых.
 function emojiCompoundCoef(mode, attempts, cfg) {
     const p = emojiModeProb(mode, cfg);
+    if (cfg === EMOJI_GAME_CONFIGS.basketball && mode.attempts > 1) {
+        return Math.floor(p[1] * 100 / p[0]) / 100;
+    }
     return Math.min(9999.99, houseCoef(p[0], p[1], mode.attempts ? 1 : attempts));
 }
 
@@ -6453,7 +6481,7 @@ function renderEmojiGameModes(animate) {
     });
     box.innerHTML = cfg.modes.filter(m => !m.attempts || m.attempts === attempts).map((m, i) => {
         const coef = emojiCompoundCoef(m, attempts, cfg);
-        return '<button class="dice-tile dice-mode' + (m.full ? ' dart-full' : '') + (m.icon ? ' dice-has-icon' : '') + (emojiGame.key === 'darts' ? ' darts-fit-tile' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
+        return '<button class="dice-tile dice-mode' + (m.full ? ' emoji-mode-full' : '') + (m.icon ? ' dice-has-icon' : '') + (emojiGame.key === 'darts' ? ' darts-fit-tile' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + m.key +
             '" onclick="selectEmojiMode(\'' + m.key + '\', this)">' +
             (emojiGame.key === 'darts' ? '<span class="darts-fit-content">' : '') + (m.icon ? '<span class="dice-num-icon dart-mode-icon" data-icon="' + m.icon + '"></span>' : '') +
             '<span class="dice-mode-name">' + m.name + '</span> ' +
@@ -6604,9 +6632,8 @@ async function handleEmojiGamePlay() {
             const totalRolls = cfg.slots ? passes.length : rolls.length;
             for (let i = 0; i < totalRolls; i++) {
                 const isFinal = i === totalRolls - 1;
-                const verdict = emojiGame.key === 'darts'
-                    ? (isFinal ? (win ? 'win' : 'lose') : (srv.verdicts?.[i] || 'pending'))
-                    : (passes[i] ? 'win' : 'lose');
+                const verdict = isFinal ? (win ? 'win' : 'lose')
+                    : (srv.verdicts?.[i] || (emojiGame.key === 'darts' ? 'pending' : (passes[i] ? 'win' : 'lose')));
                 const pending = verdict === 'pending';
                 const pass = verdict !== 'lose';
                 const roll = cfg.slots ? null : rolls[i];
