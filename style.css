@@ -5710,7 +5710,7 @@ img.img-pending { opacity: 0; }
 :root {
     --button-neutral: linear-gradient(180deg, #312b25, #1c1916 68%, #171513);
     --button-primary: linear-gradient(180deg, #60472d, #47311b 64%, #3c2917);
-    --button-selected: linear-gradient(180deg, #493a2b, #31271e);
+    --button-selected: linear-gradient(180deg, #584733, #3b2e23);
     --button-disabled: linear-gradient(180deg, #2d2822, #211d19);
     --button-edge: rgba(232,218,201,.20);
     --button-raised: inset 0 1px 2px rgba(255,242,224,.26), 0 3px 7px rgba(0,0,0,.23);
@@ -5728,10 +5728,10 @@ img.img-pending { opacity: 0; }
 :is(.pct-btn.active, .mines-count-btn.active, .mode-btn.active, .dice-count-btn.active,
     .dice-tile.selected, .lb-chip.active, .lb-date-btn.active, .crash-fb-btn.on,
     .wxs-seg [aria-pressed="true"], .wxs-stake-btn.is-active, .wxs-gift-card.is-selected,
-    .emoji-option.active) {
+    .emoji-option.active, .nav-pill) {
     --button-face: var(--button-selected);
-    --button-label: #f5dfc0;
-    --button-edge: rgba(234,207,168,.30);
+    --button-label: #ffecd0;
+    --button-edge: rgba(234,207,168,.48);
 }
 
 :is(#appShell, #releaseScreen) :is(button, input[type="button"], input[type="submit"],
