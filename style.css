@@ -3707,7 +3707,6 @@ body.ice-history-modal-open {
     opacity: 0.55;
     pointer-events: none;
 }
-.upg-locked #upgPlayBtn:disabled { opacity: 0.6; }
 
 /* Слои канваса апгрейдера: колесо, свечение, текст и стрелка накладываются
    друг на друга в одном квадрате (без этого они шли друг под другом). */
@@ -5261,7 +5260,6 @@ img.img-pending { opacity: 0; }
     transition: transform .16s ease, opacity .16s ease;
 }
 #crashPage #crashActionBtn,
-#upgraderPage #upgPlayBtn,
 #upgraderPage #upgFreebetBtn.on,
 #upgraderPage .pct-btn.active,
 #crashPage .crash-fb-btn.on,
@@ -5322,6 +5320,24 @@ img.img-pending { opacity: 0; }
 #crashPage .crash-fairness-trigger:not(:disabled):active {
     -webkit-backdrop-filter: blur(2px) saturate(1.12);
     backdrop-filter: blur(2px) saturate(1.12);
+}
+#upgraderPage #upgPlayBtn {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    margin-top: 14px;
+    background: linear-gradient(135deg, #ffdc46, #ffa61c);
+    border-color: #ffd878;
+    color: #211503;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+#upgraderPage #upgPlayBtn::before { content: none; }
+#upgraderPage #upgPlayBtn:disabled {
+    opacity: 1;
+    background: #493820;
+    border-color: #866a40;
+    color: #ffe5b3;
 }
 @supports (backdrop-filter: url("#crash-glass-refraction")) {
     #crashPage .crash-fairness-trigger:not(:disabled):active {
@@ -5987,6 +6003,12 @@ img.img-pending { opacity: 0; }
 .wxs-gift-empty[hidden] { display: none; }
 .wxs-gift-empty span { font-size: 54px; filter: grayscale(.5); }
 .wxs-gift-empty p { margin: 0; font-weight: 700; }
+#wxsGiftRetry {
+    min-height: 36px;
+    margin-bottom: 10px;
+    padding: 6px 12px;
+    border-radius: 10px;
+}
 
 /* Переключатель режима: перебиваем общий «стеклянный» скин кнопок апгрейдера */
 #upgraderPage .wxs-seg button {

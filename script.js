@@ -4607,16 +4607,15 @@ function upgOnChanceInput(commit) {
     if (commit) input.value = upg.chance;
 }
 
-function upgRelease() {
+function upgRelease(label = 'ИГРАТЬ') {
     upg.busy = false;
     isBetProcessing = false;
-    upgSyncSlider();
-
     unlockEconomy();
     const btn = document.getElementById('upgPlayBtn');
-    if (btn) { btn.disabled = false; btn.textContent = 'ИГРАТЬ'; btn.removeAttribute('aria-busy'); }
+    if (btn) { btn.disabled = false; btn.textContent = label; btn.removeAttribute('aria-busy'); }
     document.getElementById('upgraderPage')?.classList.remove('upg-locked');
     document.body.classList.remove('upg-spinning');
+    upgSyncSlider();
     renderUpgraderFreebet();
 }
 
@@ -4773,6 +4772,7 @@ function toggleUpgraderFreebet() {
     let serverCatalog = new Map();     // slug → цена в центах (с сервера)
     let liveOffers = new Map();
     let inventory = [];
+    let inventoryLoaded = false, inventoryRevision = 0;
     let lastErr = '', liveReady = false, liveLoad = null, loadedAt = 0, catalogAsked = false, priceReq = null, rateAsked = false;
     let targetSlug = null, view = 'catalog', pending = null, dollarBet = null, stakeId = null, itemId = null, busy = false;
     const roundKey = 'wxs-gift-round:' + (tgApp?.initDataUnsafe?.user?.id ?? 'anon');
@@ -4798,6 +4798,7 @@ function toggleUpgraderFreebet() {
     const stakeFor = (cents, chance) => Math.max(1, Math.ceil(cents * chance / 95));
     const sellCents = (g) => { const c = centsOf(g); return c == null ? null : Math.floor(c * 87 / 100); };
     const stakeItem = () => inventory.find((i) => i.id === stakeId) || null;
+    const inventoryItem = (id, slug) => ({ ...giftBy(slug), id });
 
     function target() {
         if (!targetSlug) return null;
@@ -4834,24 +4835,41 @@ function toggleUpgraderFreebet() {
         return data;
     }
 
-    async function refreshLive() {
+    function refreshLive() {
         if (liveLoad) return liveLoad;
+        const revision = inventoryRevision;
         liveLoad = (async () => {
             try {
                 const state = await rpc('gift_upgrade_state');
+                if (!Array.isArray(state?.pending_gifts)) throw new Error('invalid_inventory');
                 liveOffers = new Map();
                 for (const o of state.offers || []) if (!liveOffers.has(o.gift_slug)) liveOffers.set(o.gift_slug, o);
                 serverCatalog = new Map((state.catalog || []).map((c) => [c.slug, Number(c.price_cents)]));
                 const rate = Number(state.rate);
                 if (rate > 0.05 && rate < 50) { gramUsd = rate; rateFromServer = true; }
-                inventory = (state.pending_gifts || []).map((g) => ({ ...giftBy(g.gift_slug), id: g.request_id, pending: true }));
-                if (stakeId && !inventory.some((i) => i.id === stakeId)) stakeId = null;
+                if (revision === inventoryRevision) {
+                    inventory = state.pending_gifts.map((g) => inventoryItem(g.request_id, g.gift_slug));
+                    inventoryLoaded = true;
+                    if (stakeId && !stakeItem()) stakeId = null;
+                }
                 liveReady = true;
                 lastErr = '';
             } catch (e) { liveReady = false; lastErr = String(e?.message || e || 'ошибка'); }
             finally { liveLoad = null; paint(); if (dlg.open) renderDialog(); }
         })();
+        if (dlg.open && view !== 'catalog' && view !== 'item') renderDialog();
         return liveLoad;
+    }
+
+    function refreshAfterInventoryChange(removedId, wonGift) {
+        inventoryRevision++;
+        inventory = inventory.filter((g) => g.id !== removedId && g.id !== wonGift?.id);
+        if (wonGift) inventory.unshift(wonGift);
+        if (removedId && stakeId === removedId) stakeId = null;
+        const refresh = liveLoad ? liveLoad.then(refreshLive) : refreshLive();
+        paint();
+        if (dlg.open) renderDialog();
+        return refresh;
     }
 
     function parsePrices(csv) {
@@ -4914,7 +4932,6 @@ function toggleUpgraderFreebet() {
         img.alt = '';
         img.loading = lazy ? 'lazy' : 'eager';
         img.decoding = 'async';
-        img.src = 'https://nft.fragment.com/gift/' + g.slug + '-1.large.jpg';
         img.addEventListener('error', () => {
             img.addEventListener('error', () => {
                 const f = document.createElement('span');
@@ -4924,6 +4941,7 @@ function toggleUpgraderFreebet() {
             }, { once: true });
             img.src = 'https://api.changes.tg/original/' + encodeURIComponent(g.slug) + '.png?size=256';
         }, { once: true });
+        img.src = 'https://nft.fragment.com/gift/' + encodeURIComponent(g.slug) + '-1.large.jpg';
         return img;
     }
 
@@ -4957,7 +4975,7 @@ function toggleUpgraderFreebet() {
             }
         }
         upg.center?.classList.toggle('gift-empty', !t);
-        $('wxsGiftCount').textContent = inventory.length;
+        $('wxsGiftCount').textContent = inventoryLoaded || inventory.length ? inventory.length : '—';
         paintStake();
         G.key = (t?.slug || '') + ':' + (t?.cents ?? '') + ':' + (stakeId || '') + ':' + (liveReady ? 1 : 0);
         upg.textKey = null;
@@ -5139,7 +5157,7 @@ function toggleUpgraderFreebet() {
             } catch (e) {
                 if (e.retry === false) storePending(null);
                 restoreBalanceState(snap);
-                await refreshLive();
+                refreshLive();
                 showMessage(pending ? 'Не удалось подтвердить результат. Нажмите ещё раз, чтобы проверить ставку.'
                     : ERR[e.message] || 'Ставка не принята. Проверьте наличие подарка и баланс.');
                 return;
@@ -5149,17 +5167,21 @@ function toggleUpgraderFreebet() {
             if (s.gift_slug) targetSlug = s.gift_slug;
             upg.resultPayout = 0;
             setUIBalance(Number(s.balance));
-            await upgAnimate(won, upg.chance);
-            window.haptic?.(won ? 'success' : 'error');
-            await refreshLive();
+            try {
+                await upgAnimate(won, upg.chance);
+                window.haptic?.(won ? 'success' : 'error');
+            } finally {
+                const gift = won && s.gift_slug ? inventoryItem(s.request_id || body.p_request, s.gift_slug) : null;
+                if (gift || body.p_stake_round) refreshAfterInventoryChange(body.p_stake_round, gift);
+                else refreshLive();
+            }
         } finally {
-            upgRelease();
-            if (pending && btn) btn.textContent = 'ПРОВЕРИТЬ СТАВКУ';
+            upgRelease(pending ? 'ПРОВЕРИТЬ СТАВКУ' : 'ИГРАТЬ');
         }
     };
 
     // ---------- каталог, инвентарь, карточка подарка ----------
-    const dlg = $('wxsGiftDialog'), list = $('wxsGiftList'), search = $('wxsGiftSearch'), empty = $('wxsGiftEmpty'), itemBox = $('wxsGiftItem'), back = $('wxsGiftBack');
+    const dlg = $('wxsGiftDialog'), list = $('wxsGiftList'), search = $('wxsGiftSearch'), empty = $('wxsGiftEmpty'), itemBox = $('wxsGiftItem'), back = $('wxsGiftBack'), retry = $('wxsGiftRetry');
 
     function card(g, onPick, opts = {}) {
         const b = document.createElement('button');
@@ -5225,9 +5247,8 @@ function toggleUpgraderFreebet() {
                 const r = await rpc('gift_upgrade_sell', { p_request: item.id });
                 setUIBalance(Number(r.balance));
                 window.haptic?.('success');
-                if (stakeId === item.id) stakeId = null;
                 view = 'inventory';
-                await refreshLive();
+                await refreshAfterInventoryChange(item.id);
             } catch (e) {
                 showMessage(ERR[e.message] || 'Не удалось продать подарок. Попробуйте ещё раз.');
                 await refreshLive();
@@ -5241,6 +5262,10 @@ function toggleUpgraderFreebet() {
     function renderDialog() {
         const sub = $('wxsGiftSub');
         const isItem = view === 'item';
+        const isInventory = view === 'inventory' || view === 'stake';
+        const inventoryStatus = isInventory && (liveLoad && !inventoryLoaded ? 'Загружаем подарки…'
+            : lastErr && !liveLoad ? 'Не удалось обновить инвентарь' : '');
+        retry.hidden = !isInventory || !lastErr || !!liveLoad;
         itemBox.hidden = !isItem;
         back.hidden = !isItem;
         list.hidden = isItem;
@@ -5261,7 +5286,8 @@ function toggleUpgraderFreebet() {
             items = visibleInventory();
             $('wxsGiftTitle').textContent = view === 'stake' ? 'Твой подарок' : 'Инвентарь';
             const total = items.reduce((s, g) => s + (usd(g) || 0), 0);
-            sub.textContent = items.length && view === 'inventory' ? 'Всего ' + items.length + ' · на ' + money(total) : '';
+            const summary = items.length && view === 'inventory' ? 'Всего ' + items.length + ' · на ' + money(total) : '';
+            sub.textContent = [summary, inventoryStatus].filter(Boolean).join(' · ');
         }
         const filtered = items.filter((g) => g.name.toLocaleLowerCase().includes(q));
         list.replaceChildren(...filtered.map((g) => card(g, () => {
@@ -5269,8 +5295,9 @@ function toggleUpgraderFreebet() {
             else if (view === 'stake') setStake(g.id);
             else { itemId = g.id; view = 'item'; renderDialog(); }
         }, { selected: view === 'catalog' && g.slug === targetSlug })));
-        empty.hidden = filtered.length > 0;
-        empty.innerHTML = q ? '<span>🔍</span><p>Ничего не найдено</p>' : '<span>🎁</span><p>' + (view === 'catalog' ? 'Подарков пока нет' : 'Инвентарь пуст') + '</p>';
+        empty.hidden = filtered.length > 0 || (isInventory && !items.length && (!inventoryLoaded || !!liveLoad || !!lastErr));
+        empty.innerHTML = q && items.length ? '<span>🔍</span><p>Ничего не найдено</p>' : '<span>🎁</span><p>' +
+            (view === 'catalog' ? 'Подарков пока нет' : view === 'stake' && inventory.length ? 'Нет подходящих подарков' : 'Инвентарь пуст') + '</p>';
     }
 
     // для выбора своего подарка: только те, что дешевле цели
@@ -5290,7 +5317,8 @@ function toggleUpgraderFreebet() {
     }
 
     $('wxsGiftClose').addEventListener('click', () => dlg.close());
-    back.addEventListener('click', () => { view = 'inventory'; renderDialog(); });
+    retry.addEventListener('click', refreshLive);
+    back.addEventListener('click', () => openDialog('inventory'));
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
     search.addEventListener('input', renderDialog);
     $('wxsGiftInventory').addEventListener('click', () => openDialog('inventory'));
