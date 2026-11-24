@@ -4466,11 +4466,13 @@ body.anim-page .top {
     height: 100% !important;
     display: block;
 }
-.emoji-game-page .dice-modes {
+.emoji-game-page .dice-modes,
+#footballModes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .emoji-game-page #emojiGameModes .emoji-mode-full { grid-column: 1 / -1; }
-.emoji-game-page .dice-mode-name { white-space: normal; }
+.emoji-game-page .dice-mode-name,
+#footballModes .dice-mode-name { white-space: normal; }
 .emoji-game-page .dice-tile { white-space: normal; }
 .emoji-game-page .dice-count-row.hidden-row { display: none; }
 .emoji-game-page .dice-play-btn { margin-top: 4px; }

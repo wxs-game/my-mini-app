@@ -6016,44 +6016,59 @@ async function handleDicePlay() {
 
 /* ---------- ФУТБОЛ ---------- */
 const footballGame = { kicks: 1, mode: null, busy: false };
-// Вероятность одного удара [выигрышных исходов, всего исходов 1..5]:
-// гол = 3,4,5; промах = 1,2; штанга = 2,4. Режимы 2/3 ударов — компаунд.
-const FOOTBALL_MODE_PROB = { goal: [3, 5], miss: [2, 5], bar: [2, 5] };
-const FOOTBALL_MODE_COEFS = {};
-Object.keys(FOOTBALL_MODE_PROB).forEach(base => {
-    const [w, t] = FOOTBALL_MODE_PROB[base];
-    for (let n = 1; n <= 3; n++) FOOTBALL_MODE_COEFS[base + (n > 1 ? n : "")] = houseCoef(w, t, n);
-});
-
-// Какие плитки показываем при разном количестве ударов
-const FOOTBALL_MODE_SETS = {
-    1: ["goal", "miss", "bar"],
-    2: ["goal2", "miss2", "bar2"],
-    3: ["goal3", "miss3", "bar3"]
+// [Ключ RPC, название, число выигрышных последовательностей из 5^n].
+// Голы: 3 (центр), 4 (от штанги), 5 (угол). Штанга: 2 или 4.
+const FOOTBALL_MODES = {
+    1: [
+        ['centerGoal', 'Гол в центр', 1],
+        ['cornerGoal', 'Гол в угол', 1],
+        ['postGoal', 'Гол от штанги', 1],
+        ['goal', 'Любой гол', 3],
+        ['bar', 'Удар об штангу', 2],
+        ['miss', 'Промах', 2]
+    ],
+    2: [
+        ['bothCenter', 'Оба в центр', 1],
+        ['bothMiss', 'Оба мимо', 4],
+        ['bothCorner', 'Оба в угол', 1],
+        ['bothBar', 'Оба в штангу', 4],
+        ['bothPostGoal', 'Оба от штанги', 1],
+        ['bothSame', 'Оба одинаково', 5],
+        ['goalMiss', 'Гол–промах', 6],
+        ['missGoal', 'Промах–гол', 6],
+        ['twoGoals', 'Два гола', 9],
+        ['oneGoalTwo', 'Ровно 1 гол', 12]
+    ],
+    3: [
+        ['threeCenter', 'Три в центр', 1],
+        ['threeSame', 'Три одинаково', 5],
+        ['threeCorner', 'Три в угол', 1],
+        ['threeMiss', 'Три мимо', 8],
+        ['threePostGoal', 'Три от штанги', 1],
+        ['threeBar', 'Три в штангу', 8],
+        ['onlyThirdGoal', 'Лишь 3-й гол', 12],
+        ['threeGoals', 'Три гола', 27],
+        ['oneGoalThree', 'Ровно 1 гол', 36],
+        ['exactTwoGoals', 'Ровно 2 гола', 54],
+        ['anyCorner', 'Угол хоть раз', 61],
+        ['twoOrThreeGoals', '2 или 3 гола', 81]
+    ]
 };
 
-const FOOTBALL_MODE_NAMES = {
-    goal: "Гол",
-    miss: "Промах",
-    bar: "Штанга",
-    goal2: "2 Гола",
-    miss2: "2 Промаха",
-    bar2: "2 Штанги",
-    goal3: "3 Гола",
-    miss3: "3 Промаха",
-    bar3: "3 Штанги"
-};
+const FOOTBALL_MODE_COEFS = Object.fromEntries(Object.entries(FOOTBALL_MODES).flatMap(([kicks, modes]) =>
+    modes.map(([key, , wins]) => [key, houseCoef(wins, 5 ** Number(kicks), 1)])
+));
 
 function renderFootballModes(animate) {
     const box = document.getElementById("footballModes");
     if (!box) return;
-    const keys = FOOTBALL_MODE_SETS[footballGame.kicks] || FOOTBALL_MODE_SETS[1];
+    const modes = FOOTBALL_MODES[footballGame.kicks];
     const oldH = box.offsetHeight;
 
-    box.innerHTML = keys.map((k, i) =>
-        '<button class="dice-tile dice-mode' + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + k +
+    box.innerHTML = modes.map(([k, name], i) =>
+        '<button class="dice-tile dice-mode' + (k === footballGame.mode ? ' selected' : '') + (animate ? ' enter' : '') + '" style="--i:' + i + '" data-mode="' + k +
         '" onclick="selectFootballMode(\'' + k + '\', this)">' +
-        '<span class="dice-mode-name">' + FOOTBALL_MODE_NAMES[k] + '</span> ' +
+        '<span class="dice-mode-name">' + name + '</span> ' +
         '<span class="dice-mode-coef">(' + FOOTBALL_MODE_COEFS[k].toFixed(2) + '×)</span></button>'
     ).join("");
 
@@ -6096,6 +6111,7 @@ function updateFootballPlayLabel() {
 }
 
 function selectFootballMode(mode, btn) {
+    if (footballGame.busy) return;
     footballGame.mode = mode;
     document.querySelectorAll("#footballModes .dice-mode").forEach(b => b.classList.remove("selected"));
     if (btn) btn.classList.add("selected");
@@ -6200,10 +6216,11 @@ async function handleFootballPlay() {
         if (window.FootballStage) {
             for (let i = 0; i < rolls.length; i++) {
                 const isFinal = i === rolls.length - 1;
-                const pass = passes[i];
-                const nextRoll = (pass && !isFinal) ? rolls[i + 1] : null;
+                const pending = !isFinal && srv.verdicts?.[i] === 'pending';
+                const pass = isFinal ? win : passes[i];
+                const nextRoll = isFinal ? null : rolls[i + 1];
                 const title = kicks > 1
-                    ? (pass ? "Удар забит" : "Удар не забит") + " (" + (i + 1) + "/" + kicks + ")"
+                    ? (pending ? "Удар учтён" : (pass ? "Ставка зашла" : "Ставка не зашла")) + " (" + (i + 1) + "/" + kicks + ")"
                     : undefined;
                 await window.FootballStage.play({
                     roll: rolls[i],
