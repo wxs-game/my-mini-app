@@ -4966,7 +4966,8 @@ img.img-pending { opacity: 0; }
 ========================================================== */
 .dice-modes.is-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #diceModes :is(.dice-mode-name, .dice-mode) { white-space: normal; }
-#diceModes :is(.dice-full, [data-mode="productOver18"]) { grid-column: 1 / -1; }
+#diceModes :is(.dice-full, [data-mode="productOver18"], [data-mode="productOver100"]) { grid-column: 1 / -1; }
+#diceModes.is-sum3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* 3 куба → «Сумма»: «<» слева, «>» справа */
 #diceModes:is(.is-sum, .is-exact-sums) { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 #diceModes.is-sum .dice-num { grid-column: span 3; }
 #diceModes.is-sum .dice-num:is([data-num="6"], [data-num="7"], [data-num="8"]),

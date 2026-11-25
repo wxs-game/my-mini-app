@@ -5553,6 +5553,74 @@ const DICE_MODE_NAMES = {
     number: "Число", eitherNumber: "Числа", double: "Дубли", sum: "Сумма", exactSums: "Итог"
 };
 const DICE_MAX_NUMBERS = 5;
+
+/* ---------- 3 КУБА: режимы считаются по всем 216 исходам (6×6×6) ----------
+   Коэффициент = houseCoef(выигрышных исходов, 216) — те же −2.5% комиссии, что везде. */
+const DICE3_MODE_ORDER = ["descending", "ascending", "low", "high", "even", "odd",
+    "no16", "ladder", "productOver100", "triples", "sum3"];
+const DICE3_TITLES = {
+    descending: "Убывание", ascending: "Возрастание",
+    low: "Все меньше", high: "Все больше", even: "Все чётные", odd: "Все нечётные",
+    no16: "Без 1 и 6", ladder: "Лесенка", productOver100: "Произведение >100",
+    triples: "Триплы", sum3: "Сумма"
+};
+const DICE3_SUBMENUS = ["triples", "sum3"];
+// Плитки «Суммы»: [режим, число]. Сумма трёх кубов = 3…18.
+const DICE3_SUM_TILES = [
+    ["sum3Less", 5], ["sum3Greater", 16], ["sum3Less", 6], ["sum3Greater", 15],
+    ["sum3Less", 7], ["sum3Greater", 14], ["sum3Less", 8], ["sum3Greater", 13],
+    ["sum3Less", 9], ["sum3Greater", 12], ["sum3Less", 10], ["sum3Greater", 11],
+    ["sum3Less", 11], ["sum3Greater", 10], ["sum3Equal", 10], ["sum3Equal", 11]
+];
+const DICE3_SAME = d => d[0] === d[1] && d[1] === d[2];
+const DICE3_SUM = d => d[0] + d[1] + d[2];
+// d — [куб1, куб2, куб3]; n — выбранные числа (для триплов и сумм).
+const DICE3_TEST = {
+    low:  d => d.every(x => x <= 3),
+    high: d => d.every(x => x >= 4),
+    even: d => d.every(x => x % 2 === 0),
+    odd:  d => d.every(x => x % 2 === 1),
+    descending: d => d[0] > d[1] && d[1] > d[2],
+    ascending:  d => d[0] < d[1] && d[1] < d[2],
+    no16: d => d.every(x => x > 1 && x < 6),
+    ladder: d => { const t = [...d].sort((a, b) => a - b); return t[1] === t[0] + 1 && t[2] === t[1] + 1; },
+    productOver100: d => d[0] * d[1] * d[2] > 100,
+    anyTriple: d => DICE3_SAME(d),
+    triple: (d, n) => DICE3_SAME(d) && n.includes(d[0]),
+    sum3Less: (d, n) => DICE3_SUM(d) < n[0],
+    sum3Greater: (d, n) => DICE3_SUM(d) > n[0],
+    sum3Equal: (d, n) => DICE3_SUM(d) === n[0]
+};
+const _dice3WinsCache = {};
+function dice3Wins(mode, nums = []) {
+    const test = DICE3_TEST[mode];
+    if (!test) return 0;
+    const key = mode + ":" + nums.join(",");
+    if (_dice3WinsCache[key] !== undefined) return _dice3WinsCache[key];
+    let w = 0;
+    for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) for (let c = 1; c <= 6; c++) {
+        if (test([a, b, c], nums)) w++;
+    }
+    return (_dice3WinsCache[key] = w);
+}
+// Вердикт после уже выпавших кубов: "lose" — выиграть уже нельзя (красный крестик, дальше не кидаем),
+// "win" — выигрыш гарантирован при любых оставшихся бросках (зелёная галочка),
+// "pending" — пока можно и так и так (жёлтая галочка).
+function dice3Verdict(mode, nums, rolls) {
+    const test = DICE3_TEST[mode];
+    if (!test) return "pending";
+    let any = false, all = true;
+    const walk = (d) => {
+        if (d.length === 3) { if (test(d, nums)) any = true; else all = false; return; }
+        for (let f = 1; f <= 6; f++) walk(d.concat(f));
+    };
+    walk(rolls.slice(0, 3));
+    return !any ? "lose" : all ? "win" : "pending";
+}
+// Максимальный кэф подменю для надписи «до ×N».
+function dice3MaxCoef(k) {
+    return k === "triples" ? houseCoef(1, 216, 1) : houseCoef(4, 216, 1);
+}
 const DICE_NUM_IMG_DIR = "images/dice/";             // запасные modecube1.png … modecube6.png, back.png
 const DICE_NUM_TGS_DIR = "animations/dice/";         // modecube1.tgs … modecube6.tgs (если нет — берём png)
 const DICE_BACK_PNG = "images/back.png";                // запасная иконка «Назад», если нет back.tgs
@@ -5561,6 +5629,10 @@ const DICE_BACK_TGS = "images/ui/back.tgs";          // анимированна
 // Сумма s имеет 6 − |7 − s| исходов из 36 равновероятных пар.
 function diceCoefFor(mode, cubes, nums = []) {
     const k = nums.length;
+    if (cubes === 3 && DICE3_TEST[mode]) {
+        const w = dice3Wins(mode, nums);
+        return w ? houseCoef(w, 216, 1) : 0;
+    }
     if (mode === "same") return houseCoef(6, 36, 1);
     if (mode === "double") return k ? houseCoef(k, 36, 1) : 0;
     if (mode === "number") return k ? houseCoef(k, 6, cubes) : 0;
@@ -5685,6 +5757,61 @@ function mountDiceNumIcon(el, n, prefix) {
     );
 }
 
+// HTML плиток режима «3 куба»: главное меню, «Триплы», «Сумма».
+function dice3Html(view, enter) {
+    const label = (name) => '<span class="dice-mode-name">' + name + '</span>';
+    const odds = (coef) => '<span class="dice-mode-coef">(' + diceCoefText(coef) + ')</span>';
+    const back = '<button class="dice-tile dice-mode dice-mode-back' + enter + '" style="--i:9" onclick="diceNumbersBack()">' +
+        '<span class="dice-back-icon"></span>' + label("Назад") + '</button>';
+
+    if (view === "main") {
+        return DICE3_MODE_ORDER.map((k, i) => {
+            const sub = DICE3_SUBMENUS.includes(k);
+            return '<button class="dice-tile dice-mode' + (!sub && diceGame.mode === k ? ' selected' : '') + enter +
+                '" style="--i:' + i + '" data-mode="' + k + '" onclick="' +
+                (sub ? "openDiceNumbers('" + k + "')" : "selectDiceMode('" + k + "', this)") + '">' +
+                label(DICE3_TITLES[k] + (sub ? " ›" : "")) +
+                (sub ? '<span class="dice-mode-coef">(до ' + diceCoefText(dice3MaxCoef(k)) + ')</span>'
+                     : odds(diceCoefFor(k, 3))) + '</button>';
+        }).join("");
+    }
+
+    if (view === "triples") {
+        const sel = diceGame.numbers;
+        let html = '<button class="dice-tile dice-mode dice-full' + (diceGame.mode === "anyTriple" ? " selected" : "") + enter +
+            '" data-mode="anyTriple" onclick="selectDiceMode(\'anyTriple\', this)">' + label("Любой трипл") +
+            odds(diceCoefFor("anyTriple", 3)) + '</button>';
+        for (let n = 1; n <= 6; n++) {
+            const selected = sel.includes(n);
+            html += '<button class="dice-tile dice-mode dice-num' + (selected ? " selected" : "") + enter +
+                '" style="--i:' + n + '" data-num="' + n + '" aria-pressed="' + selected +
+                '" onclick="toggleDiceNumber(' + n + ', this)">' + label("Трипл " + n) +
+                odds(diceCoefFor("triple", 3, sel.length ? sel : [n])) + '</button>';
+        }
+        return html + back;
+    }
+
+    // view === "sum3"
+    const html = DICE3_SUM_TILES.map(([key, n], i) => {
+        const name = key === "sum3Less" ? "&lt; " + n : key === "sum3Greater" ? "&gt; " + n : "Ровно " + n;
+        const selected = diceGame.mode === key && diceGame.numbers[0] === n;
+        return '<button class="dice-tile dice-mode dice-sum3' + (selected ? " selected" : "") + enter +
+            '" style="--i:' + i + '" data-mode="' + key + '" data-n="' + n +
+            '" onclick="selectDice3Sum(\'' + key + '\', ' + n + ', this)">' + label(name) +
+            odds(diceCoefFor(key, 3, [n])) + '</button>';
+    }).join("");
+    return html + back;
+}
+
+function selectDice3Sum(key, n, btn) {
+    if (diceGame.busy) return;
+    diceGame.mode = key;
+    diceGame.numbers = [n];
+    document.querySelectorAll("#diceModes .dice-sum3").forEach(b => b.classList.remove("selected"));
+    btn?.classList.add("selected");
+    updateDicePlayLabel();
+}
+
 // animate=true — плавная смена набора плиток.
 function renderDiceModes(animate) {
     const box = document.getElementById("diceModes");
@@ -5716,7 +5843,9 @@ function doRenderDiceModes(animate) {
     const odds = (coef) => '<span class="dice-mode-coef">(' + diceCoefText(coef) + ')</span>';
     let html = "";
 
-    if (view === "main") {
+    if (cubes === 3 && (view === "main" || view === "triples" || view === "sum3")) {
+        html = dice3Html(view, enter);
+    } else if (view === "main") {
         const keys = cubes === 2 ? DICE_MODE_ORDER_2 : DICE_MODE_ORDER;
         html = keys.map((k, i) => {
             const submenu = DICE_SUBMENUS.includes(k);
@@ -5764,6 +5893,7 @@ function doRenderDiceModes(animate) {
 
     box.classList.toggle("is-numbers", view !== "main");
     box.classList.toggle("is-sum", view === "sum");
+    box.classList.toggle("is-sum3", cubes === 3 && view === "sum3");
     box.classList.toggle("is-exact-sums", view === "exactSums");
     box.querySelectorAll(".dice-num-icon, .dice-back-icon").forEach(el => {
         try { el._anim && el._anim.destroy(); } catch (e) {}
@@ -5829,20 +5959,21 @@ function toggleDiceNumber(n, btn) {
             diceGame.numbers.splice(index, 1);
         } else {
             if (diceGame.numbers.length >= limit) {
-                showMessage("Можно выбрать не больше " + limit + (view === "exactSums" ? " сумм" : " чисел"));
+                showMessage("Можно выбрать не больше " + limit + (view === "exactSums" ? " сумм" : view === "triples" ? " триплов" : " чисел"));
                 return;
             }
             diceGame.numbers.push(n);
             diceGame.numbers.sort((a, b) => a - b);
         }
-        diceGame.mode = diceGame.numbers.length ? view : null;
+        diceGame.mode = diceGame.numbers.length ? (view === "triples" ? "triple" : view) : null;
+        if (view === "triples") document.querySelector('#diceModes [data-mode="anyTriple"]')?.classList.remove("selected");
         const selected = diceGame.numbers.includes(n);
         btn.classList.toggle("selected", selected);
         btn.setAttribute("aria-pressed", String(selected));
         const icon = btn.querySelector(".dice-num-icon");
         try { icon?._anim?.goToAndPlay(0, true); } catch {}
-        if (view === "number") {
-            const coef = diceCoefFor(view, diceGame.cubes, diceGame.numbers.length ? diceGame.numbers : [n]);
+        if (view === "number" || view === "triples") {
+            const coef = diceCoefFor(view === "triples" ? "triple" : view, diceGame.cubes, diceGame.numbers.length ? diceGame.numbers : [n]);
             document.querySelectorAll("#diceModes .dice-num .dice-mode-coef").forEach(el => {
                 el.textContent = "(" + diceCoefText(coef) + ")";
             });
@@ -5880,7 +6011,7 @@ function selectDiceMode(mode, btn) {
         document.querySelectorAll("#diceModes .dice-mode").forEach(b => b.classList.remove("selected"));
         btn?.classList.add("selected");
     } else {
-        if (mode === "same") diceGame.numbers = [];
+        if (mode === "same" || mode === "anyTriple") diceGame.numbers = [];
         doRenderDiceModes(false);
     }
     updateDicePlayLabel();
@@ -5992,12 +6123,22 @@ async function handleDicePlay() {
         unlockEconomy();
         return;
     }
-    const rolls = (srv.rolls || []).map(Number);
+    let rolls = (srv.rolls || []).map(Number);
     const passes = (srv.passes || []).map(Boolean);
     const win = !!srv.win;
     const winAmount = win ? roundMoney(srv.payout) : 0;
     const coefSrv = Number(srv.coef) || coef;
     const finalBalance = Number(srv.balance);
+    // 3 куба: вердикт после каждого броска. Как только выиграть уже нельзя — крестик и дальше не кидаем.
+    const dice3 = cubes === 3 && !!DICE3_TEST[mode];
+    const dice3Verdicts = [];
+    if (dice3) {
+        for (let i = 0; i < rolls.length; i++) {
+            const v = dice3Verdict(mode, nums, rolls.slice(0, i + 1));
+            dice3Verdicts.push(v);
+            if (v === "lose" && !win && i < rolls.length - 1) { rolls = rolls.slice(0, i + 1); break; }
+        }
+    }
     // до конца анимации показываем баланс без выигрыша
     currentBalance = finalBalance;
     setUIBalance(roundMoney(finalBalance - winAmount));
@@ -6017,11 +6158,19 @@ async function handleDicePlay() {
         if (window.DiceStage) {
             for (let i = 0; i < rolls.length; i++) {
                 const isFinal = i === rolls.length - 1;
-                const pass = isFinal ? win : passes[i];
+                let pass = isFinal ? win : passes[i];
                 const nextRoll = isFinal ? null : rolls[i + 1];
-                const pending = !isFinal && pass && srv.verdicts?.[i] !== "win";
+                let pending = !isFinal && pass && srv.verdicts?.[i] !== "win";
+                if (dice3) {
+                    // последний бросок — решает сервер; промежуточные: жёлтая (пока неясно) или зелёная (уже точно выиграл)
+                    const v = isFinal ? (win ? "win" : "lose")
+                        : (dice3Verdicts[i] === "lose" ? "pending" : dice3Verdicts[i]);
+                    pass = v !== "lose";
+                    pending = v === "pending";
+                }
                 const greenPass = pass && !pending;
-                const word = pending ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла");
+                const word = dice3 ? (pass ? "Ставка зашла" : "Ставка не зашла")
+                    : (pending ? "Ставка зачтена" : (pass ? "Ставка зашла" : "Ставка не зашла"));
                 const title = cubes > 1 ? word + " (" + (i + 1) + "/" + cubes + ")" : undefined;
 
                 await window.DiceStage.play({
