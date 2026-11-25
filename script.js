@@ -6139,9 +6139,10 @@ async function handleDicePlay() {
             if (v === "lose" && !win && i < rolls.length - 1) { rolls = rolls.slice(0, i + 1); break; }
         }
     }
-    // до конца анимации показываем баланс без выигрыша
+    // Сервер уже начислил выплату: показываем полный баланс сразу с поп-апом.
+    // setUIBalance плавно анимирует изменение суммы.
     currentBalance = finalBalance;
-    setUIBalance(roundMoney(finalBalance - winAmount));
+    setUIBalance(finalBalance);
     const liveBetId = await broadcastLiveBet(bet, "Куб");
     if (window.DiceStage) window.DiceStage.prepare(rolls[0]);   // заранее собираем анимацию выпавшей грани
 
@@ -6150,6 +6151,7 @@ async function handleDicePlay() {
         currentWinsCount++;
         if (coefSrv > currentMaxWin) currentMaxWin = coefSrv;
     }
+    if (win) window.showWinPopup?.(winAmount, coefSrv);
     unlockEconomy();
 
     // --- 3. анимация ---
@@ -6378,9 +6380,10 @@ async function handleFootballPlay() {
     const winAmount = win ? roundMoney(srv.payout) : 0;
     const coefSrv = Number(srv.coef) || coef;
     const finalBalance = Number(srv.balance);
-    // до конца анимации показываем баланс без выигрыша
+    // Сервер уже начислил выплату: показываем полный баланс сразу с поп-апом.
+    // setUIBalance плавно анимирует изменение суммы.
     currentBalance = finalBalance;
-    setUIBalance(roundMoney(finalBalance - winAmount));
+    setUIBalance(finalBalance);
     const liveBetId = await broadcastLiveBet(bet, "Футбол");
     if (window.FootballStage) window.FootballStage.prepare(rolls[0]);
 
@@ -6389,6 +6392,7 @@ async function handleFootballPlay() {
         currentWinsCount++;
         if (coefSrv > currentMaxWin) currentMaxWin = coefSrv;
     }
+    if (win) window.showWinPopup?.(winAmount, coefSrv);
     unlockEconomy();
 
     // --- 3. анимация ---
@@ -6809,9 +6813,10 @@ async function handleEmojiGamePlay() {
     const winAmount = win ? roundMoney(srv.payout) : 0;
     const coefSrv = Number(srv.coef) || coef;
     const finalBalance = Number(srv.balance);
-    // до конца анимации показываем баланс без выигрыша
+    // Сервер уже начислил выплату: показываем полный баланс сразу с поп-апом.
+    // setUIBalance плавно анимирует изменение суммы.
     currentBalance = finalBalance;
-    setUIBalance(roundMoney(finalBalance - winAmount));
+    setUIBalance(finalBalance);
     const liveBetId = await broadcastLiveBet(bet, cfg.label);
 
     if (win) {
@@ -6819,6 +6824,7 @@ async function handleEmojiGamePlay() {
         currentWinsCount++;
         if (coefSrv > currentMaxWin) currentMaxWin = coefSrv;
     }
+    if (win) window.showWinPopup?.(winAmount, coefSrv);
     unlockEconomy();
 
     // --- 3. анимация ---
@@ -12829,8 +12835,8 @@ document.addEventListener('visibilitychange', function () {
         return '+' + Number(n).toFixed(2).replace('.', ',') + '$';
     }
     function fmtMult(m) {
-        // 9.80 -> x9.8, 1.62 -> x1.62, 2.00 -> x2
-        return 'x' + String(parseFloat(Number(m).toFixed(2)));
+        // Всегда показываем две цифры и знак умножения: 2.30×
+        return Number(m).toFixed(2).replace('.', ',') + '×';
     }
 
     function destroyAnim() {
