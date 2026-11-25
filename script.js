@@ -5581,7 +5581,7 @@ const DICE3_TEST = {
     even: d => d.every(x => x % 2 === 0),
     odd:  d => d.every(x => x % 2 === 1),
     descending: d => d[0] > d[1] && d[1] > d[2],
-    ascending:  d => d[0] < d[1] && d[1] < d[2],
+    ascending:  d => d[1] === d[0] + 1 && d[2] === d[1] + 1,
     no16: d => d.every(x => x > 1 && x < 6),
     ladder: d => { const t = [...d].sort((a, b) => a - b); return t[1] === t[0] + 1 && t[2] === t[1] + 1; },
     productOver100: d => d[0] * d[1] * d[2] > 100,
